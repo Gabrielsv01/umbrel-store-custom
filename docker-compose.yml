@@ -1,0 +1,11 @@
+services:
+  ngrok:
+    image: ngrok/ngrok:latest
+    command:
+      - http
+      - "5678"
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    ports:
+      - "4040:4040"
+    restart: on-failure
