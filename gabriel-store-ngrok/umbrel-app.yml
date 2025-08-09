@@ -23,6 +23,7 @@ dependencies: []
 path: ""
 defaultUsername: ""
 defaultPassword: ""
+config: ./ui.yml
 
 env:
   NGROK_AUTHTOKEN:
