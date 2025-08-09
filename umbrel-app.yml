@@ -19,3 +19,10 @@ env:
     description: Copie de https://dashboard.ngrok.com/get-started/your-authtoken
     default: ""
     required: true
+
+  LOCAL_PORT:
+    name: Porta local para expor
+    description: Digite a porta do serviço local (ex: 80, 8123)
+    default: "80"
+    required: true
+
