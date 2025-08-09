@@ -1,2 +1,5 @@
-id: "ngrok"
-name: "Ngrok"
+id: ngrok
+name: Ngrok
+publisher: Gabriel Vieira
+apps:
+  - ngrok
