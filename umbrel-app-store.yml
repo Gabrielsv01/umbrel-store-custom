@@ -1,5 +1,5 @@
-id: ngrok
-name: Ngrok Tunnel
+id: gabriel-store
+name: Gabriel Store
 publisher: Gabriel Vieira
 apps:
   - ngrok
