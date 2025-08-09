@@ -1,5 +1,2 @@
-id: gabriel-store
-name: Gabriel Store
-publisher: Gabriel Vieira
-apps:
-  - ngrok
+id: "ngrok" # Choose the ID for your app store. This should contain only alphabets ("a to z") and dashes ("-").
+name: "Ngrok" # Choose the name of your app store. It will show up in the UI as "<name> App Store".
