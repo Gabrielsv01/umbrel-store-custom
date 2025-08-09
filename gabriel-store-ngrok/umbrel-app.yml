@@ -1,5 +1,5 @@
 manifestVersion: 1
-id: ngrok
+id: gabriel-store-ngrok
 name: Ngrok Tunnel
 tagline: Exponha sua Umbrel para a internet com ngrok
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-ngrok-app/main/ngrok/icon.svg
