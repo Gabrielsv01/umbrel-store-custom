@@ -1,11 +1,11 @@
+version: "3.7"
+
 services:
   ngrok:
     image: ngrok/ngrok:latest
-    command:
-      - http
-      - "${LOCAL_PORT}"
+    restart: unless-stopped
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
-    ports:
-      - "4040:4040"  # Painel web do ngrok
-    restart: on-failure
+    command:
+      - http
+      - ${LOCAL_PORT}
