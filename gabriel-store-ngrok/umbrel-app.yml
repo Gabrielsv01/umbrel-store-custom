@@ -23,17 +23,3 @@ dependencies: []
 path: ""
 defaultUsername: ""
 defaultPassword: ""
-config: ./ui.yml
-
-env:
-  NGROK_AUTHTOKEN:
-    name: Token do Ngrok
-    description: Copie seu token de https://dashboard.ngrok.com
-    default: ""
-    required: true
-
-  LOCAL_PORT:
-    name: Porta local
-    description: Porta do serviço local que será exposto
-    default: "80"
-    required: true
