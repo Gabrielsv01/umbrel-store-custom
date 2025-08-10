@@ -1,5 +1,0 @@
-authtoken: TOKEN
-tunnels:
-  tunnel-name:
-    proto: http
-    addr: PORT_LOCAL

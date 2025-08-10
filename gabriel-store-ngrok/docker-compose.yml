@@ -3,10 +3,11 @@ version: "3.7"
 services:
   ngrok:
     image: ngrok/ngrok:latest
+    command:
+      - http
+      - "5678"
+    environment:
+      NGROK_AUTHTOKEN: "123"   # aqui você passa seu token real
+    network_mode: host
     restart: unless-stopped
-    command: ["start", "--all"]
-    ports:
-      - "4040:4040"
-    volumes:
-      - ${APP_DATA_DIR}/config/ngrok:/home/umbrel/.config/ngrok
 
