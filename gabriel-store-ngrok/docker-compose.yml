@@ -4,8 +4,11 @@ services:
   ngrok:
     image: ngrok/ngrok:latest
     restart: unless-stopped
-    environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
-    command:
-      - http
-      - ${LOCAL_PORT}
+    command: ["start", "--all"]
+    ports:
+      - "4040:4040"
+    volumes:
+      - ngrok-data:/home/umbrel/.config/ngrok
+
+volumes:
+  ngrok-data:
