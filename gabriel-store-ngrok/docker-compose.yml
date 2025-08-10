@@ -8,7 +8,5 @@ services:
     ports:
       - "4040:4040"
     volumes:
-      - ngrok-data:/home/umbrel/.config/ngrok
+      - ${APP_DATA_DIR}/config/ngrok:/app/.config/ngrok
 
-volumes:
-  ngrok-data:
