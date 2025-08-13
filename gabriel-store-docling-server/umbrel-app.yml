@@ -17,23 +17,24 @@ repo: https://github.com/Gabrielsv01/umbrel-store-custom
 support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
 gallery: []
 releaseNotes: >-
-  Features
-  🗂️ Parsing of multiple document formats incl. PDF, DOCX, PPTX, XLSX, HTML, WAV, MP3, images (PNG, TIFF, JPEG, ...), and more
-  📑 Advanced PDF understanding incl. page layout, reading order, table structure, code, formulas, image classification, and more
-  🧬 Unified, expressive DoclingDocument representation format
-  ↪️ Various export formats and options, including Markdown, HTML, DocTags and lossless JSON
-  🔒 Local execution capabilities for sensitive data and air-gapped environments
-  🤖 Plug-and-play integrations incl. LangChain, LlamaIndex, Crew AI & Haystack for agentic AI
-  🔍 Extensive OCR support for scanned PDFs and images
-  👓 Support of several Visual Language Models (SmolDocling)
-  🎙️ Support for Audio with Automatic Speech Recognition (ASR) models
-  💻 Simple and convenient CLI
+  Features:
+  - 🗂️ Parsing of multiple document formats incl. PDF, DOCX, PPTX, XLSX, HTML, WAV, MP3, images (PNG, TIFF, JPEG, ...), and more
+  - 📑 Advanced PDF understanding incl. page layout, reading order, table structure, code, formulas, image classification, and more
+  - 🧬 Unified, expressive DoclingDocument representation format
+  - ↪️ Various export formats and options, including Markdown, HTML, DocTags and lossless JSON
+  - 🔒 Local execution capabilities for sensitive data and air-gapped environments
+  - 🤖 Plug-and-play integrations incl. LangChain, LlamaIndex, Crew AI & Haystack for agentic AI
+  - 🔍 Extensive OCR support for scanned PDFs and images
+  - 👓 Support of several Visual Language Models (SmolDocling)
+  - 🎙️ Support for Audio with Automatic Speech Recognition (ASR) models
+  - 💻 Simple and convenient CLI
 
+  Server:
   Server started at http://umbrel.local:5001
   Documentation at http://umbrel.local:5001/docs
   Scalar docs at http://umbrel.local:5001/scalar
   UI at http://umbrel.local:5001/ui
-
+  
 dependencies: []
 path: ""
 defaultUsername: ""
