@@ -9,7 +9,7 @@ port: 5001
 description: >-
   Docling simplifies document processing, parsing diverse formats — including advanced PDF understanding — and providing seamless integrations with the gen AI ecosystem.
 
-developer: Gabriel Vieira
+developer: Docling Project
 website: https://docling-project.github.io/docling/
 submitter: Gabriel Vieira
 submission: https://github.com/Gabrielsv01/umbrel-store-custom
@@ -34,7 +34,7 @@ releaseNotes: >-
   Documentation at http://umbrel.local:5001/docs
   Scalar docs at http://umbrel.local:5001/scalar
   UI at http://umbrel.local:5001/ui
-  
+
 dependencies: []
 path: ""
 defaultUsername: ""
