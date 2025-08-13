@@ -1,14 +1,14 @@
 manifestVersion: 1
 id: gabriel-store-ngrok
 name: Ngrok Tunnel
-tagline: Exponha sua Umbrel para a internet com ngrok
+tagline: Expose your Umbrell to the internet with ngrok
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-ngrok-app/main/gabriel-store-ngrok/icon.svg
 category: Utilities
 version: "1.0.0"
 port: 4040
 description: >-
-  Este app cria um túnel seguro para uma porta local usando ngrok.
-  Ideal para acessar serviços da sua Umbrel de forma remota e segura.
+  This app creates a secure tunnel to a local port using ngrok.
+  Ideal for remotely and securely accessing your Umbrel services.
 
 developer: Gabriel Vieira
 website: https://ngrok.com
@@ -18,7 +18,7 @@ repo: https://github.com/Gabrielsv01/umbrel-ngrok-app
 support: https://github.com/Gabrielsv01/umbrel-ngrok-app/issues
 gallery: []
 releaseNotes: >-
-  Primeira versão do app Ngrok para Umbrel.
+  First version of the Ngrok app for Umbrel.
 dependencies: []
 path: ""
 defaultUsername: ""

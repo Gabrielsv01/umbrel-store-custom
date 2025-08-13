@@ -7,7 +7,7 @@ services:
       - http
       - "5678"
     environment:
-      NGROK_AUTHTOKEN: "123"   # aqui você passa seu token real
+      NGROK_AUTHTOKEN: "123"   # put your token
     network_mode: host
     restart: unless-stopped
 

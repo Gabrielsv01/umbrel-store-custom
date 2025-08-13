@@ -1,0 +1,40 @@
+manifestVersion: 1
+id: gabriel-store-ngrok
+name: Docling Server
+tagline: Docling simplifies document processing, parsing diverse formats
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-docling-server/icon.svg
+category: Utilities
+version: "1.0.0"
+port: 5001
+description: >-
+  Docling simplifies document processing, parsing diverse formats — including advanced PDF understanding — and providing seamless integrations with the gen AI ecosystem.
+
+developer: Gabriel Vieira
+website: https://docling-project.github.io/docling/
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+releaseNotes: >-
+  Features
+  🗂️ Parsing of multiple document formats incl. PDF, DOCX, PPTX, XLSX, HTML, WAV, MP3, images (PNG, TIFF, JPEG, ...), and more
+  📑 Advanced PDF understanding incl. page layout, reading order, table structure, code, formulas, image classification, and more
+  🧬 Unified, expressive DoclingDocument representation format
+  ↪️ Various export formats and options, including Markdown, HTML, DocTags and lossless JSON
+  🔒 Local execution capabilities for sensitive data and air-gapped environments
+  🤖 Plug-and-play integrations incl. LangChain, LlamaIndex, Crew AI & Haystack for agentic AI
+  🔍 Extensive OCR support for scanned PDFs and images
+  👓 Support of several Visual Language Models (SmolDocling)
+  🎙️ Support for Audio with Automatic Speech Recognition (ASR) models
+  💻 Simple and convenient CLI
+
+  Server started at http://umbrel.local:5001
+  Documentation at http://umbrel.local:5001/docs
+  Scalar docs at http://umbrel.local:5001/scalar
+  UI at http://umbrel.local:5001/ui
+
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""

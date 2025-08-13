@@ -1,0 +1,16 @@
+version: "3.8"
+services:
+  docling-serve:
+    image: quay.io/docling-project/docling-serve:latest
+    container_name: docling-serve
+    ports:
+      - 5001:5001
+    command:
+      - docling-serve
+      - run
+      - --enable-ui
+    volumes:
+      - ./docling-data:/app/data
+    network_mode: host
+    restart: unless-stopped
+
