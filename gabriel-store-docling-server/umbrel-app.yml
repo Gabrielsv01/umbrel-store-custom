@@ -1,5 +1,5 @@
 manifestVersion: 1
-id: gabriel-store-ngrok
+id: gabriel-store-docling-server
 name: Docling Server
 tagline: Docling simplifies document processing, parsing diverse formats
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-docling-server/icon.svg
