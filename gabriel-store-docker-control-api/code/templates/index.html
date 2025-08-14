@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Control API</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Docker Control API</h1>
+        <p>Bem-vindo à interface de controle de containers Docker via API.</p>
+        <div class="api-info">
+            <strong>Endpoints disponíveis:</strong>
+            <ul style="text-align:left; margin: 12px 0 0 0; padding-left: 18px;">
+                <li><code>GET /api/authorized-containers</code></li>
+                <li><code>POST /api/authorized-containers</code></li>
+                <li><code>DELETE /api/authorized-containers/&lt;nome&gt;</code></li>
+                <li><code>POST /api/containers/&lt;nome&gt;/start</code></li>
+                <li><code>POST /api/containers/&lt;nome&gt;/stop</code></li>
+            </ul>
+        </div>
+        <div class="footer">
+            &copy; 2025 Docker Control API
+        </div>
+        <div style="margin-top:24px;">
+            <strong>Token de acesso:</strong>
+            <span id="apiToken" style="user-select:all; background:#f1f8fb; padding:4px 8px; border-radius:6px; font-family:monospace;">{{ api_token }}</span>
+            <button onclick="copyToken()" style="margin-left:8px;">Copiar</button>
+        </div>
+        <div style="margin-top:32px;">
+            <input type="text" id="containerNameInput" placeholder="Nome do container">
+            <button onclick="addContainer()">Adicionar</button>
+        </div>
+        <div class="container-list" id="containerList"></div>
+    </div>
+    <script src="/static/scripts.js"></script>
+</body>
+</html>
