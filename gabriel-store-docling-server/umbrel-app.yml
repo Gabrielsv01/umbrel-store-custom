@@ -19,7 +19,6 @@ gallery: []
 releaseNotes: >-
   Features:
 
-
     - 🗂️ Parsing of multiple document formats incl. PDF, DOCX, PPTX, XLSX, HTML, WAV, MP3, images (PNG, TIFF, JPEG, ...), and more
     - 📑 Advanced PDF understanding incl. page layout, reading order, table structure, code, formulas, image classification, and more
     - 🧬 Unified, expressive DoclingDocument representation format
@@ -32,7 +31,6 @@ releaseNotes: >-
     - 💻 Simple and convenient CLI
 
   Server:
-
 
     - Server started at http://umbrel.local:5001
     - Documentation at http://umbrel.local:5001/docs
