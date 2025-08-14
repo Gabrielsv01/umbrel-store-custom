@@ -3,6 +3,9 @@ services:
   docker-api:
     image: gabrielsv01/docker-control-api:1.0.3
     container_name: docker-control-api
+    environment:
+      - USERNAME=admin
+      - PASSWORD=password123
     ports:
       - 5123:5123
     volumes:
