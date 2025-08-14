@@ -1,0 +1,12 @@
+version: "3.7"
+services:
+  docker-api:
+    build: .
+    container_name: docker-control-api
+    ports:
+      - 5123:5123
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    network_mode: host
+    restart: unless-stopped
+

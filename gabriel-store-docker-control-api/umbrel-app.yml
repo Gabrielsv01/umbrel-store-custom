@@ -1,0 +1,24 @@
+manifestVersion: 1
+id: gabriel-store-docker-control-api
+name: Docker Control API
+tagline: Expose your docker Umbrell 
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-docker-control-api/icon.svg
+category: Utilities
+version: "1.0.0"
+port: 5123
+description: >-
+  This app creates a api to control the docker
+
+developer: Gabriel Vieira
+website: https://github.com/Gabrielsv01/umbrel-store-custom
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+releaseNotes: >-
+  First version of the API docker for Umbrel.
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
