@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  webhook-gateway:
+    build:
+      context: .
+      dockerfile: code/Dockerfile
+    container_name: webhook-gateway
+    restart: unless-stopped
+    ports:
+      - "5124:5124"
+    env_file:
+      - code/.env

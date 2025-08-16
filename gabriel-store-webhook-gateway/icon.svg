@@ -1,0 +1,38 @@
+<svg width="280" height="100" viewBox="0 0 280 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Webhook Gateway Logo">
+  <defs>
+    <style>
+      :root {
+        --wg-bg: #ffffff;      /* fundo */
+        --wg-primary: #3B82F6; /* azul vibrante */
+        --wg-accent: #10B981;  /* verde (check) */
+        --wg-ink: #0F172A;     /* quase preto */
+      }
+      .title { font-family: "Segoe UI", sans-serif; font-weight: 700; }
+    </style>
+  </defs>
+
+  <!-- Fundo -->
+  <rect width="280" height="100" rx="14" fill="var(--wg-bg)"/>
+
+  <!-- Ícone portão + verificação -->
+  <g transform="translate(20,30)">
+    <!-- portão (duas colunas) -->
+    <rect x="28" y="5" width="5" height="30" rx="2" fill="var(--wg-ink)"/>
+    <rect x="42" y="5" width="5" height="30" rx="2" fill="var(--wg-ink)"/>
+
+    <!-- seta entrando -->
+    <path d="M5 20 H26" stroke="var(--wg-primary)" stroke-width="4" stroke-linecap="round"/>
+    <polygon points="26,16 34,20 26,24" fill="var(--wg-primary)"/>
+
+    <!-- check dentro do portão -->
+    <path d="M36 20 l4 5 l8 -10" fill="none" stroke="var(--wg-accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- seta saindo -->
+    <path d="M50 20 H70" stroke="var(--wg-primary)" stroke-width="4" stroke-linecap="round"/>
+    <polygon points="70,16 78,20 70,24" fill="var(--wg-primary)"/>
+  </g>
+
+  <!-- Nome empilhado -->
+  <text x="120" y="45" class="title" font-size="26" fill="var(--wg-ink)">Webhook</text>
+  <text x="120" y="75" class="title" font-size="26" fill="var(--wg-accent)">Gateway</text>
+</svg>

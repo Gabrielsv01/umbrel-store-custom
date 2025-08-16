@@ -1,0 +1,24 @@
+manifestVersion: 1
+id: gabriel-store-webhook-gateway
+name: Webhook Gateway
+tagline: Expose your docker Umbrel
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-webhook-gateway/icon.svg
+category: Utilities
+version: "1.0.0"
+port: 5124
+description: >-
+  This app creates a api to receive webhooks from your docker containers
+
+developer: Gabriel Vieira
+website: https://github.com/Gabrielsv01/umbrel-store-custom
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+releaseNotes: >-
+  First version of the API docker for Umbrel.
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
