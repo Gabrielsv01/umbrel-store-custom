@@ -12,8 +12,8 @@ const MAX_LOGS = 500;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.post('/webhook/:serviceName', async (req: Request, res: Response) => {
-    const { serviceName } = req.params;
+async function processWebhook(req: Request, res: Response) {
+     const { serviceName } = req.params;
     const config = webhookConfig[serviceName];
 
     const logEntry = {
@@ -52,12 +52,16 @@ app.post('/webhook/:serviceName', async (req: Request, res: Response) => {
         console.error(`[${serviceName}] - Erro ao repassar o webhook.`, (error as any).message);
         return res.status(500).send('Erro interno ao processar o webhook.');
     }
-});
+};
 
-app.get('/api/webhooks', (req: Request, res: Response) => {
+app.post('/:serviceName', processWebhook);
+app.post('/:serviceName/webhook/:id/webhook', processWebhook);
+app.post('/:serviceName/webhook-test/:id/webhook', processWebhook);
+
+app.get('/api/webhooks', (_req: Request, res: Response) => {
     const webhooks = Object.keys(webhookConfig).map(serviceName => ({
         name: serviceName,
-        endpoint: `/webhook/${serviceName}`
+        endpoint: `/${serviceName}`
     }));
     res.json(webhooks);
 });
@@ -76,5 +80,4 @@ app.get('/api/logs/:serviceName', (req: Request, res: Response) => {
 
 app.listen(PORT, () => {
     console.log(`API de Guarda de Webhooks rodando na porta ${PORT}`);
-    console.log(`Endpoint Telegram: /webhook/telegram`);
 });

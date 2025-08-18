@@ -9,5 +9,5 @@ services:
     restart: unless-stopped
     ports:
       - "5124:5124"
-    env_file:
-      - code/.env
+    environment:
+      - PORT=5124

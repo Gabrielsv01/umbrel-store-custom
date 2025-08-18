@@ -3,3 +3,15 @@ telegram:
   authorizedChatIds: ${TELEGRAM_AUTHORIZED_CHAT_IDS}
   authorizedUsernames: ${TELEGRAM_AUTHORIZED_USERNAMES}
   filter: telegramFilter
+
+webhook-test:
+  destination: ${N8N_WEBHOOK_URL}
+  authorizedChatIds: ${TELEGRAM_AUTHORIZED_CHAT_IDS}
+  authorizedUsernames: ${TELEGRAM_AUTHORIZED_USERNAMES}
+  filter: telegramFilter
+
+webhook:
+  destination: ${N8N_WEBHOOK_URL}
+  authorizedChatIds: ${TELEGRAM_AUTHORIZED_CHAT_IDS}
+  authorizedUsernames: ${TELEGRAM_AUTHORIZED_USERNAMES}
+  filter: telegramFilter
