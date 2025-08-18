@@ -2,9 +2,7 @@ version: '3.8'
 
 services:
   webhook-gateway:
-    build:
-      context: .
-      dockerfile: code/Dockerfile
+    image: gabrielsv01/webhook-gateway:1.0.0
     container_name: webhook-gateway
     restart: unless-stopped
     ports:
