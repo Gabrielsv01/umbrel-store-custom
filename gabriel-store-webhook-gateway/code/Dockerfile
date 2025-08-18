@@ -2,15 +2,15 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY ./code/package*.json ./
-COPY ./code/tsconfig.json ./
-COPY ./code/vite.config.ts ./
+COPY package*.json ./
+COPY tsconfig.json ./
+COPY vite.config.ts ./
 
 RUN npm install
 
-COPY ./code/src ./src
-COPY ./code/public ./public
-COPY ./code/webhooks.yml ./webhooks.yml
+COPY src ./src
+COPY public ./public
+COPY webhooks.yml ./webhooks.yml
 
 # Build backend e frontend
 RUN npm run build && npm run build-frontend
