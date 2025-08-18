@@ -10,7 +10,6 @@ RUN npm install
 
 COPY src ./src
 COPY public ./public
-COPY webhooks.yml ./webhooks.yml
 
 # Build backend e frontend
 RUN npm run build && npm run build-frontend
@@ -22,7 +21,6 @@ WORKDIR /app
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/dist/public ./dist/public
-COPY --from=builder /app/webhooks.yml ./webhooks.yml 
 
 RUN npm install --only=production
 
