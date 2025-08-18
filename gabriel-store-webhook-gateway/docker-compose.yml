@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   webhook-gateway:
-    image: gabrielsv01/webhook-gateway:1.0.2
+    image: gabrielsv01/webhook-gateway:1.0.3
     container_name: webhook-gateway
     restart: unless-stopped
     ports:

@@ -4,7 +4,7 @@ name: Webhook Gateway
 tagline: Expose your docker Umbrel
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-webhook-gateway/icon.svg
 category: Utilities
-version: "1.0.2"
+version: "1.0.3"
 port: 5124
 description: >-
   This app creates a api to receive webhooks from your docker containers
