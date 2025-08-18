@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
             serviceCard.className = 'service-card';
             serviceCard.innerHTML = `
                 <div class="service-summary">
-                    <h3>/${webhook.name}</h3>
+                    <h3>api/${webhook.name}</h3>
                     <span class="expand-icon">›</span>
                 </div>
                 <div class="service-details" style="display: none;">

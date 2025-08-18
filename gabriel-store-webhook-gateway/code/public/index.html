@@ -1,14 +1,20 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
-    <title>Webhook Gateway</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <title>Login</title>
+  <style>
+    body { font-family: sans-serif; background: #f7f7f7; display: flex; align-items: center; justify-content: center; height: 100vh; }
+    .login-box { background: #fff; padding: 2rem; border-radius: 12px; box-shadow: 0 2px 8px #0001; }
+    input[type="password"] { width: 100%; padding: 0.5rem; margin: 1rem 0; border-radius: 8px; border: 1px solid #ccc; }
+    button { padding: 0.5rem 1.5rem; border-radius: 8px; border: none; background: #007bff; color: #fff; font-weight: bold; }
+  </style>
 </head>
 <body>
-    <h1>Webhook Gateway</h1>
-    <div id="services-container">
-        </div>
-    <script type="module" src="app.ts"></script>
+  <form class="login-box" method="POST" action="/">
+    <h2>Login</h2>
+    <input type="password" name="password" placeholder="Senha" required />
+    <button type="submit">Entrar</button>
+  </form>
 </body>
 </html>

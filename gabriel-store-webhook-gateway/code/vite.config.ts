@@ -5,5 +5,11 @@ export default defineConfig({
   build: {
     outDir: '../dist/public',
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: 'public/index.html',
+        dashboard: 'public/dashboard.html'
+      }
+    }
   }
 });

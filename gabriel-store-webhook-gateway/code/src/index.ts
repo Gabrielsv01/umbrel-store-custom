@@ -4,13 +4,26 @@ import axios from 'axios';
 import webhookConfig from './webhook-config';
 import { webhookLogs } from './logs';
 import path from 'path';
+import bcrypt from 'bcrypt';
+import crypto from 'crypto';
+import cookieParser from 'cookie-parser';
+
+const MAX_LOGS = 500;
+const PORT = process.env.PORT || 5124;
+const SESSION_COOKIE = 'webhook_admin';
+const PASSWORD_HASH = process.env.LOGIN_PASSWORD_HASH || '';
+const SESSIONS = new Set<string>();
+const SESSION_EXPIRE_MS = 2 * 60 * 1000; // 2 minutes
 
 const app = express();
-const PORT = process.env.PORT || 5124;
-const MAX_LOGS = 500;
-
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
+
+function isAuthenticated(req: express.Request): boolean {
+    const token = req.cookies[SESSION_COOKIE];
+    return token && SESSIONS.has(token);
+}
 
 async function processWebhook(req: Request, res: Response) {
      const { serviceName } = req.params;
@@ -54,19 +67,23 @@ async function processWebhook(req: Request, res: Response) {
     }
 };
 
-app.post('/:serviceName', processWebhook);
-app.post('/:serviceName/webhook/:id/webhook', processWebhook);
-app.post('/:serviceName/webhook-test/:id/webhook', processWebhook);
+app.post('/api/:serviceName', processWebhook);
+app.post('/api/:serviceName/webhook/:id/webhook', processWebhook);
+app.post('/api/:serviceName/webhook-test/:id/webhook', processWebhook);
 
 app.get('/api/webhooks', (_req: Request, res: Response) => {
     const webhooks = Object.keys(webhookConfig).map(serviceName => ({
         name: serviceName,
-        endpoint: `/${serviceName}`
+        endpoint: `api/${serviceName}`
     }));
     res.json(webhooks);
 });
 
 app.get('/api/logs/:serviceName', (req: Request, res: Response) => {
+    if (!isAuthenticated(req)) {
+        return res.status(401).send('Não autorizado');
+    }
+
    const { serviceName } = req.params;
     const limit = parseInt(req.query.limit as string) || 10; 
 
@@ -76,6 +93,32 @@ app.get('/api/logs/:serviceName', (req: Request, res: Response) => {
         .slice(0, limit);
 
     res.json(logs);
+});
+
+app.get('/dashboard', (req, res) => {
+    if (isAuthenticated(req)) {
+         return res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+    } else {
+        return res.redirect('/');
+    }
+});
+
+app.post('/', express.urlencoded({ extended: false }), async (req, res) => {
+    const { password } = req.body;
+    if (!password) return res.status(400).send('Senha obrigatória');
+    
+    const isValid = await bcrypt.compare(password, PASSWORD_HASH);
+    if (isValid) {
+        const sessionToken = crypto.randomBytes(32).toString('hex');
+        SESSIONS.add(sessionToken);
+        res.cookie(SESSION_COOKIE, sessionToken, { httpOnly: true, maxAge: SESSION_EXPIRE_MS });
+        setTimeout(() => {
+            SESSIONS.delete(sessionToken);
+        }, SESSION_EXPIRE_MS);
+        return res.redirect('/dashboard');
+    } else {
+        return res.status(401).send('Senha incorreta');
+    }
 });
 
 app.listen(PORT, () => {
