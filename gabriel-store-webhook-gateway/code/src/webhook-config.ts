@@ -38,7 +38,7 @@ const substituteEnvVars = (obj: any) => {
 
 const loadConfig = () => {
     try {
-        const configPath = path.resolve(process.cwd(), 'webhooks.yml');
+        const configPath = '/app/webhooks.yml';
         const fileContents = fs.readFileSync(configPath, 'utf8');
         const parsedYaml: any = yaml.load(fileContents);
 
