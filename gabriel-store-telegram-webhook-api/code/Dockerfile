@@ -1,11 +1,15 @@
-FROM python:3.9-slim
+FROM node:20-alpine
 
 WORKDIR /app
 
-COPY . /app
+COPY package*.json ./
+COPY tsconfig.json ./
+RUN npm install
 
-RUN pip install python-telegram-bot requests nest_asyncio
+COPY . .
+
+RUN npm run build
 
 EXPOSE 5125
 
-CMD ["python", "app.py"]
+CMD ["node", "dist/index.js"]

@@ -1,12 +1,14 @@
 version: "3.7"
 services:
   telegram-webhook-api:
-    image: gabrielsv01/telegram-webhook-api:1.0.7
+    image: gabrielsv01/telegram-webhook-api:1.0.8
     container_name: telegram-webhook-api
     environment:
-      - TELEGRAM_BOT_TOKEN=admin
-      - FORWARD_ENDPOINT=password123
-      - WEBHOOK_URL=https://meu-servidor-legal.com/api/telegram
+      - PORT=5125
+      - TELEGRAM_BOT_TOKEN=123
+      - URI_BASE=/api/telegram
+      - WEBHOOK_URL=https://ngrok-free.app
+      - FORWARD_ENDPOINT=http://umbrel.local
     ports:
       - 5125:5125
     network_mode: host
