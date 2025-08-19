@@ -1,7 +1,7 @@
 from telegram.ext import Updater
 import os
 import requests
-from telegram.ext import MessageHandler, Filters
+from telegram.ext import MessageHandler, filters
 
 # URL do seu servidor onde o bot está rodando
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
@@ -28,7 +28,7 @@ def main():
             except Exception as e:
                 print(f"Erro ao encaminhar mensagem: {e}")
 
-    dp.add_handler(MessageHandler(Filters.all, forward_message))
+    dp.add_handler(MessageHandler(filters.ALL, forward_message))
 
     updater.idle()
 
