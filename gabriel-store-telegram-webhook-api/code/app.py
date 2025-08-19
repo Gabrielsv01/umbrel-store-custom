@@ -27,4 +27,13 @@ async def main():
 
 if __name__ == '__main__':
     import asyncio
-    asyncio.run(main())
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        loop.create_task(main())
+    else:
+        asyncio.run(main())
