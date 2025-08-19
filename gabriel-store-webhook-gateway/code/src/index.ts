@@ -31,9 +31,9 @@ app.post('/api/:serviceName/webhook/:id/webhook', webhookLimiter, processWebhook
 app.post('/api/:serviceName/webhook-test/:id/webhook', webhookLimiter, processWebhook);
 
 // Auth
-app.get('/api/webhooks', loginLimiter, webhooks);
-app.get('/api/logs/:serviceName', loginLimiter, logs);
-app.get('/dashboard', loginLimiter, dashboard);
+app.get('/api/webhooks', webhooks);
+app.get('/api/logs/:serviceName', logs);
+app.get('/dashboard', dashboard);
 app.post('/', loginLimiter, express.urlencoded({ extended: false }), auth);
 
 app.listen(PORT, () => {
