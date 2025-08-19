@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY . /app
 
-RUN pip install python-telegram-bot requests
+RUN pip install python-telegram-bot requests nest_asyncio
 
 EXPOSE 5125
 

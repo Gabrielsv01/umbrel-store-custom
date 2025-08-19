@@ -1,5 +1,7 @@
 import os
 import requests
+import asyncio
+import nest_asyncio
 from telegram.ext import Application, MessageHandler, ContextTypes, filters
 
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
@@ -26,14 +28,13 @@ async def main():
     )
 
 if __name__ == '__main__':
-    import asyncio
-
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         loop = None
 
     if loop and loop.is_running():
-        loop.create_task(main())
+        nest_asyncio.apply()
+        loop.run_until_complete(main())
     else:
         asyncio.run(main())
