@@ -6,7 +6,7 @@ import 'dotenv/config';
 const { PORT, TELEGRAM_BOT_TOKEN, WEBHOOK_URL, FORWARD_ENDPOINT, URI_BASE } = process.env;
 
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
-const URI = `${URI_BASE}/${TELEGRAM_BOT_TOKEN}`;
+const URI = `${URI_BASE}`;
 const webhookURL = `${WEBHOOK_URL}${URI}`;
 
 
