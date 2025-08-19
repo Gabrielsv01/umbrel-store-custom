@@ -21,4 +21,4 @@ releaseNotes: >-
 dependencies: []
 path: ""
 defaultUsername: ""
-defaultPassword: ""
+defaultPassword: "admin"
