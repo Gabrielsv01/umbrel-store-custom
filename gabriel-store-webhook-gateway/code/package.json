@@ -8,12 +8,15 @@
     "dev-frontend": "npx vite"
   },
   "dependencies": {
+    "@types/helmet": "^0.0.48",
     "axios": "^1.11.0",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "crypto": "^1.0.1",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.0.1",
+    "helmet": "^8.1.0",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {
