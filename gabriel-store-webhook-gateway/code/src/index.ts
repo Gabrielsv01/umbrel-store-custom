@@ -13,7 +13,9 @@ import { auth, dashboard, logs, webhooks } from './auth';
 
 const app = express();
 app.use(helmet());
-app.use(helmet.contentSecurityPolicy({ directives: { defaultSrc: ["'self'"] } }));
+if (process.env.ENABLE_CSP === 'true') {
+    app.use(helmet.contentSecurityPolicy({ directives: { defaultSrc: ["'self'"] } }));
+}
 app.use(helmet.hsts());
 app.use(helmet.noSniff());
 app.use(helmet.frameguard({ action: 'deny' }));
