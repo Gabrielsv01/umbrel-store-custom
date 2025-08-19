@@ -20,7 +20,19 @@ async function processWebhook(req: Request, res: Response) {
         console.warn(`[${serviceName}] - Serviço desconhecido. Requisição rejeitada.`);
         return res.status(404).send('Serviço de webhook não encontrado.');
     }
-    
+
+    if (process.env.DEBUG === "true"){
+        console.log(`[${serviceName}] - Requisição recebida:`, req.body);
+    }
+
+    if (process.env.DEBUG === "true"){
+        if (config.filter) {
+            console.log(`[${serviceName}] - Requisição recebida, filtrada:`, !config.filter(req.body, req.headers));
+        }else{
+            console.log(`[${serviceName}] - Requisição recebida, filter is undefined:`, config.filter);
+        }
+    }
+
     if (config.filter && !config.filter(req.body, req.headers)) {
         console.log(`[${serviceName}] - Requisição filtrada e ignorada com base no conteúdo.`);
         return res.status(200).send('OK, mas a requisição foi filtrada.');
@@ -34,6 +46,11 @@ async function processWebhook(req: Request, res: Response) {
 
 
     try {
+        if (process.env.DEBUG === "true"){
+            console.log(`[${serviceName}] - Enviando requisição para:`, config.destination);
+            console.log(`[${serviceName}] - Body da requisição:`, req.body);
+            console.log(`[${serviceName}] - Body da headers:`, req.headers);
+        }
         await axios.post(config.destination, req.body, {
             headers: req.headers as any
         });

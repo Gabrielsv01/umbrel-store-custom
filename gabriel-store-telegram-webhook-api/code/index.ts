@@ -3,7 +3,7 @@ import express, { Request, Response } from 'express';
 import axios from 'axios';
 import 'dotenv/config'; 
 
-const { PORT, TELEGRAM_BOT_TOKEN, WEBHOOK_URL, FORWARD_ENDPOINT, URI_BASE } = process.env;
+const { PORT, TELEGRAM_BOT_TOKEN, WEBHOOK_URL, FORWARD_ENDPOINT, URI_BASE, DEBUG } = process.env;
 
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 const URI = `${URI_BASE}`;
@@ -26,7 +26,17 @@ const setupWebhook = async (): Promise<void> => {
 
 app.post(URI, async (req: Request, res: Response) => {
     try {
-        await axios.post(FORWARD_ENDPOINT as string, req.body);
+        if (DEBUG === 'true'){
+            console.log('Requisição recebida:', req.body);
+        }
+        
+        await axios.post(FORWARD_ENDPOINT as string, req.body, {
+            headers: req.headers as any
+        });
+
+        if (DEBUG === 'true'){
+            console.log('Requisição encaminhada com sucesso.');
+        }
         res.status(200).send('ok');
     } catch (error: any) {
         console.error('Erro ao encaminhar mensagem:', error.message);
