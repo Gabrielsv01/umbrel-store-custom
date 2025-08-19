@@ -12,14 +12,16 @@ import { processWebhook } from './api';
 import { auth, dashboard, logs, webhooks } from './auth';
 
 const app = express();
-app.use(helmet());
-if (process.env.ENABLE_CSP === 'true') {
-    app.use(helmet.contentSecurityPolicy({ directives: { defaultSrc: ["'self'"] } }));
+if (process.env.ENABLE_HELMET === 'true') {
+    app.use(helmet({
+         contentSecurityPolicy : process.env.ENABLE_CSP === 'true' ? { directives: { defaultSrc: ["'self'"] } } : false,
+         hsts: process.env.ENABLE_HSTS === 'true',
+         noSniff: process.env.ENABLE_NO_SNIFF === 'true',
+         frameguard: process.env.ENABLE_FRAMEGUARD === 'true' ? { action: 'deny' } : false,
+         xssFilter: process.env.ENABLE_XSS_FILTER === 'true'
+    }));
 }
-app.use(helmet.hsts());
-app.use(helmet.noSniff());
-app.use(helmet.frameguard({ action: 'deny' }));
-app.use(helmet.xssFilter());
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));

@@ -2,14 +2,19 @@ version: '3.8'
 
 services:
   webhook-gateway:
-    image: gabrielsv01/webhook-gateway:1.0.6
+    image: gabrielsv01/webhook-gateway:1.0.7
     container_name: webhook-gateway
     restart: unless-stopped
     ports:
       - "5124:5124"
     environment:
       - PORT=5124
+      - ENABLE_HELMET=true
       - ENABLE_CSP=false
+      - ENABLE_HSTS=true
+      - ENABLE_NO_SNIFF=true
+      - ENABLE_FRAMEGUARD=true
+      - ENABLE_XSS_FILTER=true
       - LOGIN_PASSWORD_HASH=$2a$14$2ugEF5bxlp5NiAqfSGx3dOpsfcZD.lMZ/CqQzfYP.ecZXr.C5WDYe
     volumes:
       - ${APP_DATA_DIR}/code/webhooks.yml:/app/webhooks.yml
