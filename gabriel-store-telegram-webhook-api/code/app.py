@@ -22,7 +22,7 @@ async def main():
     await app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        url_path="telegram"
+        url_path="/api/telegram"
     )
 
 if __name__ == '__main__':
