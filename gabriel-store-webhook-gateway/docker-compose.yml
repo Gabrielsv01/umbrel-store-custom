@@ -11,4 +11,4 @@ services:
       - PORT=5124
       - LOGIN_PASSWORD_HASH=$2a$14$2ugEF5bxlp5NiAqfSGx3dOpsfcZD.lMZ/CqQzfYP.ecZXr.C5WDYe
     volumes:
-      - ./code/webhooks.yml:/app/webhooks.yml
+      - ${APP_DATA_DIR}/code/webhooks.yml:/app/webhooks.yml
