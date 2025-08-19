@@ -11,6 +11,5 @@ services:
       - FORWARD_ENDPOINT=http://umbrel.local
     ports:
       - 5125:5125
-    network_mode: host
     restart: unless-stopped
 
