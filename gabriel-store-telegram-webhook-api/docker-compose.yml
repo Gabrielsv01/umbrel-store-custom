@@ -1,0 +1,14 @@
+version: "3.7"
+services:
+  telegram-webhook-api:
+    image: gabrielsv01/telegram-webhook-api:1.0.1
+    container_name: telegram-webhook-api
+    environment:
+      - TELEGRAM_BOT_TOKEN=admin
+      - FORWARD_ENDPOINT=password123
+      - WEBHOOK_URL=https://meu-servidor-legal.com/telegram
+    ports:
+      - 5125:5125
+    network_mode: host
+    restart: unless-stopped
+

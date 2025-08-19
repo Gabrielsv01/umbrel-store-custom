@@ -1,0 +1,24 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Webhook Telegram API Icon">
+  <defs>
+    <style>
+      :root {
+        --tg-blue: #229ED9;    /* cor oficial Telegram */
+        --wg-accent: #10B981;  /* verde para check/webhook */
+        --bg: #ffffff;         /* fundo */
+      }
+    </style>
+  </defs>
+
+  <!-- Fundo quadrado -->
+  <rect width="200" height="200" rx="40" fill="var(--bg)"/>
+
+  <!-- Bolha de mensagem -->
+  <circle cx="100" cy="90" r="60" fill="var(--tg-blue)"/>
+
+  <!-- Seta curva (webhook) -->
+  <path d="M70 90 A30 30 0 1 1 130 90" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round"/>
+  <polygon points="130,85 145,90 130,95" fill="#fff"/>
+
+  <!-- Check dentro da bolha -->
+  <path d="M80 140 l15 15 l25 -35" fill="none" stroke="var(--wg-accent)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,24 @@
+manifestVersion: 1
+id: gabriel-store-telegram-webhook-api
+name: Telegram Webhook API
+tagline: Controll the webhook telegram api for Umbrel
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-telegram-webhook-api/icon.svg
+category: Utilities
+version: "1.0.1"
+port: 5125
+description: >-
+  This app creates a api to webhook telegram in docker
+
+developer: Gabriel Vieira
+website: https://github.com/Gabrielsv01/umbrel-store-custom
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+releaseNotes: >-
+  First version of the telegram webhook API docker for Umbrel.
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
