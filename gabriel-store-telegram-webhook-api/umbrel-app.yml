@@ -4,7 +4,7 @@ name: Telegram Webhook API
 tagline: Controll the webhook telegram api for Umbrel
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-telegram-webhook-api/icon.svg
 category: Utilities
-version: "1.0.11"
+version: "1.0.12"
 port: 5125
 description: >-
   This app creates a api to webhook telegram in docker

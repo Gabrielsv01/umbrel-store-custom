@@ -31,7 +31,9 @@ app.post(URI, async (req: Request, res: Response) => {
         }
         
         await axios.post(FORWARD_ENDPOINT as string, req.body, {
-            headers: req.headers as any,
+            headers: {
+                'Content-Type': 'application/json'
+            },
             timeout: 5000
         });
 
