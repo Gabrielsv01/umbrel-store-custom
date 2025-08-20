@@ -52,7 +52,9 @@ async function processWebhook(req: Request, res: Response) {
             console.log(`[${serviceName}] - Body da headers:`, req.headers);
         }
         await axios.post(config.destination, req.body, {
-            headers: req.headers as any,
+            headers: {
+                'Content-Type': 'application/json'
+            },
             timeout: 5000
         });
         console.log(`[${serviceName}] - Webhook repassado com sucesso.`);
