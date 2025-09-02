@@ -15,3 +15,8 @@ webhook:
   authorizedChatIds: ${TELEGRAM_AUTHORIZED_CHAT_IDS}
   authorizedUsernames: ${TELEGRAM_AUTHORIZED_USERNAMES}
   filter: telegramFilter
+
+alexa:
+  destination: ${ALEXA_WEBHOOK_URL}
+  applicationId: ${ALEXA_APPLICATION_ID}
+  filter: alexaskillFilter

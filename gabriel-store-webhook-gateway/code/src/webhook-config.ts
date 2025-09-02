@@ -2,10 +2,12 @@
 import * as yaml from 'js-yaml';
 import * as fs from 'fs';
 import { WebhookConfig } from './types';
-import { telegramFilter } from './filters';
+import { telegramFilter, alexaskillFilter, noFilter } from './filters';
 
 const filterFunctions = {
-    telegramFilter
+    telegramFilter,
+    alexaskillFilter,
+    noFilter,
 };
 
 const webhookConfig: WebhookConfig = {};
@@ -44,6 +46,7 @@ const loadConfig = () => {
                 destination: string;
                 authorizedChatIds?: string;
                 authorizedUsernames?: string;
+                applicationId?: string;
                 filter?: keyof typeof filterFunctions;
             }
 
@@ -51,6 +54,7 @@ const loadConfig = () => {
                 destination: string;
                 authorizedChatIds: string[];
                 authorizedUsernames: string[];
+                applicationId?: string;
                 filter?: (payload: any, headers?: any) => boolean;
             }
 
@@ -60,6 +64,7 @@ const loadConfig = () => {
                 destination: serviceTyped.destination!,
                 authorizedChatIds: serviceTyped.authorizedChatIds ? serviceTyped.authorizedChatIds.split(',').map((id: string) => id.trim()) : [],
                 authorizedUsernames: serviceTyped.authorizedUsernames ? serviceTyped.authorizedUsernames.split(',').map((username: string) => username.trim()) : [],
+                applicationId: serviceTyped.applicationId!,
                 filter: serviceTyped.filter ? (payload: any, headers: any) => filterFunctions[serviceTyped.filter as keyof typeof filterFunctions](payload, loadedConfig[serviceName], headers) : undefined,
             } as LoadedServiceConfig;
         }
