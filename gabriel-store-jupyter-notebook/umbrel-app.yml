@@ -1,0 +1,24 @@
+manifestVersion: 1
+id: gabriel-store-jupyter-notebook
+name: jupyter scipy notebook
+tagline: Expose your Umbrell to the internet with jupyter notebook
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-jupyter-notebook/icon.svg
+category: Utilities
+version: "1.0.0"
+port: 5127
+description: >-
+  This app creates a jupyter notebook in docker
+
+developer: Jupyter
+website: https://jupyter.org
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+releaseNotes: >-
+  First version of the jupyter notebook app for Umbrel.
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""

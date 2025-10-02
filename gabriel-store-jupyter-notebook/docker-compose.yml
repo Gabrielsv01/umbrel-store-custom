@@ -1,0 +1,16 @@
+version: "3.8"
+services:
+  jupyter:
+    image: jupyter/scipy-notebook
+    ports:
+      - 5127:8888
+    volumes:
+      - jupyter_data:/home/jovyan/work
+    environment:
+      - JUPYTER_LAB_ENABLE=yes
+      - GRANT_SUDO=yes
+      - JUPYTER_TOKEN=admin
+    restart: unless-stopped
+
+volumes:
+  jupyter_data:
