@@ -1,0 +1,20 @@
+version: "3.7"
+
+services:
+  kdenlive:
+    image: linuxserver/kdenlive:25.08.2
+    ports:
+      - "5128:3000"
+      - "5129:3001"
+      - "5130:8082"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - kdenlive_config:/config
+    shm_size: "1gb"
+    restart: unless-stopped
+
+volumes:
+  kdenlive_config:
