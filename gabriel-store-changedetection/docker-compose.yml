@@ -1,0 +1,20 @@
+version: "3.7"
+
+services:
+  changedetection:
+    image: lscr.io/linuxserver/changedetection.io:latest
+    container_name: changedetection
+    ports:
+      - "5131:5000"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      # - PLAYWRIGHT_DRIVER_URL=
+      # - WEBDRIVER_URL=
+    volumes:
+      - changedetection:/config
+    restart: unless-stopped
+
+volumes:
+  changedetection:
