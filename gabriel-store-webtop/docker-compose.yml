@@ -6,6 +6,7 @@ services:
     container_name: webtop
     ports:
       - "5134:3000"
+      - "5135:3001"
     environment:
       - PUID=1000
       - PGID=1000
@@ -14,6 +15,8 @@ services:
       - kdenlive_config:/config
     shm_size: "1gb"
     restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
 
 volumes:
   kdenlive_config:

@@ -4,7 +4,7 @@ name: Webtop
 tagline: Your personal web desktop
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-webtop/icon.svg
 category: Multimedia
-version: "1.0.0"
+version: "1.0.1"
 port: 5134
 description: >-
   Webtop is a personal web desktop that allows you to access your applications and files from anywhere.
