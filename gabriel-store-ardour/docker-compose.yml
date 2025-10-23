@@ -1,0 +1,19 @@
+version: "3.7"
+
+services:
+  ardour:
+    image: linuxserver/ardour
+    container_name: ardour
+    ports:
+      - "5132:3000"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - ardour_config:/config
+    shm_size: "1gb"
+    restart: unless-stopped
+
+volumes:
+  ardour_config:
