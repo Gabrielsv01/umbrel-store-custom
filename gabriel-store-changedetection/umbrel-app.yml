@@ -4,7 +4,7 @@ name: Changedetection
 tagline: Web page change detection made easy
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-changedetection/icon.svg
 category: Multimedia
-version: "1.0.0"
+version: "1.0.1"
 port: 5131
 description: >-
   Changedetection is a tool to monitor web pages for changes.

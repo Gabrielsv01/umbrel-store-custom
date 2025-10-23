@@ -10,11 +10,25 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=Etc/UTC
-      # - PLAYWRIGHT_DRIVER_URL=
-      # - WEBDRIVER_URL=
+      - PLAYWRIGHT_DRIVER_URL=ws://playwright:3000 
     volumes:
       - changedetection:/config
     restart: unless-stopped
+    depends_on:
+      - playwright
+
+  playwright: 
+    hostname: playwright
+    image: dgtlmoon/sockpuppetbrowser:latest
+    restart: unless-stopped
+    tmpfs:
+      - /tmp   
+    environment:
+        - SCREEN_WIDTH=1920
+        - SCREEN_HEIGHT=1024
+        - SCREEN_DEPTH=16
+        - MAX_CONCURRENT_CHROME_PROCESSES=10
+        - STATS_REFRESH_SECONDS=120
 
 volumes:
   changedetection:
