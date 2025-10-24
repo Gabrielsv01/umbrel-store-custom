@@ -4,7 +4,7 @@ name: Ardour
 tagline: Digital audio workstation
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-ardour/icon.svg
 category: Multimedia
-version: "1.0.0"
+version: "1.0.1"
 port: 5132
 description: >-
   Ardour is a digital audio workstation that allows you to record, edit, and mix audio with ease.

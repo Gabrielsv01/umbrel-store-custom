@@ -5,18 +5,17 @@ services:
     image: linuxserver/webtop:arm64v8-fedora-kde
     container_name: webtop
     ports:
-      - "5134:3000"
-      - "5135:3001"
+      - "5134:3001"
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=Etc/UTC
     volumes:
-      - kdenlive_config:/config
+      - webtop_config:/config
     shm_size: "1gb"
     restart: unless-stopped
     security_opt:
       - seccomp:unconfined
 
 volumes:
-  kdenlive_config:
+  webtop_config:

@@ -4,7 +4,7 @@ name: Freecad
 tagline: 3D CAD modeling made easy
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-freecad/icon.svg
 category: Multimedia
-version: "1.0.0"
+version: "1.0.1"
 port: 5133
 description: >-
   Freecad is a parametric 3D CAD modeler that allows you to create and edit 3D models with ease.
