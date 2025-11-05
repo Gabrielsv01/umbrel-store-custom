@@ -1,0 +1,25 @@
+manifestVersion: 1
+id: gabriel-store-ffmpeg
+name: ffmpeg
+tagline: Your personal video processing tool
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-ffmpeg/icon.svg
+category: Multimedia
+version: "1.0.0"
+port: 5135
+description: >-
+  FFmpeg is a complete, cross-platform solution to record, convert and stream audio and video.
+  It offers a wide range of features and is suitable for both beginners and professionals.
+
+developer: ffmpeg
+website: https://ffmpeg.org
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+releaseNotes: >-
+  First version of the ffmpeg app for Umbrel.
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
