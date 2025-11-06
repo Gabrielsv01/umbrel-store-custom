@@ -9,6 +9,8 @@ import deleteMultipleFiles from './api/deleteMultipleFiles';
 import command from './api/command';
 import downloadbyFilename from './api/downloadbyFilename';
 import clearDirectory from './api/clearDirectory';
+import uploadJson from './api/uploadJson';
+import doc from './api/doc';
 
 const app = express();
 
@@ -34,6 +36,8 @@ app.get('/files/:type', fileType);
 
 // Endpoint para obter informações detalhadas de um arquivo de mídia
 app.get('/info/:type/:filename', infoByFilename);
+
+app.post('/upload-json', uploadJson);
 
 // Endpoint para deletar arquivos
 app.delete('/files/:type/:filename', deleteFilesbyFileName);
@@ -65,6 +69,9 @@ app.post('/init', (_req: Request, res: Response) => {
         });
     });
 });
+
+// Endpoint para servir o README na rota raiz
+app.get('/', doc);
 
 const PORT = process.env.PORT || 3001;
 

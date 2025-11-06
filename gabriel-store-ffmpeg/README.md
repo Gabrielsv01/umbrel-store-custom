@@ -131,6 +131,34 @@ GET /info/input/video.mp4
 }
 ```
 
+### 📤 Upload de Arquivos
+
+#### `POST /upload-json`
+Faz upload de arquivos usando base64.
+
+**Body:**
+```json
+{
+  "data": "base64_encoded_file_data",
+  "filename": "video.mp4"
+}
+```
+
+**Resposta:**
+```json
+{
+  "success": true,
+  "message": "Arquivo enviado com sucesso",
+  "file": {
+    "savedName": "1642254000000-video.mp4",
+    "size": 15728640,
+    "path": "/shared/input/1642254000000-video.mp4"
+  }
+}
+```
+
+### 🗑️ Deletar Arquivos
+
 #### `DELETE /files/:type/:filename`
 Deleta um arquivo específico.
 
@@ -153,22 +181,61 @@ DELETE /files/input/video.mp4
 }
 ```
 
-#### `DELETE /files/:type?confirm=true`
-Deleta múltiplos arquivos ou limpa um diretório.
+#### `DELETE /files/:type`
+Deleta múltiplos arquivos.
 
-**Para múltiplos arquivos:**
-```bash
-DELETE /files/input
-Content-Type: application/json
-
+**Body:**
+```json
 {
   "files": ["video1.mp4", "video2.mp4"]
 }
 ```
 
-**Para limpar diretório completamente:**
+**Resposta:**
+```json
+{
+  "success": true,
+  "message": "2 arquivo(s) deletado(s), 0 falha(s)",
+  "type": "input",
+  "results": [
+    {
+      "filename": "video1.mp4",
+      "success": true,
+      "message": "Deletado com sucesso"
+    },
+    {
+      "filename": "video2.mp4",
+      "success": true,
+      "message": "Deletado com sucesso"
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "deleted": 2,
+    "failed": 0
+  }
+}
+```
+
+#### `DELETE /clear/:type?confirm=true`
+Limpa todos os arquivos de um diretório.
+
+**Parâmetros:**
+- `type`: `input` ou `output`
+- Query parameter: `confirm=true` (obrigatório)
+
+**Exemplo:**
 ```bash
 DELETE /clear/input?confirm=true
+```
+
+**Resposta:**
+```json
+{
+  "success": true,
+  "message": "Todos os arquivos do diretório input foram removidos",
+  "type": "input"
+}
 ```
 
 ### 🎬 Processamento FFmpeg
@@ -214,6 +281,19 @@ GET /files/compressed.mp4
 ```
 
 ## 💡 Exemplos de Uso
+
+### Upload de arquivo via base64
+
+```bash
+# Converter arquivo para base64 e fazer upload
+base64_data=$(base64 -i video.mp4)
+curl -X POST http://localhost:5135/upload-json \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"data\": \"$base64_data\",
+    \"filename\": \"video.mp4\"
+  }"
+```
 
 ### Converter vídeo para diferentes formatos
 
@@ -271,27 +351,59 @@ curl -X POST http://localhost:5135/ffmpeg \
   }'
 ```
 
+### Obter informações de um arquivo
+
+```bash
+# Listar arquivos de entrada
+curl http://localhost:5135/files/input
+
+# Obter informações detalhadas de um arquivo
+curl http://localhost:5135/info/input/video.mp4
+
+# Deletar arquivo específico
+curl -X DELETE http://localhost:5135/files/input/video.mp4
+
+# Deletar múltiplos arquivos
+curl -X DELETE http://localhost:5135/files/input \
+  -H "Content-Type: application/json" \
+  -d '{
+    "files": ["video1.mp4", "video2.mp4"]
+  }'
+
+# Limpar diretório completamente
+curl -X DELETE "http://localhost:5135/clear/input?confirm=true"
+```
+
 ## 🔧 Estrutura do Projeto
 
 ```
 gabriel-store-ffmpeg/
 ├── docker-compose.yml          # Configuração dos containers
+├── README.md                   # Esta documentação
 ├── code/                       # Código da API
 │   ├── src/
 │   │   ├── app.ts             # Aplicação principal
-│   │   ├── types.ts           # Definições de tipos
+│   │   ├── types.ts           # Definições de tipos TypeScript
 │   │   ├── utils.ts           # Funções utilitárias
 │   │   └── api/               # Endpoints da API
-│   │       ├── status.ts
-│   │       ├── filesType.ts
-│   │       ├── command.ts
-│   │       └── ...
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── Dockerfile
-└── shared/                     # Diretórios compartilhados
-    ├── input/                  # Arquivos de entrada
-    └── output/                 # Arquivos processados
+│   │       ├── status.ts           # Status dos diretórios
+│   │       ├── filesType.ts        # Listar arquivos
+│   │       ├── infoByfilename.ts   # Informações de arquivo
+│   │       ├── command.ts          # Executar FFmpeg
+│   │       ├── uploadJson.ts       # Upload via base64
+│   │       ├── downloadbyFilename.ts # Download de arquivos
+│   │       ├── deleteFilesbyFileName.ts # Deletar arquivo único
+│   │       ├── deleteMultipleFiles.ts   # Deletar múltiplos
+│   │       └── clearDirectory.ts   # Limpar diretório
+│   ├── package.json           # Dependências Node.js
+│   ├── tsconfig.json          # Configuração TypeScript
+│   ├── Dockerfile             # Build da API
+│   ├── .nvmrc                 # Versão do Node.js
+│   ├── .gitignore            # Arquivos ignorados
+│   └── .dockerignore         # Arquivos ignorados no build
+└── shared/                    # Diretórios compartilhados
+    ├── input/                 # Arquivos de entrada
+    └── output/                # Arquivos processados
 ```
 
 ## 🐳 Containers
@@ -300,12 +412,14 @@ gabriel-store-ffmpeg/
 - **Imagem:** `linuxserver/ffmpeg:arm64v8-latest`
 - **Função:** Container com FFmpeg instalado
 - **Status:** Fica rodando um loop infinito para aceitar comandos `docker exec`
+- **Volumes:** Configuração e diretórios compartilhados
 
 ### `ffmpeg-api`
-- **Imagem:** `gabrielsv01/ffmpeg-api:1.0.0`
-- **Função:** API REST Node.js/TypeScript
+- **Build:** `./code` (TypeScript/Node.js)
+- **Função:** API REST que controla o container FFmpeg
 - **Porta:** 5135:3001
 - **Volumes:** Docker socket + diretórios compartilhados
+- **Dependências:** Container `ffmpeg`
 
 ## ⚠️ Notas Importantes
 
@@ -320,6 +434,18 @@ gabriel-store-ffmpeg/
 4. **Sobrescrever:** O parâmetro `-y` é adicionado automaticamente aos comandos `ffmpeg`.
 
 5. **Formatos suportados:** Todos os formatos suportados pelo FFmpeg (MP4, AVI, MOV, MKV, WebM, MP3, WAV, AAC, FLAC, etc.).
+
+6. **Upload:** Arquivos podem ser enviados via base64 usando o endpoint `/upload-json`.
+
+7. **Validação:** Nomes de arquivos são validados para prevenir path traversal attacks.
+
+## 🛠️ Utilitários Disponíveis
+
+A API inclui várias funções utilitárias implementadas em [`utils.ts`](code/src/utils.ts):
+
+- **`formatFileSize(bytes)`**: Formata tamanho de arquivo em formato legível
+- **`formatDuration(seconds)`**: Formata duração em formato MM:SS ou HH:MM:SS
+- **`isValidDirectoryType(type)`**: Valida se o tipo é 'input' ou 'output'
 
 ## 📝 Desenvolvimento
 
@@ -338,6 +464,17 @@ cd code
 docker build -t ffmpeg-api:latest .
 ```
 
+### Estrutura de scripts
+
+```json
+{
+  "build": "tsc",
+  "start": "node dist/app.js",
+  "dev": "nodemon src/app.ts",
+  "clean": "rm -rf dist"
+}
+```
+
 ## 🤝 Contribuindo
 
 1. Fork o projeto
@@ -345,3 +482,7 @@ docker build -t ffmpeg-api:latest .
 3. Commit suas mudanças
 4. Push para a branch
 5. Abra um Pull Request
+
+## 🏷️ Tags
+
+`ffmpeg` `api` `typescript` `docker` `video` `audio` `conversion` `multimedia` `rest-api` `node.js`

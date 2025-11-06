@@ -4,12 +4,7 @@ services:
   ffmpeg:
     image: linuxserver/ffmpeg:arm64v8-latest
     container_name: ffmpeg
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Etc/UTC
     volumes:
-      - ffmpeg_config:/config
       - ./shared:/shared
     shm_size: "1gb"
     restart: unless-stopped
@@ -19,16 +14,16 @@ services:
     command: ["-c", "while true; do sleep 30; done"]
 
   ffmpeg-api:
-    image: gabrielsv01/ffmpeg-api:1.0.0
+    image: gabrielsv01/ffmpeg-api:1.0.1
     container_name: ffmpeg-api
+    environment:
+      - PORT=5135
     ports:
-      - "5135:3001"
+      - "5135:5135"
     volumes:
+      - ./README.md:/app/README.md:ro
       - /var/run/docker.sock:/var/run/docker.sock
       - ./shared:/shared
     depends_on:
       - ffmpeg
     restart: unless-stopped
-
-volumes:
-  ffmpeg_config:
