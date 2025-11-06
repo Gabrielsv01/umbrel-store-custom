@@ -3,13 +3,14 @@
 import { Request, Response } from 'express';
 import fs from 'fs';
 import MarkdownIt from 'markdown-it';
+import path from 'path';
 
 const PORT = process.env.PORT || 3001;
 const md = new MarkdownIt();
 
 const doc = (_req: Request, res: Response) => {
     try {
-        const readmePath = '/app/README.md';
+        const readmePath = path.join(__dirname, '../doc/README.md');
 
         if (!fs.existsSync(readmePath)) {
             return res.status(404).send('README.md não encontrado');

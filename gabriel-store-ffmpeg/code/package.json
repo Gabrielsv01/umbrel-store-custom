@@ -4,7 +4,8 @@
   "description": "FFmpeg API with TypeScript",
   "main": "dist/app.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run copy-static",
+    "copy-static": "mkdir -p dist/doc && cp src/doc/README.md dist/doc/",
     "start": "node dist/app.js",
     "dev": "nodemon src/app.ts",
     "clean": "rm -rf dist"

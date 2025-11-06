@@ -157,6 +157,34 @@ Faz upload de arquivos usando base64.
 }
 ```
 
+#### `POST /upload`
+Faz upload de arquivos usando multipart/form-data.
+
+**Form Data:**
+- `file`: arquivo a ser enviado
+
+**Exemplo usando curl:**
+```bash
+curl -X POST http://localhost:5135/upload \
+  -F "file=@video.mp4"
+```
+
+**Resposta:**
+```json
+{
+  "success": true,
+  "message": "Arquivo enviado com sucesso",
+  "file": {
+    "originalName": "video.mp4",
+    "savedName": "1642254000000-video.mp4",
+    "size": 15728640,
+    "sizeFormatted": "15.00 MB",
+    "path": "/shared/input/1642254000000-video.mp4",
+    "mimetype": "video/mp4"
+  }
+}
+```
+
 ### 🗑️ Deletar Arquivos
 
 #### `DELETE /files/:type/:filename`
@@ -295,6 +323,79 @@ curl -X POST http://localhost:5135/upload-json \
   }"
 ```
 
+### Upload de arquivo via multipart
+
+```bash
+# Upload usando form-data (recomendado para arquivos grandes)
+curl -X POST http://localhost:5135/upload \
+  -F "file=@video.mp4"
+
+curl -X POST http://localhost:5135/upload \
+  -F "file=@audio.mp3"
+```
+
+### 🎵 Juntar Áudio e Vídeo
+
+#### 1. Substituir o áudio do vídeo completamente
+
+```bash
+curl -X POST http://localhost:5135/ffmpeg \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "ffmpeg -i /shared/input/video.mp4 -i /shared/input/audio.mp3 -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 /shared/output/video_com_audio.mp4"
+  }'
+```
+
+#### 2. Misturar áudio existente com novo áudio
+
+```bash
+curl -X POST http://localhost:5135/ffmpeg \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "ffmpeg -i /shared/input/video.mp4 -i /shared/input/audio.mp3 -filter_complex \"[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=3\" -c:v copy -c:a aac /shared/output/video_audio_mixado.mp4"
+  }'
+```
+
+#### 3. Adicionar áudio a vídeo sem áudio
+
+```bash
+curl -X POST http://localhost:5135/ffmpeg \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "ffmpeg -i /shared/input/video.mp4 -i /shared/input/audio.mp3 -c:v copy -c:a aac -shortest /shared/output/video_com_audio.mp4"
+  }'
+```
+
+#### 4. Controlar volumes durante a mistura
+
+```bash
+curl -X POST http://localhost:5135/ffmpeg \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "ffmpeg -i /shared/input/video.mp4 -i /shared/input/audio.mp3 -filter_complex \"[0:a]volume=0.5[a0];[1:a]volume=0.8[a1];[a0][a1]amix=inputs=2:duration=first\" -c:v copy -c:a aac /shared/output/video_volumes_ajustados.mp4"
+  }'
+```
+
+#### 5. Sincronizar áudio com delay
+
+```bash
+curl -X POST http://localhost:5135/ffmpeg \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "ffmpeg -i /shared/input/video.mp4 -i /shared/input/audio.mp3 -filter_complex \"[1:a]adelay=2000|2000[delayed];[0:a][delayed]amix=inputs=2:duration=first\" -c:v copy -c:a aac /shared/output/video_audio_delayed.mp4"
+  }'
+```
+
+#### Parâmetros importantes para áudio/vídeo:
+
+- **`-c:v copy`**: Copia o vídeo sem recodificar (mais rápido)
+- **`-c:a aac`**: Codifica o áudio em AAC
+- **`-map 0:v:0 -map 1:a:0`**: Mapeia vídeo do primeiro arquivo e áudio do segundo
+- **`-shortest`**: Termina quando o arquivo mais curto acabar
+- **`amix`**: Filtro para misturar múltiplos áudios
+- **`volume=0.5`**: Ajusta volume (0.5 = 50%)
+- **`adelay=2000`**: Adiciona delay de 2 segundos (em milissegundos)
+
 ### Converter vídeo para diferentes formatos
 
 ```bash
@@ -351,6 +452,30 @@ curl -X POST http://localhost:5135/ffmpeg \
   }'
 ```
 
+### Workflow completo: Upload → Processar → Download
+
+```bash
+# 1. Fazer upload de vídeo e áudio
+curl -X POST http://localhost:5135/upload -F "file=@video.mp4"
+curl -X POST http://localhost:5135/upload -F "file=@audio.mp3"
+
+# 2. Verificar arquivos
+curl http://localhost:5135/files/input
+
+# 3. Juntar áudio e vídeo
+curl -X POST http://localhost:5135/ffmpeg \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "ffmpeg -i /shared/input/1642254000000-video.mp4 -i /shared/input/1642254000001-audio.mp3 -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 /shared/output/resultado.mp4"
+  }'
+
+# 4. Verificar resultado
+curl http://localhost:5135/files/output
+
+# 5. Baixar arquivo final
+curl -O http://localhost:5135/download/resultado.mp4
+```
+
 ### Obter informações de um arquivo
 
 ```bash
@@ -372,38 +497,6 @@ curl -X DELETE http://localhost:5135/files/input \
 
 # Limpar diretório completamente
 curl -X DELETE "http://localhost:5135/clear/input?confirm=true"
-```
-
-## 🔧 Estrutura do Projeto
-
-```
-gabriel-store-ffmpeg/
-├── docker-compose.yml          # Configuração dos containers
-├── README.md                   # Esta documentação
-├── code/                       # Código da API
-│   ├── src/
-│   │   ├── app.ts             # Aplicação principal
-│   │   ├── types.ts           # Definições de tipos TypeScript
-│   │   ├── utils.ts           # Funções utilitárias
-│   │   └── api/               # Endpoints da API
-│   │       ├── status.ts           # Status dos diretórios
-│   │       ├── filesType.ts        # Listar arquivos
-│   │       ├── infoByfilename.ts   # Informações de arquivo
-│   │       ├── command.ts          # Executar FFmpeg
-│   │       ├── uploadJson.ts       # Upload via base64
-│   │       ├── downloadbyFilename.ts # Download de arquivos
-│   │       ├── deleteFilesbyFileName.ts # Deletar arquivo único
-│   │       ├── deleteMultipleFiles.ts   # Deletar múltiplos
-│   │       └── clearDirectory.ts   # Limpar diretório
-│   ├── package.json           # Dependências Node.js
-│   ├── tsconfig.json          # Configuração TypeScript
-│   ├── Dockerfile             # Build da API
-│   ├── .nvmrc                 # Versão do Node.js
-│   ├── .gitignore            # Arquivos ignorados
-│   └── .dockerignore         # Arquivos ignorados no build
-└── shared/                    # Diretórios compartilhados
-    ├── input/                 # Arquivos de entrada
-    └── output/                # Arquivos processados
 ```
 
 ## 🐳 Containers
@@ -435,9 +528,11 @@ gabriel-store-ffmpeg/
 
 5. **Formatos suportados:** Todos os formatos suportados pelo FFmpeg (MP4, AVI, MOV, MKV, WebM, MP3, WAV, AAC, FLAC, etc.).
 
-6. **Upload:** Arquivos podem ser enviados via base64 usando o endpoint `/upload-json`.
+6. **Upload:** Arquivos podem ser enviados via base64 usando `/upload-json` ou via multipart usando `/upload`.
 
 7. **Validação:** Nomes de arquivos são validados para prevenir path traversal attacks.
+
+8. **Limites:** Upload JSON suporta até 500MB. Para arquivos maiores, use o endpoint `/upload`.
 
 ## 🛠️ Utilitários Disponíveis
 
@@ -468,7 +563,8 @@ docker build -t ffmpeg-api:latest .
 
 ```json
 {
-  "build": "tsc",
+  "build": "tsc && npm run copy-static",
+  "copy-static": "mkdir -p dist/doc && cp src/doc/README.md dist/doc/",
   "start": "node dist/app.js",
   "dev": "nodemon src/app.ts",
   "clean": "rm -rf dist"
@@ -485,4 +581,4 @@ docker build -t ffmpeg-api:latest .
 
 ## 🏷️ Tags
 
-`ffmpeg` `api` `typescript` `docker` `video` `audio` `conversion` `multimedia` `rest-api` `node.js`
+`ffmpeg` `api` `typescript` `docker` `video` `audio` `conversion` `multimedia` `rest-api` `node.js` `audio-video-merge`

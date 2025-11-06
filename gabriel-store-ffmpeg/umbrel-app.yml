@@ -4,7 +4,7 @@ name: ffmpeg
 tagline: Your personal video processing tool
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-ffmpeg/icon.svg
 category: Multimedia
-version: "1.0.1"
+version: "1.0.2"
 port: 5135
 description: >-
   FFmpeg is a complete, cross-platform solution to record, convert and stream audio and video.

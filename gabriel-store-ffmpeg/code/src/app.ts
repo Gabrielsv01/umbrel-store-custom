@@ -23,7 +23,18 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage: storage });
-app.use(express.json());
+
+// Aumenta o limite de payload para requisições JSON (500MB)
+app.use(express.json({ 
+    limit: '500mb'
+}));
+
+// Aumenta o limite para URL encoded data
+app.use(express.urlencoded({ 
+    limit: '500mb', 
+    extended: true,
+    parameterLimit: 100000 
+}));
 
 // Servir arquivos estáticos da pasta output
 app.use('/files', express.static('/shared/output'));
@@ -38,6 +49,42 @@ app.get('/files/:type', fileType);
 app.get('/info/:type/:filename', infoByFilename);
 
 app.post('/upload-json', uploadJson);
+
+// Adicionar endpoint multipart para arquivos grandes (recomendado)
+app.post('/upload', upload.single('file'), (req: Request, res: Response) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+        }
+
+        const formatFileSize = (bytes: number): string => {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        };
+
+        res.json({
+            success: true,
+            message: 'Arquivo enviado com sucesso',
+            file: {
+                originalName: req.file.originalname,
+                savedName: req.file.filename,
+                size: req.file.size,
+                sizeFormatted: formatFileSize(req.file.size),
+                path: req.file.path,
+                mimetype: req.file.mimetype
+            }
+        });
+    } catch (error) {
+        console.error('Erro no upload:', error);
+        res.status(500).json({ 
+            error: 'Erro ao fazer upload do arquivo',
+            details: error instanceof Error ? error.message : 'Erro desconhecido'
+        });
+    }
+});
 
 // Endpoint para deletar arquivos
 app.delete('/files/:type/:filename', deleteFilesbyFileName);

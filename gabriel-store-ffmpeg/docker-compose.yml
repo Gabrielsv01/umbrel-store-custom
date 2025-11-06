@@ -14,14 +14,13 @@ services:
     command: ["-c", "while true; do sleep 30; done"]
 
   ffmpeg-api:
-    image: gabrielsv01/ffmpeg-api:1.0.1
+    image: gabrielsv01/ffmpeg-api:1.0.2
     container_name: ffmpeg-api
     environment:
       - PORT=5135
     ports:
       - "5135:5135"
     volumes:
-      - ./README.md:/app/README.md:ro
       - /var/run/docker.sock:/var/run/docker.sock
       - ./shared:/shared
     depends_on:
