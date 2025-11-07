@@ -54,3 +54,16 @@ export interface MediaInfo {
     downloadUrl: string | null;
     directUrl: string | null;
 }
+
+export interface Job {
+    id: string;
+    status: 'pending' | 'running' | 'completed' | 'failed';
+    command: string;
+    startTime: Date;
+    endTime?: Date;
+    progress?: number;
+    stdout?: string;
+    stderr?: string;
+    outputFile?: string;
+    error?: string;
+}

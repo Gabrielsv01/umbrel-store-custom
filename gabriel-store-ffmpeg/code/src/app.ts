@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { exec } from 'child_process';
 import multer from 'multer';
+import { randomUUID } from 'crypto';
 import status from './api/status';
 import fileType from './api/filesType';
 import infoByFilename from './api/infoByfilename';
@@ -11,8 +12,16 @@ import downloadbyFilename from './api/downloadbyFilename';
 import clearDirectory from './api/clearDirectory';
 import uploadJson from './api/uploadJson';
 import doc from './api/doc';
+import DeleteJobById from './api/jobs/deletebyId';
+import { Job } from './types';
+import listAllJobs from './api/jobs/listAllJobs';
+import commandAsync from './api/commandAsync';
+import { cleanupOldJobs, JOB_CLEANUP_CONFIG } from './api/jobs/utils';
+import getJobById from './api/jobs/getJobById';
 
 const app = express();
+
+const jobs: Map<string, Job> = new Map();
 
 // Configurar multer para salvar arquivos na pasta shared/input
 const storage = multer.diskStorage({
@@ -101,6 +110,26 @@ app.get('/download/:filename', downloadbyFilename);
 // Endpoint para executar comandos FFmpeg
 app.post('/ffmpeg', command);
 
+// Endpoint assíncrono para FFmpeg
+app.post('/ffmpeg-async', (req: Request, res: Response) => {
+    return commandAsync(req, res, jobs);
+});
+
+// Endpoint para verificar status do job
+app.get('/job/:jobId', (req: Request, res: Response) => {
+    return getJobById(req, res, jobs);
+});
+
+// Endpoint para listar todos os jobs
+app.get('/jobs', (req: Request, res: Response) => {
+    return listAllJobs(req, res, jobs);
+});
+
+// Endpoint para cancelar/remover job
+app.delete('/job/:jobId', (req: Request, res: Response) => {
+   return DeleteJobById(req, res, jobs);
+});
+
 // Endpoint para criar diretórios se não existirem
 app.post('/init', (_req: Request, res: Response) => {
     const dockerCmd = `docker exec ffmpeg mkdir -p /shared/input /shared/output`;
@@ -119,6 +148,10 @@ app.post('/init', (_req: Request, res: Response) => {
 
 // Endpoint para servir o README na rota raiz
 app.get('/', doc);
+
+// Iniciar limpeza automática
+setInterval(() => cleanupOldJobs(jobs), JOB_CLEANUP_CONFIG.cleanupInterval);
+
 
 const PORT = process.env.PORT || 3001;
 
