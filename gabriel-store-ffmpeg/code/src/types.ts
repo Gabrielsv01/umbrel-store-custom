@@ -66,4 +66,6 @@ export interface Job {
     stderr?: string;
     outputFile?: string;
     error?: string;
+    lastHeartbeat?: Date; 
+    heartbeatInterval?: NodeJS.Timeout; 
 }

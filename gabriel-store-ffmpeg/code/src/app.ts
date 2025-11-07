@@ -16,7 +16,7 @@ import DeleteJobById from './api/jobs/deletebyId';
 import { Job } from './types';
 import listAllJobs from './api/jobs/listAllJobs';
 import commandAsync from './api/commandAsync';
-import { cleanupOldJobs, JOB_CLEANUP_CONFIG } from './api/jobs/utils';
+import { cleanupOldJobs, JOB_CLEANUP_CONFIG, syncJobsWithRunningProcesses } from './api/jobs/utils';
 import getJobById from './api/jobs/getJobById';
 
 const app = express();
@@ -151,6 +151,8 @@ app.get('/', doc);
 
 // Iniciar limpeza automática
 setInterval(() => cleanupOldJobs(jobs), JOB_CLEANUP_CONFIG.cleanupInterval);
+// Adicionar sincronização de jobs órfãos
+setInterval(() => syncJobsWithRunningProcesses(jobs), JOB_CLEANUP_CONFIG.syncInterval);
 
 
 const PORT = process.env.PORT || 3001;
