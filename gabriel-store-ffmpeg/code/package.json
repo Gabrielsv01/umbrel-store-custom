@@ -1,6 +1,6 @@
 {
   "name": "ffmpeg-api",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "FFmpeg API with TypeScript",
   "main": "dist/app.js",
   "scripts": {
