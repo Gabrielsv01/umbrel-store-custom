@@ -250,6 +250,12 @@ body {
     font-weight: 600;
 }
 
+.job-title-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
 .job-title {
     font-weight: 700;
     color: #2d3748;
@@ -261,6 +267,9 @@ body {
     border: 1px solid #e2e8f0;
     word-break: break-all;
     overflow-wrap: break-word;
+    display: inline-block;
+    width: auto;
+    max-width: 100%;
 }
 
 .job-status {
@@ -314,6 +323,31 @@ body {
 .job-progress-fill {
     height: 100%;
     background: linear-gradient(90deg, #4299e1, #3182ce);
+    position: relative;
+    overflow: hidden;
+}
+
+.job-progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -50%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(90deg, 
+        transparent 0%, 
+        rgba(255, 255, 255, 0.4) 50%, 
+        transparent 100%);
+    animation: slideEffect 2s ease-in-out infinite;
+}
+
+@keyframes slideEffect {
+    0% {
+        left: -50%;
+    }
+    100% {
+        left: 100%;
+    }
 }
 
 .job-details {
@@ -504,6 +538,11 @@ body {
         flex-direction: column;
         gap: 8px;
     }
+    .file-actions {
+        flex-direction: column;
+        padding-left: 16px;
+    }
+
     
     .job-actions .btn {
         margin-right: 0;
@@ -514,13 +553,11 @@ body {
 }
 
 .duration-badge {
-    background: linear-gradient(135deg, #e6fffa, #b2f5ea);
     color: #234e52;
     padding: 4px 8px;
     border-radius: 12px;
     font-size: 0.75rem;
     font-weight: 600;
-    border: 1px solid #81e6d9;
 }
 
 .file-path {

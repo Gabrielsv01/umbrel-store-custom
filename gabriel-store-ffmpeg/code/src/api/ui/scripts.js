@@ -73,21 +73,6 @@ async function viewJobFile(filename) {
     }
 }
 
-async function viewJobDetails(jobId) {
-    try {
-        const response = await fetch(`/job/${jobId}`);
-        const result = await response.json();
-        
-        if (result.success) {
-            showToast(`📊 Job ${jobId}: ${result.job.status}`, 'success');
-        } else {
-            showToast(`❌ Erro ao obter detalhes do job`, 'error');
-        }
-    } catch (error) {
-        showToast(`❌ Erro: ${error.message}`, 'error');
-    }
-}
-
 async function deleteFile(type, filename) {
     if (!confirm(`Deletar ${filename}?`)) return;
 
@@ -134,7 +119,7 @@ async function loadJobs() {
         }
 
         document.getElementById('jobsList').innerHTML = jobs.map(job => {
-            const duration = job.duration ? `${Math.round(job.duration)}ms` : 'N/A';
+            const duration = formatDuration(job.duration);
             const isLongCommand = job.command.length > 80;
             const commandShort = isLongCommand ? job.command.substring(0, 80) + '...' : job.command;
             
@@ -147,7 +132,9 @@ async function loadJobs() {
                 <div class="job-header">
                     <div class="job-title-container">
                         <div class="job-title-label">Job ID:</div>
-                        <div class="job-title">${job.id}</div>
+                        <div class="job-title-wrapper">
+                            <div class="job-title">${job.id}</div>
+                        </div>
                     </div>
                     <div class="job-status ${job.status}">${getStatusText(job.status)}</div>
                 </div>
@@ -213,11 +200,6 @@ async function loadJobs() {
                         �️ Visualizar
                     </button>
                     ` : ''}
-                    ${job.status === 'running' ? `
-                    <button class="btn btn-small" onclick="viewJobDetails('${job.id}')">
-                        📊 Detalhes
-                    </button>
-                    ` : ''}
                 </div>
             </div>
             `;
@@ -250,6 +232,24 @@ function getStatusText(status) {
         pending: 'Pendente'
     };
     return statusMap[status] || status;
+}
+
+function formatDuration(ms) {
+    if (!ms || ms === 0) return 'N/A';
+    
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    
+    if (hours > 0) {
+        return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+    } else if (minutes > 0) {
+        return `${minutes}m ${seconds % 60}s`;
+    } else if (seconds > 0) {
+        return `${seconds}s`;
+    } else {
+        return `${ms}ms`;
+    }
 }
 
 async function deleteJob(jobId) {
