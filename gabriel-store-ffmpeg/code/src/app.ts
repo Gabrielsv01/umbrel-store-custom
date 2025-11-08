@@ -12,6 +12,7 @@ import downloadbyFilename from './api/downloadbyFilename';
 import clearDirectory from './api/clearDirectory';
 import uploadJson from './api/uploadJson';
 import doc from './api/doc';
+import ui from './api/ui';
 import DeleteJobById from './api/jobs/deletebyId';
 import { Job } from './types';
 import listAllJobs from './api/jobs/listAllJobs';
@@ -47,6 +48,9 @@ app.use(express.urlencoded({
 
 // Servir arquivos estáticos da pasta output
 app.use('/files', express.static('/shared/output'));
+
+// Servir arquivos estáticos da UI (CSS e JS)
+app.use('/ui', express.static(__dirname + '/api/ui'));
 
 // Endpoint para verificar se os diretórios existem
 app.get('/status', status);
@@ -148,6 +152,9 @@ app.post('/init', (_req: Request, res: Response) => {
 
 // Endpoint para servir o README na rota raiz
 app.get('/', doc);
+
+// Interface web para gerenciar FFmpeg API
+app.get('/ui', ui);
 
 // Iniciar limpeza automática
 setInterval(() => cleanupOldJobs(jobs), JOB_CLEANUP_CONFIG.cleanupInterval);

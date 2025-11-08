@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FFmpeg API - Interface</title>
+    <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🎬 FFmpeg API</h1>
+            <p>Processamento de vídeo e áudio em tempo real</p>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="grid">
+            <!-- Left Column - Stats -->
+            <div>
+                <div class="card">
+                    <h2>📊 Estatísticas</h2>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-number" id="totalJobs">0</div>
+                            <div class="stat-label">Total Jobs</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="runningJobs">0</div>
+                            <div class="stat-label">Executando</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="completedJobs">0</div>
+                            <div class="stat-label">Concluídos</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="failedJobs">0</div>
+                            <div class="stat-label">Falharam</div>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-small" onclick="refreshData()">
+                        🔄 Atualizar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Column - Files -->
+            <div>
+                <div class="card">
+                    <h2>📁 Arquivos</h2>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <button class="btn btn-small" onclick="loadFiles('input')" id="inputBtn">
+                            📥 Entrada
+                        </button>
+                        <button class="btn btn-small btn-secondary" onclick="loadFiles('output')" id="outputBtn">
+                            📤 Saída
+                        </button>
+                    </div>
+                    
+                    <div class="file-list" id="filesList">
+                        <div class="no-data">Selecione uma pasta para ver os arquivos</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Jobs Card (Full Width) -->
+        <div class="card" style="margin-top: 30px;">
+            <h2>🔧 Jobs em Execução</h2>
+            
+            <div style="margin-bottom: 20px;">
+                <button class="btn btn-small" onclick="loadJobs()">
+                    🔄 Atualizar Jobs
+                </button>
+            </div>
+            
+            <div id="jobsList">
+                <div class="no-data">Nenhum job encontrado</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast" class="toast"></div>
+
+    <script src="/ui/scripts.js"></script>
+</body>
+</html>

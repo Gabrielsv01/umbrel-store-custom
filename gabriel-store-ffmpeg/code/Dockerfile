@@ -15,6 +15,9 @@ COPY src/ ./src/
 # Compilar TypeScript
 RUN npm run build
 
+# Copiar arquivos estáticos da UI
+COPY src/api/ui/ ./dist/api/ui/
+
 # Estágio de produção
 FROM node:18-alpine AS production
 

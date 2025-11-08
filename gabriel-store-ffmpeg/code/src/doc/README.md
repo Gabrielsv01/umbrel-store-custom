@@ -4,7 +4,16 @@ Uma API REST completa para processamento de vídeo e áudio usando FFmpeg em con
 
 ## 📋 Visão Geral
 
-Esta API fornece uma interface HTTP para executar comandos FFmpeg, gerenciar arquivos de entrada e saída, e monitorar o status do sistema. É ideal para automação de processamento de mídia em ambientes containerizados.
+Esta API fornece uma interface HTTP para executar comandos FFmpeg, gerenciar arquivos de entrada e saída, e monitorar jobs de processamento. É ideal para automação de processamento de mídia em ambientes containerizados.
+
+### 🌟 Características Principais
+
+- **API REST Completa**: Endpoints para todas as operações FFmpeg
+- **Sistema de Jobs**: Processamento assíncrono com heartbeat monitoring
+- **Upload Flexível**: Suporte a base64 e multipart/form-data até 500MB
+- **Gerenciamento de Arquivos**: Upload, download, listagem e informações de mídia
+- **Validação de Segurança**: Path traversal protection e validação de arquivos
+- **Documentação Automática**: README servido como HTML na rota raiz
 
 ## 🚀 Início Rápido
 
@@ -15,10 +24,9 @@ Esta API fornece uma interface HTTP para executar comandos FFmpeg, gerenciar arq
 
 ### Instalação
 
-1. Clone o repositório
-2. Execute com Docker Compose:
-
 ```bash
+git clone <repository>
+cd gabriel-store-ffmpeg
 docker-compose up -d
 ```
 
@@ -29,24 +37,70 @@ A API estará disponível em `http://localhost:5135`
 ### 🔍 Status e Monitoramento
 
 #### `GET /status`
-Verifica o status dos diretórios compartilhados.
+Verifica o status dos diretórios compartilhados e containers.
 
-**Resposta:**
+**Parâmetros:**
+- Nenhum parâmetro necessário
+
+**Exemplo:**
+```bash
+curl http://localhost:5135/status
+```
+
+**Resposta de Sucesso:**
 ```json
 {
   "status": "ok",
-  "directories": "drwxr-xr-x 2 abc abc 4096 Jan 15 10:30 input\ndrwxr-xr-x 2 abc abc 4096 Jan 15 10:30 output"
+  "directories": "total 8\ndrwxr-xr-x 2 abc abc 4096 Jan 15 10:30 input\ndrwxr-xr-x 2 abc abc 4096 Jan 15 10:30 output"
+}
+```
+
+**Resposta de Erro (container FFmpeg não encontrado):**
+```json
+{
+  "status": "error",
+  "error": "Error: No such container: ffmpeg"
+}
+```
+
+**Resposta de Erro (diretórios não acessíveis):**
+```json
+{
+  "status": "error", 
+  "error": "docker: Error response from daemon: container ffmpeg is not running"
 }
 ```
 
 #### `POST /init`
 Cria os diretórios necessários se não existirem.
 
-**Resposta:**
+**Parâmetros:**
+- Nenhum parâmetro necessário
+
+**Exemplo:**
+```bash
+curl -X POST http://localhost:5135/init
+```
+
+**Resposta de Sucesso:**
 ```json
 {
   "success": true,
   "message": "Diretórios criados/verificados"
+}
+```
+
+**Resposta de Erro (container não acessível):**
+```json
+{
+  "error": "Error: No such container: ffmpeg"
+}
+```
+
+**Resposta de Erro (permissão negada):**
+```json
+{
+  "error": "docker: Error response from daemon: container ffmpeg is not running"
 }
 ```
 
@@ -60,17 +114,17 @@ Lista arquivos em um diretório específico.
 
 **Exemplo:**
 ```bash
-GET /files/input
+curl http://localhost:5135/files/input
 ```
 
-**Resposta:**
+**Resposta de Sucesso:**
 ```json
 {
   "type": "input",
   "count": 2,
   "files": [
     {
-      "name": "video.mp4",
+      "name": "1642254000000-video.mp4",
       "size": 15728640,
       "sizeFormatted": "15.00 MB",
       "date": "Jan 15 10:30",
@@ -78,8 +132,34 @@ GET /files/input
       "isMedia": true,
       "downloadUrl": null,
       "directUrl": null
+    },
+    {
+      "name": "1642254000001-audio.mp3",
+      "size": 5242880,
+      "sizeFormatted": "5.00 MB",
+      "date": "Jan 15 10:32",
+      "permissions": "-rw-r--r--",
+      "isMedia": true,
+      "downloadUrl": null,
+      "directUrl": null
     }
   ]
+}
+```
+
+**Resposta (diretório vazio):**
+```json
+{
+  "type": "input",
+  "count": 0,
+  "files": []
+}
+```
+
+**Resposta de Erro:**
+```json
+{
+  "error": "Tipo de diretório inválido. Use 'input' ou 'output'"
 }
 ```
 
@@ -92,13 +172,13 @@ Obtém informações detalhadas de um arquivo de mídia usando ffprobe.
 
 **Exemplo:**
 ```bash
-GET /info/input/video.mp4
+curl http://localhost:5135/info/input/video.mp4
 ```
 
-**Resposta:**
+**Resposta de Sucesso:**
 ```json
 {
-  "filename": "video.mp4",
+  "filename": "1642254000000-video.mp4",
   "type": "input",
   "format": {
     "formatName": "mov,mp4,m4a,3gp,3g2,mj2",
@@ -131,45 +211,40 @@ GET /info/input/video.mp4
 }
 ```
 
+**Resposta de Erro (arquivo não encontrado):**
+```json
+{
+  "error": "Arquivo não encontrado",
+  "filename": "inexistente.mp4",
+  "type": "input"
+}
+```
+
+**Resposta de Erro (não é arquivo de mídia):**
+```json
+{
+  "error": "Não foi possível obter informações do arquivo. Certifique-se de que é um arquivo de mídia válido",
+  "filename": "documento.txt",
+  "type": "input"
+}
+```
+
 ### 📤 Upload de Arquivos
 
-#### `POST /upload-json`
-Faz upload de arquivos usando base64.
-
-**Body:**
-```json
-{
-  "data": "base64_encoded_file_data",
-  "filename": "video.mp4"
-}
-```
-
-**Resposta:**
-```json
-{
-  "success": true,
-  "message": "Arquivo enviado com sucesso",
-  "file": {
-    "savedName": "1642254000000-video.mp4",
-    "size": 15728640,
-    "path": "/shared/input/1642254000000-video.mp4"
-  }
-}
-```
-
 #### `POST /upload`
-Faz upload de arquivos usando multipart/form-data.
+Upload via multipart/form-data (recomendado para arquivos grandes).
 
-**Form Data:**
-- `file`: arquivo a ser enviado
+**Parâmetros:**
+- **Form Data**: `file` - arquivo a ser enviado (obrigatório)
+- **Headers**: `Content-Type: multipart/form-data` (automático)
 
-**Exemplo usando curl:**
+**Exemplo:**
 ```bash
 curl -X POST http://localhost:5135/upload \
   -F "file=@video.mp4"
 ```
 
-**Resposta:**
+**Resposta de Sucesso:**
 ```json
 {
   "success": true,
@@ -185,38 +260,420 @@ curl -X POST http://localhost:5135/upload \
 }
 ```
 
-### 🗑️ Deletar Arquivos
+**Resposta de Erro (nenhum arquivo):**
+```json
+{
+  "error": "Nenhum arquivo enviado"
+}
+```
 
-#### `DELETE /files/:type/:filename`
-Deleta um arquivo específico.
+**Resposta de Erro (erro do sistema):**
+```json
+{
+  "error": "Erro ao fazer upload do arquivo",
+  "details": "ENOSPC: no space left on device, write '/shared/input/temp'"
+}
+```
+
+#### `POST /upload-json`
+Upload via base64 (até 500MB).
 
 **Parâmetros:**
-- `type`: `input` ou `output`
-- `filename`: nome do arquivo
+- **Body JSON**: 
+  - `data` (string, obrigatório): arquivo codificado em base64
+  - `filename` (string, obrigatório): nome do arquivo com extensão
+
+**Headers necessários:**
+- `Content-Type: application/json`
 
 **Exemplo:**
 ```bash
-DELETE /files/input/video.mp4
+curl -X POST http://localhost:5135/upload-json \
+  -H "Content-Type: application/json" \
+  -d '{
+    "data": "data:video/mp4;base64,AAAAHGZ0eXBpc29...",
+    "filename": "video.mp4"
+  }'
 ```
 
-**Resposta:**
+**Resposta de Sucesso:**
 ```json
 {
   "success": true,
-  "message": "Arquivo video.mp4 deletado com sucesso",
-  "filename": "video.mp4",
-  "type": "input"
+  "message": "Arquivo enviado com sucesso",
+  "file": {
+    "originalName": "video.mp4",
+    "savedName": "1642254000000-video.mp4",
+    "size": 15728640,
+    "sizeFormatted": "15.00 MB",
+    "path": "/shared/input/1642254000000-video.mp4"
+  }
+}
+```
+
+**Resposta de Erro (dados faltando):**
+```json
+{
+  "error": "Dados ou nome do arquivo não fornecidos"
+}
+```
+
+**Resposta de Erro (base64 inválido):**
+```json
+{
+  "error": "Erro ao processar dados base64",
+  "details": "Invalid character in base64 string"
+}
+```
+
+**Resposta de Erro (arquivo muito grande):**
+```json
+{
+  "error": "Payload too large",
+  "details": "Arquivo excede o limite de 500MB para upload JSON"
+}
+```{
+  {
+    "originalName": "video.mp4",
+    "savedName": "1642254000000-video.mp4",
+    "size": 15728640,
+    "sizeFormatted": "15.00 MB",
+    "path": "/shared/input/1642254000000-video.mp4",
+    "mimetype": "video/mp4"
+  }
+}
+```
+
+### 🎬 Processamento FFmpeg
+
+#### `POST /ffmpeg`
+Executa comandos FFmpeg síncronos (timeout: 5 minutos).
+
+**Parâmetros:**
+- **Body JSON**: 
+  - `command` (string, obrigatório): comando FFmpeg completo
+
+**Headers necessários:**
+- `Content-Type: application/json`
+
+**Observações:**
+- Parâmetro `-y` é adicionado automaticamente
+- Timeout de 5 minutos (300 segundos)
+- Processamento síncrono (bloqueia até conclusão)
+
+**Exemplo:**
+```bash
+curl -X POST http://localhost:5135/ffmpeg \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "ffmpeg -i /shared/input/video.mp4 -c:v libx264 -crf 23 /shared/output/compressed.mp4"
+  }'
+```
+
+**Resposta de Sucesso:**
+```json
+{
+  "success": true,
+  "stdout": "ffmpeg version 4.4.2-0ubuntu0.20.04.4 Copyright (c) 2000-2021 the FFmpeg developers\nbuilt with gcc 9 (Ubuntu 9.4.0-1ubuntu1~20.04.1)\n...\nframe= 3600 fps= 45 q=23.0 size=   15360kB time=00:02:00.00 bitrate=1024.0kbits/s speed=1.5x\nvideo:14080kB audio:1280kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.000000%",
+  "stderr": "",
+  "outputFile": "compressed.mp4",
+  "downloadUrl": "/download/compressed.mp4",
+  "directUrl": "/files/compressed.mp4"
+}
+```
+
+**Resposta de Erro (comando vazio):**
+```json
+{
+  "success": false,
+  "error": "Comando não fornecido"
+}
+```
+
+**Resposta de Erro (arquivo não encontrado):**
+```json
+{
+  "success": false,
+  "stdout": "",
+  "stderr": "/shared/input/inexistente.mp4: No such file or directory",
+  "error": "Erro na execução do FFmpeg"
+}
+```
+
+**Resposta de Erro (timeout):**
+```json
+{
+  "success": false,
+  "error": "Comando cancelado por timeout (5 minutos)"
+}
+```
+
+#### `POST /ffmpeg-async`
+Executa comandos FFmpeg assíncronos com sistema de jobs avançado.
+
+**Parâmetros:**
+- **Body JSON**: 
+  - `command` (string, obrigatório): comando FFmpeg completo
+
+**Headers necessários:**
+- `Content-Type: application/json`
+
+**Observações:**
+- Parâmetro `-y` é adicionado automaticamente
+- Sem timeout (monitored via heartbeat)
+- Processamento assíncrono (retorna job ID imediatamente)
+- Job é monitorado via heartbeat system
+
+**Exemplo:**
+```bash
+curl -X POST http://localhost:5135/ffmpeg-async \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "ffmpeg -i /shared/input/video.mp4 -c:v libx264 -crf 23 /shared/output/compressed.mp4"
+  }'
+```
+
+**Resposta de Sucesso:**
+```json
+{
+  "success": true,
+  "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "message": "Job iniciado",
+  "statusUrl": "/job/f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "status": "pending"
+}
+```
+
+**Resposta de Erro (comando vazio):**
+```json
+{
+  "success": false,
+  "error": "Comando não fornecido"
+}
+```
+
+**Resposta de Erro (sistema ocupado):**
+```json
+{
+  "success": false,
+  "error": "Sistema temporariamente indisponível. Tente novamente em alguns segundos."
+}
+```
+
+### 👷 Sistema Avançado de Jobs
+
+#### `GET /jobs`
+Lista todos os jobs com estatísticas detalhadas.
+
+**Parâmetros:**
+- Nenhum parâmetro necessário
+
+**Exemplo:**
+```bash
+curl http://localhost:5135/jobs
+```
+
+**Resposta (com múltiplos jobs):**
+```json
+{
+  "jobs": [
+    {
+      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "status": "running",
+      "command": "ffmpeg -i /shared/input/1642254000000-video.mp4 -c:v libx264 -crf 23 /shared/output/compressed.mp4",
+      "startTime": "2024-01-15T10:30:00.000Z",
+      "endTime": null,
+      "outputFile": null,
+      "duration": null
+    },
+    {
+      "id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      "status": "completed",
+      "command": "ffmpeg -i /shared/input/1642254000001-audio.mp3 -c:a aac /shared/output/converted.aac",
+      "startTime": "2024-01-15T10:25:00.000Z",
+      "endTime": "2024-01-15T10:26:30.000Z",
+      "outputFile": "converted.aac",
+      "duration": 90000
+    },
+    {
+      "id": "6ba7b811-9dad-11d1-80b4-00c04fd430c8",
+      "status": "failed",
+      "command": "ffmpeg -i /shared/input/inexistente.mp4 -c:v copy /shared/output/fail.mp4",
+      "startTime": "2024-01-15T10:20:00.000Z",
+      "endTime": "2024-01-15T10:20:05.000Z",
+      "outputFile": null,
+      "duration": 5000
+    }
+  ],
+  "total": 3,
+  "running": 1,
+  "completed": 1,
+  "failed": 1
+}
+```
+
+**Resposta (sem jobs):**
+```json
+{
+  "jobs": [],
+  "total": 0,
+  "running": 0,
+  "completed": 0,
+  "failed": 0
+}
+```
+
+#### `GET /job/:jobId`
+Obtém status detalhado de um job específico com informações de heartbeat.
+
+**Parâmetros:**
+- `jobId` (path, obrigatório): ID único do job
+
+**Exemplo:**
+```bash
+curl http://localhost:5135/job/f47ac10b-58cc-4372-a567-0e02b2c3d479
+```
+
+**Resposta (Job em execução):**
+```json
+{
+  "success": true,
+  "job": {
+    "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "status": "running",
+    "command": "ffmpeg -i /shared/input/1642254000000-video.mp4 -c:v libx264 -crf 23 /shared/output/compressed.mp4",
+    "startTime": "2024-01-15T10:30:00.000Z",
+    "lastHeartbeat": "2024-01-15T10:32:15.000Z",
+    "progress": null,
+    "stdout": "frame= 1800 fps= 30 q=23.0 size=   7680kB time=00:01:00.00 bitrate=1024.0kbits/s speed=1.0x",
+    "stderr": "",
+    "outputFile": null,
+    "error": null
+  }
+}
+```
+
+**Resposta (Job concluído):**
+```json
+{
+  "success": true,
+  "job": {
+    "id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+    "status": "completed",
+    "command": "ffmpeg -i /shared/input/1642254000001-audio.mp3 -c:a aac /shared/output/converted.aac",
+    "startTime": "2024-01-15T10:25:00.000Z",
+    "endTime": "2024-01-15T10:26:30.000Z",
+    "lastHeartbeat": "2024-01-15T10:26:30.000Z",
+    "progress": null,
+    "stdout": "frame=    0 fps=0.0 q=-1.0 size=    5120kB time=00:03:20.00 bitrate= 128.0kbits/s speed=15.2x",
+    "stderr": "",
+    "outputFile": "converted.aac",
+    "error": null
+  }
+}
+```
+
+**Resposta (Job com falha):**
+```json
+{
+  "success": true,
+  "job": {
+    "id": "6ba7b811-9dad-11d1-80b4-00c04fd430c8",
+    "status": "failed",
+    "command": "ffmpeg -i /shared/input/inexistente.mp4 -c:v copy /shared/output/fail.mp4",
+    "startTime": "2024-01-15T10:20:00.000Z",
+    "endTime": "2024-01-15T10:20:05.000Z",
+    "lastHeartbeat": "2024-01-15T10:20:05.000Z",
+    "progress": null,
+    "stdout": "",
+    "stderr": "/shared/input/inexistente.mp4: No such file or directory",
+    "outputFile": null,
+    "error": "FFmpeg process exited with code 1"
+  }
+}
+```
+
+**Resposta de Erro (Job não encontrado):**
+```json
+{
+  "success": false,
+  "error": "Job não encontrado"
+}
+```
+
+#### `DELETE /job/:jobId`
+Cancela/remove um job (marca como falhou se estiver rodando).
+
+**Parâmetros:**
+- `jobId` (path, obrigatório): ID único do job
+
+**Exemplo:**
+```bash
+curl -X DELETE http://localhost:5135/job/abc123
+```
+
+**Resposta de Sucesso:**
+```json
+{
+  "success": true,
+  "message": "Job abc123 removido"
+}
+```
+
+**Resposta de Erro:**
+```json
+{
+  "success": false,
+  "error": "Job não encontrado"
+}
+```
+
+### 🗑️ Gerenciamento de Arquivos
+
+#### `DELETE /files/:type/:filename`
+Remove arquivo específico com validação de segurança.
+
+**Parâmetros:**
+- `type` (path, obrigatório): `input` ou `output`
+- `filename` (path, obrigatório): nome do arquivo a ser removido
+
+**Exemplo:**
+```bash
+curl -X DELETE http://localhost:5135/files/input/video.mp4
+```
+
+**Resposta de Sucesso:**
+```json
+{
+  "success": true,
+  "message": "Arquivo video.mp4 deletado com sucesso"
+}
+```
+
+**Resposta de Erro:**
+```json
+{
+  "success": false,
+  "error": "Arquivo não encontrado"
 }
 ```
 
 #### `DELETE /files/:type`
-Deleta múltiplos arquivos.
+Remove múltiplos arquivos com relatório detalhado.
 
-**Body:**
-```json
-{
-  "files": ["video1.mp4", "video2.mp4"]
-}
+**Parâmetros:**
+- `type` (path, obrigatório): `input` ou `output`
+- **Body JSON**:
+  - `files` (array, obrigatório): lista de nomes de arquivos
+
+**Headers necessários:**
+- `Content-Type: application/json`
+
+**Exemplo:**
+```bash
+curl -X DELETE http://localhost:5135/files/input \
+  -H "Content-Type: application/json" \
+  -d '{"files": ["video1.mp4", "video2.mp4"]}'
 ```
 
 **Resposta:**
@@ -246,161 +703,137 @@ Deleta múltiplos arquivos.
 ```
 
 #### `DELETE /clear/:type?confirm=true`
-Limpa todos os arquivos de um diretório.
+Limpa diretório completamente (requer confirmação).
 
 **Parâmetros:**
-- `type`: `input` ou `output`
-- Query parameter: `confirm=true` (obrigatório)
+- `type` (path, obrigatório): `input` ou `output`
+- `confirm` (query, obrigatório): deve ser `true` para confirmar ação
 
 **Exemplo:**
 ```bash
-DELETE /clear/input?confirm=true
+curl -X DELETE "http://localhost:5135/clear/input?confirm=true"
 ```
 
-**Resposta:**
+**Resposta de Sucesso:**
 ```json
 {
   "success": true,
-  "message": "Todos os arquivos do diretório input foram removidos",
-  "type": "input"
+  "message": "Diretório input limpo com sucesso",
+  "deletedFiles": 3
 }
 ```
 
-### 🎬 Processamento FFmpeg
-
-#### `POST /ffmpeg`
-Executa comandos FFmpeg no container.
-
-**Body:**
+**Resposta de Erro (sem confirmação):**
 ```json
 {
-  "command": "ffmpeg -i /shared/input/video.mp4 -c:v libx264 -crf 23 /shared/output/compressed.mp4"
+  "success": false,
+  "error": "Confirmação necessária. Use ?confirm=true"
 }
 ```
 
-**Resposta:**
-```json
-{
-  "success": true,
-  "stdout": "ffmpeg version 4.4.2...",
-  "stderr": "",
-  "outputFile": "compressed.mp4",
-  "downloadUrl": "/download/compressed.mp4",
-  "directUrl": "/files/compressed.mp4"
-}
-```
-
-### 📥 Download de Arquivos
+### 📥 Download
 
 #### `GET /download/:filename`
-Baixa um arquivo específico do diretório de saída.
+Download direto de arquivos processados com headers apropriados para download.
+
+**Parâmetros:**
+- `filename` (path, obrigatório): nome do arquivo no diretório `/shared/output/`
+
+**Observações:**
+- Arquivo deve existir no diretório output
+- Valida contra path traversal attacks
+- Define Content-Disposition para forçar download
 
 **Exemplo:**
 ```bash
-GET /download/compressed.mp4
+curl -O http://localhost:5135/download/compressed.mp4
+```
+
+**Headers de Resposta:**
+```
+Content-Type: video/mp4
+Content-Disposition: attachment; filename="compressed.mp4"
+Content-Length: 15728640
+```
+
+**Resposta de Erro (404):**
+```json
+{
+  "error": "Arquivo não encontrado",
+  "filename": "inexistente.mp4"
+}
 ```
 
 #### `GET /files/:filename`
-Acesso direto a arquivos do diretório de saída (servidos estaticamente).
+Acesso direto a arquivos para visualização/streaming (servidos estaticamente).
+
+**Parâmetros:**
+- `filename` (path, obrigatório): nome do arquivo no diretório `/shared/output/`
+
+**Observações:**
+- Servido via express.static
+- Suporte a range requests (streaming)
+- Sem Content-Disposition (navegador decide)
 
 **Exemplo:**
 ```bash
-GET /files/compressed.mp4
+curl http://localhost:5135/files/compressed.mp4
 ```
 
-## 💡 Exemplos de Uso
+**Diferenças do /download:**
+- **Sem Content-Disposition**: Navegador decide se baixa ou visualiza
+- **Streaming Friendly**: Suporte a range requests para vídeo
+- **Cache Headers**: Headers de cache otimizados
 
-### Upload de arquivo via base64
+### 📚 Documentação
 
+#### `GET /`
+Serve esta documentação como HTML estilizado.
+
+**Parâmetros:**
+- Nenhum parâmetro necessário
+
+**Exemplo:**
 ```bash
-# Converter arquivo para base64 e fazer upload
-base64_data=$(base64 -i video.mp4)
-curl -X POST http://localhost:5135/upload-json \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"data\": \"$base64_data\",
-    \"filename\": \"video.mp4\"
-  }"
+curl http://localhost:5135/
 ```
 
-### Upload de arquivo via multipart
+#### `GET /ui`
+Interface web moderna para gerenciamento visual.
 
+**Parâmetros:**
+- Nenhum parâmetro necessário
+
+**Exemplo:**
 ```bash
-# Upload usando form-data (recomendado para arquivos grandes)
-curl -X POST http://localhost:5135/upload \
-  -F "file=@video.mp4"
-
-curl -X POST http://localhost:5135/upload \
-  -F "file=@audio.mp3"
+curl http://localhost:5135/ui
 ```
 
-### 🎵 Juntar Áudio e Vídeo
+## 🎵 Casos de Uso Comuns
 
-#### 1. Substituir o áudio do vídeo completamente
+### 1. Juntar Áudio e Vídeo
 
 ```bash
+# Substituir áudio completamente
 curl -X POST http://localhost:5135/ffmpeg \
   -H "Content-Type: application/json" \
   -d '{
-    "command": "ffmpeg -i /shared/input/video.mp4 -i /shared/input/audio.mp3 -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 /shared/output/video_com_audio.mp4"
+    "command": "ffmpeg -i /shared/input/video.mp4 -i /shared/input/audio.mp3 -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 /shared/output/resultado.mp4"
   }'
-```
 
-#### 2. Misturar áudio existente com novo áudio
-
-```bash
-curl -X POST http://localhost:5135/ffmpeg \
+# Misturar áudios (original + novo)
+curl -X POST http://localhost:5135/ffmpeg-async \
   -H "Content-Type: application/json" \
   -d '{
-    "command": "ffmpeg -i /shared/input/video.mp4 -i /shared/input/audio.mp3 -filter_complex \"[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=3\" -c:v copy -c:a aac /shared/output/video_audio_mixado.mp4"
+    "command": "ffmpeg -i /shared/input/video.mp4 -i /shared/input/audio.mp3 -filter_complex \"[0:a][1:a]amix=inputs=2:duration=first\" -c:v copy -c:a aac /shared/output/mixado.mp4"
   }'
 ```
 
-#### 3. Adicionar áudio a vídeo sem áudio
-
-```bash
-curl -X POST http://localhost:5135/ffmpeg \
-  -H "Content-Type: application/json" \
-  -d '{
-    "command": "ffmpeg -i /shared/input/video.mp4 -i /shared/input/audio.mp3 -c:v copy -c:a aac -shortest /shared/output/video_com_audio.mp4"
-  }'
-```
-
-#### 4. Controlar volumes durante a mistura
-
-```bash
-curl -X POST http://localhost:5135/ffmpeg \
-  -H "Content-Type: application/json" \
-  -d '{
-    "command": "ffmpeg -i /shared/input/video.mp4 -i /shared/input/audio.mp3 -filter_complex \"[0:a]volume=0.5[a0];[1:a]volume=0.8[a1];[a0][a1]amix=inputs=2:duration=first\" -c:v copy -c:a aac /shared/output/video_volumes_ajustados.mp4"
-  }'
-```
-
-#### 5. Sincronizar áudio com delay
-
-```bash
-curl -X POST http://localhost:5135/ffmpeg \
-  -H "Content-Type: application/json" \
-  -d '{
-    "command": "ffmpeg -i /shared/input/video.mp4 -i /shared/input/audio.mp3 -filter_complex \"[1:a]adelay=2000|2000[delayed];[0:a][delayed]amix=inputs=2:duration=first\" -c:v copy -c:a aac /shared/output/video_audio_delayed.mp4"
-  }'
-```
-
-#### Parâmetros importantes para áudio/vídeo:
-
-- **`-c:v copy`**: Copia o vídeo sem recodificar (mais rápido)
-- **`-c:a aac`**: Codifica o áudio em AAC
-- **`-map 0:v:0 -map 1:a:0`**: Mapeia vídeo do primeiro arquivo e áudio do segundo
-- **`-shortest`**: Termina quando o arquivo mais curto acabar
-- **`amix`**: Filtro para misturar múltiplos áudios
-- **`volume=0.5`**: Ajusta volume (0.5 = 50%)
-- **`adelay=2000`**: Adiciona delay de 2 segundos (em milissegundos)
-
-### Converter vídeo para diferentes formatos
+### 2. Conversão de Formatos
 
 ```bash
 # MP4 para WebM
-curl -X POST http://localhost:5135/ffmpeg \
+curl -X POST http://localhost:5135/ffmpeg-async \
   -H "Content-Type: application/json" \
   -d '{
     "command": "ffmpeg -i /shared/input/video.mp4 -c:v libvpx-vp9 -c:a libopus /shared/output/video.webm"
@@ -414,19 +847,17 @@ curl -X POST http://localhost:5135/ffmpeg \
   }'
 ```
 
-### Redimensionar vídeo
+### 3. Redimensionamento e Compressão
 
 ```bash
+# Converter para 720p
 curl -X POST http://localhost:5135/ffmpeg \
   -H "Content-Type: application/json" \
   -d '{
-    "command": "ffmpeg -i /shared/input/video.mp4 -vf scale=1280:720 /shared/output/video_720p.mp4"
+    "command": "ffmpeg -i /shared/input/video.mp4 -vf scale=1280:720 -c:v libx264 -crf 23 /shared/output/720p.mp4"
   }'
-```
 
-### Criar thumbnail
-
-```bash
+# Criar thumbnail
 curl -X POST http://localhost:5135/ffmpeg \
   -H "Content-Type: application/json" \
   -d '{
@@ -434,117 +865,118 @@ curl -X POST http://localhost:5135/ffmpeg \
   }'
 ```
 
-### Combinar múltiplos vídeos
+## 🔧 Workflow Completo
 
 ```bash
-# Primeiro, criar um arquivo de lista
-curl -X POST http://localhost:5135/ffmpeg \
-  -H "Content-Type: application/json" \
-  -d '{
-    "command": "echo \"file '/shared/input/video1.mp4'\nfile '/shared/input/video2.mp4'\" > /shared/input/filelist.txt"
-  }'
-
-# Depois, concatenar
-curl -X POST http://localhost:5135/ffmpeg \
-  -H "Content-Type: application/json" \
-  -d '{
-    "command": "ffmpeg -f concat -safe 0 -i /shared/input/filelist.txt -c copy /shared/output/combined.mp4"
-  }'
-```
-
-### Workflow completo: Upload → Processar → Download
-
-```bash
-# 1. Fazer upload de vídeo e áudio
+# 1. Upload de arquivos
 curl -X POST http://localhost:5135/upload -F "file=@video.mp4"
 curl -X POST http://localhost:5135/upload -F "file=@audio.mp3"
 
 # 2. Verificar arquivos
 curl http://localhost:5135/files/input
 
-# 3. Juntar áudio e vídeo
-curl -X POST http://localhost:5135/ffmpeg \
+# 3. Obter informações do vídeo
+curl http://localhost:5135/info/input/1642254000000-video.mp4
+
+# 4. Processar (assíncrono)
+RESPONSE=$(curl -X POST http://localhost:5135/ffmpeg-async \
   -H "Content-Type: application/json" \
   -d '{
     "command": "ffmpeg -i /shared/input/1642254000000-video.mp4 -i /shared/input/1642254000001-audio.mp3 -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 /shared/output/resultado.mp4"
-  }'
+  }')
 
-# 4. Verificar resultado
-curl http://localhost:5135/files/output
+# 5. Extrair jobId da resposta
+JOB_ID=$(echo $RESPONSE | jq -r '.jobId')
 
-# 5. Baixar arquivo final
+# 6. Monitorar progresso
+curl http://localhost:5135/job/$JOB_ID
+
+# 7. Listar jobs
+curl http://localhost:5135/jobs
+
+# 8. Download do resultado
 curl -O http://localhost:5135/download/resultado.mp4
 ```
 
-### Obter informações de um arquivo
+## 🏗️ Arquitetura
 
-```bash
-# Listar arquivos de entrada
-curl http://localhost:5135/files/input
+### Estrutura de Containers
 
-# Obter informações detalhadas de um arquivo
-curl http://localhost:5135/info/input/video.mp4
+- **`ffmpeg`**: Container LinuxServer FFmpeg para processamento
+- **`ffmpeg-api`**: API Node.js/TypeScript que controla o FFmpeg
 
-# Deletar arquivo específico
-curl -X DELETE http://localhost:5135/files/input/video.mp4
+### Sistema de Jobs com Heartbeat
 
-# Deletar múltiplos arquivos
-curl -X DELETE http://localhost:5135/files/input \
-  -H "Content-Type: application/json" \
-  -d '{
-    "files": ["video1.mp4", "video2.mp4"]
-  }'
+O sistema de jobs assíncronos inclui:
 
-# Limpar diretório completamente
-curl -X DELETE "http://localhost:5135/clear/input?confirm=true"
+- **Heartbeat Monitoring**: Verifica processos a cada 30s
+- **Orphan Job Detection**: Detecta jobs órfãos e marca como falhou
+- **Auto Cleanup**: Remove jobs antigos automaticamente (24h)
+- **Process Validation**: Confirma que processos FFmpeg estão realmente rodando
+
+```typescript
+// Configurações do sistema
+const HEARTBEAT_CONFIG = {
+    interval: 30000,        // 30 segundos
+    maxSilentTime: 120000   // 2 minutos
+};
+
+const JOB_CLEANUP_CONFIG = {
+    maxAge: 24 * 60 * 60 * 1000,    // 24 horas
+    maxJobs: 100,                    // Máximo de jobs
+    cleanupInterval: 60 * 60 * 1000, // Limpeza a cada 1h
+    syncInterval: 5 * 60 * 1000      // Sync a cada 5min
+};
 ```
 
-## 🐳 Containers
+## 🔐 Segurança e Validação
 
-### `ffmpeg`
-- **Imagem:** `linuxserver/ffmpeg:arm64v8-latest`
-- **Função:** Container com FFmpeg instalado
-- **Status:** Fica rodando um loop infinito para aceitar comandos `docker exec`
-- **Volumes:** Configuração e diretórios compartilhados
+### Validações Implementadas
 
-### `ffmpeg-api`
-- **Build:** `./code` (TypeScript/Node.js)
-- **Função:** API REST que controla o container FFmpeg
-- **Porta:** 5135:3001
-- **Volumes:** Docker socket + diretórios compartilhados
-- **Dependências:** Container `ffmpeg`
+1. **Path Traversal Protection**: Validação de nomes de arquivo
+2. **Directory Type Validation**: Apenas 'input' e 'output' permitidos
+3. **Command Timeout**: 5 minutos máximo para comandos síncronos
+4. **File Size Limits**: 500MB para uploads JSON
+5. **Process Isolation**: Execução em containers separados
+
+## ⚙️ Configurações
+
+### Variáveis de Ambiente
+
+```bash
+PORT=3001                    # Porta da API (padrão: 3001)
+```
+
+### Limites e Timeouts
+
+- **Upload JSON**: 500MB máximo
+- **Upload Multipart**: Sem limite específico
+- **Command Timeout**: 5 minutos (300 segundos)
+- **Job Heartbeat**: 30 segundos de intervalo
+- **Job Max Silent**: 2 minutos sem atividade
+
+### Health Check
+
+```bash
+# Verificar saúde da API
+curl http://localhost:5135/status
+
+# Verificar se containers estão rodando
+docker ps | grep ffmpeg
+```
 
 ## ⚠️ Notas Importantes
 
-1. **Segurança:** A API executa comandos Docker diretamente. Use apenas em ambientes controlados.
+1. **Ambiente Controlado**: Use apenas em ambientes seguros
+2. **Caminhos Absolutos**: Sempre use `/shared/input/` e `/shared/output/`
+3. **Parâmetro -y**: Adicionado automaticamente aos comandos `ffmpeg`
+4. **Formatos Suportados**: Todos os formatos do FFmpeg (MP4, AVI, MOV, MKV, WebM, MP3, WAV, AAC, FLAC, etc.)
+5. **Docker Socket**: API precisa de acesso ao socket Docker
+6. **Monitoring**: Jobs são monitorados via heartbeat para detectar falhas
 
-2. **Caminhos:** Sempre use caminhos absolutos:
-   - Input: `/shared/input/arquivo.mp4`
-   - Output: `/shared/output/arquivo.mp4`
+## 🛠️ Desenvolvimento
 
-3. **Timeout:** Comandos FFmpeg têm timeout de 5 minutos (300 segundos).
-
-4. **Sobrescrever:** O parâmetro `-y` é adicionado automaticamente aos comandos `ffmpeg`.
-
-5. **Formatos suportados:** Todos os formatos suportados pelo FFmpeg (MP4, AVI, MOV, MKV, WebM, MP3, WAV, AAC, FLAC, etc.).
-
-6. **Upload:** Arquivos podem ser enviados via base64 usando `/upload-json` ou via multipart usando `/upload`.
-
-7. **Validação:** Nomes de arquivos são validados para prevenir path traversal attacks.
-
-8. **Limites:** Upload JSON suporta até 500MB. Para arquivos maiores, use o endpoint `/upload`.
-
-## 🛠️ Utilitários Disponíveis
-
-A API inclui várias funções utilitárias implementadas em [`utils.ts`](code/src/utils.ts):
-
-- **`formatFileSize(bytes)`**: Formata tamanho de arquivo em formato legível
-- **`formatDuration(seconds)`**: Formata duração em formato MM:SS ou HH:MM:SS
-- **`isValidDirectoryType(type)`**: Valida se o tipo é 'input' ou 'output'
-
-## 📝 Desenvolvimento
-
-### Executar localmente
+### Setup Local
 
 ```bash
 cd code
@@ -552,19 +984,17 @@ npm install
 npm run dev
 ```
 
-### Build da imagem Docker
+### Build
 
 ```bash
-cd code
-docker build -t ffmpeg-api:latest .
+npm run build
 ```
 
-### Estrutura de scripts
+### Scripts Disponíveis
 
 ```json
 {
-  "build": "tsc && npm run copy-static",
-  "copy-static": "mkdir -p dist/doc && cp src/doc/README.md dist/doc/",
+  "build": "tsc",
   "start": "node dist/app.js",
   "dev": "nodemon src/app.ts",
   "clean": "rm -rf dist"
@@ -581,4 +1011,18 @@ docker build -t ffmpeg-api:latest .
 
 ## 🏷️ Tags
 
-`ffmpeg` `api` `typescript` `docker` `video` `audio` `conversion` `multimedia` `rest-api` `node.js` `audio-video-merge`
+`ffmpeg` `api` `typescript` `docker` `video` `audio` `conversion` `multimedia` `rest-api` `node.js` `jobs` `heartbeat` `async` `media-processing` `file-management`
+
+---
+
+<div align="center">
+
+**[📖 Documentação](http://localhost:5135)** • 
+**[📊 Status](http://localhost:5135/status)** • 
+**[📁 Arquivos Input](http://localhost:5135/files/input)** • 
+**[📁 Arquivos Output](http://localhost:5135/files/output)** • 
+**[👷 Jobs](http://localhost:5135/jobs)**
+
+*Desenvolvido com ❤️ usando TypeScript, Express e Docker*
+
+</div>
