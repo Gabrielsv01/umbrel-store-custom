@@ -28,9 +28,14 @@ const command = (req: Request, res: Response) => {
         
         // Tentar extrair nome do arquivo de output do comando
         let outputFile: string | null = null;
-        const outputMatch = command.match(/\/shared\/output\/([^\s]+)/);
+        // Tenta primeiro com aspas duplas, depois aspas simples, depois sem aspas
+        const outputMatch = command.match(/\/shared\/output\/(?:"([^"]+)"|'([^']+)'|([^\s"']+))/);
         if (outputMatch) {
-            outputFile = outputMatch[1];
+            // Pega o primeiro grupo não-nulo (aspas duplas, aspas simples ou sem aspas)
+            let filename = outputMatch[1] || outputMatch[2] || outputMatch[3];
+            // Remover aspas extras no início ou fim se houver
+            filename = filename.replace(/^["']|["']$/g, '');
+            outputFile = filename;
         }
         
         res.json({ 

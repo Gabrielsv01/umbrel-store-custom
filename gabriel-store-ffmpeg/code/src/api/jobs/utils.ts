@@ -72,9 +72,14 @@ async function executeFFmpegJobWithHeartbeat(jobId: string, command: string, job
                 console.log(`✅ ${command.split(' ')[0]} ${jobId} concluído. Resultado no stdout.`);
             } else {
                 // Extrair nome do arquivo de saída para ffmpeg
-                const outputMatch = command.match(/\/shared\/output\/([^\s]+)/);
+                // Tenta primeiro com aspas duplas, depois aspas simples, depois sem aspas
+                const outputMatch = command.match(/\/shared\/output\/(?:"([^"]+)"|'([^']+)'|([^\s"']+))/);
                 if (outputMatch) {
-                    updatedJob.outputFile = outputMatch[1];
+                    // Pega o primeiro grupo não-nulo (aspas duplas, aspas simples ou sem aspas)
+                    let filename = outputMatch[1] || outputMatch[2] || outputMatch[3];
+                    // Remover aspas extras no início ou fim se houver
+                    filename = filename.replace(/^["']|["']$/g, '');
+                    updatedJob.outputFile = filename;
                 }
                 console.log(`✅ Job ${jobId} concluído. Arquivo de saída:`, updatedJob.outputFile);
             }
