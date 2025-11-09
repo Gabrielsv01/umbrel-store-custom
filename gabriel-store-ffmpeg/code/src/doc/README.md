@@ -628,6 +628,127 @@ curl -X DELETE http://localhost:5135/job/abc123
 }
 ```
 
+#### `POST /jobs/status`
+Verifica o status de múltiplos jobs simultaneamente.
+
+**Parâmetros:**
+- **Body JSON**:
+  - `jobIds` (array, obrigatório): lista de IDs dos jobs a verificar
+
+**Headers necessários:**
+- `Content-Type: application/json`
+
+**Exemplo:**
+```bash
+curl -X POST http://localhost:5135/jobs/status \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jobIds": [
+      "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      "job-inexistente-123"
+    ]
+  }'
+```
+
+**Resposta de Sucesso:**
+```json
+{
+  "success": true,
+  "summary": {
+    "total": 3,
+    "found": 2,
+    "finished": 1,
+    "pending": 1,
+    "notFound": 1
+  },
+  "jobs": [
+    {
+      "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "found": true,
+      "status": "running",
+      "isFinished": false,
+      "isPending": true,
+      "startTime": "2024-01-15T10:30:00.000Z",
+      "endTime": null,
+      "duration": null,
+      "outputFile": null
+    },
+    {
+      "jobId": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      "found": true,
+      "status": "completed",
+      "isFinished": true,
+      "isPending": false,
+      "startTime": "2024-01-15T10:25:00.000Z",
+      "endTime": "2024-01-15T10:26:30.000Z",
+      "duration": 90000,
+      "outputFile": "converted.aac"
+    },
+    {
+      "jobId": "job-inexistente-123",
+      "found": false,
+      "status": null,
+      "isFinished": false,
+      "isPending": false,
+      "message": "Job não encontrado"
+    }
+  ]
+}
+```
+
+**Resposta de Erro:**
+```json
+{
+  "error": "jobIds deve ser um array"
+}
+```
+
+#### `POST /job/:jobId/retry`
+Retenta a execução de um job, criando uma nova instância com o mesmo comando.
+
+**Parâmetros:**
+- `jobId` (path, obrigatório): ID único do job a ser retentado
+
+**Headers necessários:**
+- `Content-Type: application/json`
+
+**Exemplo:**
+```bash
+curl -X POST http://localhost:5135/job/6ba7b811-9dad-11d1-80b4-00c04fd430c8/retry \
+  -H "Content-Type: application/json"
+```
+
+**Resposta de Sucesso:**
+```json
+{
+  "success": true,
+  "message": "Job retentado com sucesso",
+  "originalJobId": "6ba7b811-9dad-11d1-80b4-00c04fd430c8",
+  "newJobId": "c026451c-f31a-4591-827d-8534edf20508",
+  "command": "ffmpeg -i /shared/input/inexistente.mp4 -c:v copy /shared/output/fail.mp4",
+  "status": "pending",
+  "statusUrl": "/job/c026451c-f31a-4591-827d-8534edf20508"
+}
+```
+
+**Resposta de Erro (Job não encontrado):**
+```json
+{
+  "error": "Job não encontrado",
+  "jobId": "job-inexistente-123"
+}
+```
+
+**Resposta de Erro (Job ainda em execução):**
+```json
+{
+  "error": "Job ainda está em execução ou pendente",
+  "currentStatus": "running",
+  "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+}
+```
+
 ### 🗑️ Gerenciamento de Arquivos
 
 #### `DELETE /files/:type/:filename`

@@ -1,7 +1,6 @@
 import express, { Request, Response } from 'express';
 import { exec } from 'child_process';
 import multer from 'multer';
-import { randomUUID } from 'crypto';
 import status from './api/status';
 import fileType from './api/filesType';
 import infoByFilename from './api/infoByfilename';
@@ -19,6 +18,8 @@ import listAllJobs from './api/jobs/listAllJobs';
 import commandAsync from './api/commandAsync';
 import { cleanupOldJobs, JOB_CLEANUP_CONFIG, syncJobsWithRunningProcesses } from './api/jobs/utils';
 import getJobById from './api/jobs/getJobById';
+import jobsStatus from './api/jobs/jobsStatus';
+import retryById from './api/jobs/retryById';
 
 const app = express();
 
@@ -122,6 +123,16 @@ app.post('/ffmpeg-async', (req: Request, res: Response) => {
 // Endpoint para verificar status do job
 app.get('/job/:jobId', (req: Request, res: Response) => {
     return getJobById(req, res, jobs);
+});
+
+// Endpoint para verificar status de múltiplos jobs
+app.post('/jobs/status', (req: Request, res: Response) => {
+    return jobsStatus(req, res, jobs);
+});
+
+// Endpoint para retentar execução de um job
+app.post('/job/:jobId/retry', (req: Request, res: Response) => {
+    return retryById(req, res, jobs);
 });
 
 // Endpoint para listar todos os jobs
