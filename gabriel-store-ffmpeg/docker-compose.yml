@@ -6,7 +6,6 @@ services:
     container_name: ffmpeg
     volumes:
       - ./shared:/shared
-    shm_size: "1gb"
     restart: unless-stopped
     security_opt:
       - seccomp:unconfined
