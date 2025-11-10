@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  whisper-asr:
+    image: onerahmet/openai-whisper-asr-webservice:v1.9.1
+    container_name: whisper_api
+    ports:
+      - "5136:9000"
+    environment:
+      - ASR_MODEL=base 
+      - ASR_ENGINE=openai_whisper 
+    restart: unless-stopped
+

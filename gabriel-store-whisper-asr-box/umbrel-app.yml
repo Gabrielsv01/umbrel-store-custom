@@ -1,0 +1,27 @@
+manifestVersion: 1
+id: gabriel-store-whisper-asr-box
+name: Whisper ASR Box
+tagline: Speech recognition made easy
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-whisper-asr-box/icon.svg
+category: Utilities
+version: "1.0.0"
+port: 5136
+description: >-
+  This app provides a speech recognition service using OpenAI's Whisper model.
+  Ideal for remotely and securely accessing your Umbrel services.
+  
+  To access the documentation, visit /docs path in your browser.
+
+developer: ahmetoner
+website: https://ahmetoner.com/whisper-asr-webservice
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/ahmetoner/whisper-asr-webservice/issues
+gallery: []
+releaseNotes: >-
+  First version of the Whisper ASR Box app for Umbrel.
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
