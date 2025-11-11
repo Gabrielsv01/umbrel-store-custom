@@ -20,6 +20,7 @@ import { cleanupOldJobs, JOB_CLEANUP_CONFIG, syncJobsWithRunningProcesses } from
 import getJobById from './api/jobs/getJobById';
 import jobsStatus from './api/jobs/jobsStatus';
 import retryById from './api/jobs/retryById';
+import filesbyNmae from './api/filesbyName';
 
 const app = express();
 
@@ -58,6 +59,8 @@ app.get('/status', status);
 
 // Endpoint para listar arquivos
 app.get('/files/:type', fileType);
+
+
 
 // Endpoint para obter informações detalhadas de um arquivo de mídia
 app.get('/info/:type/:filename', infoByFilename);
@@ -111,6 +114,9 @@ app.delete('/clear/:type', clearDirectory);
 
 // Endpoint para download de arquivos específicos
 app.get('/download/:filename', downloadbyFilename);
+
+// Endpoint para download de arquivos por tipo (input/output) e nome
+app.get('/files/:type/:filename', filesbyNmae);
 
 // Endpoint para executar comandos FFmpeg
 app.post('/ffmpeg', command);

@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-const ui = (req: Request, res: Response) => {
+const ui = (_req: Request, res: Response) => {
     try {
         const htmlPath = join(__dirname, 'ui', 'index.html');
         const html = readFileSync(htmlPath, 'utf8');

@@ -14,6 +14,49 @@
             <p>Processamento de vídeo e áudio em tempo real</p>
         </div>
 
+        <!-- FFmpeg Command Card (Full Width) -->
+        <div class="card" style="margin-bottom: 30px;">
+            <h2>⚡ Executar Comando FFmpeg</h2>
+            
+            <div style="margin-bottom: 20px;">
+                <label for="ffmpegCommand" style="display: block; margin-bottom: 10px; font-weight: 600; color: #4a5568;">
+                    Comando FFmpeg:
+                </label>
+                <textarea 
+                    id="ffmpegCommand" 
+                    placeholder="Ex: ffmpeg -i /shared/input/video.mp4 -c:v libx264 -crf 23 /shared/output/compressed.mp4"
+                    style="width: 100%; min-height: 100px; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-family: 'Courier New', monospace; resize: vertical;"
+                ></textarea>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <button class="btn" onclick="executeFFmpegCommand()">
+                    🚀 Executar Comando
+                </button>
+                <button class="btn btn-secondary" onclick="clearCommand()">
+                    🗑️ Limpar
+                </button>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <h4 style="color: #4a5568; margin-bottom: 10px;">📋 Comandos de Exemplo:</h4>
+                <div class="examples-grid">
+                    <button class="btn btn-small example-btn" onclick="setExampleCommand('compress')">
+                        📦 Comprimir Vídeo
+                    </button>
+                    <button class="btn btn-small example-btn" onclick="setExampleCommand('convert')">
+                        🔄 Converter Formato
+                    </button>
+                    <button class="btn btn-small example-btn" onclick="setExampleCommand('audio')">
+                        🎵 Extrair Áudio
+                    </button>
+                    <button class="btn btn-small example-btn" onclick="setExampleCommand('resize')">
+                        📏 Redimensionar
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Main Grid -->
         <div class="grid">
             <!-- Left Column - Stats -->
@@ -60,6 +103,15 @@
                         </button>
                     </div>
                     
+                    <div class="files-actions" style="margin-bottom: 15px; display: none;" id="filesActions">
+                        <button class="btn btn-small btn-danger" onclick="clearAllFiles('input')" id="clearInputBtn" style="display: none;">
+                            🗑️ Limpar Entrada
+                        </button>
+                        <button class="btn btn-small btn-danger" onclick="clearAllFiles('output')" id="clearOutputBtn" style="display: none;">
+                            🗑️ Limpar Saída
+                        </button>
+                    </div>
+                    
                     <div class="file-list" id="filesList">
                         <div class="no-data">Selecione uma pasta para ver os arquivos</div>
                     </div>
@@ -69,7 +121,7 @@
 
         <!-- Jobs Card (Full Width) -->
         <div class="card" style="margin-top: 30px;">
-            <h2>🔧 Jobs em Execução</h2>
+            <h2>🔧 Gerenciamento de Jobs</h2>
             
             <div style="margin-bottom: 20px;">
                 <button class="btn btn-small" onclick="loadJobs()">
@@ -77,14 +129,70 @@
                 </button>
             </div>
             
-            <div id="jobsList">
-                <div class="no-data">Nenhum job encontrado</div>
+            <!-- Jobs em Execução -->
+            <div class="job-section">
+                <h3 class="section-title running">🔄 Jobs em Execução</h3>
+                <div id="runningJobsList">
+                    <div class="no-data">Nenhum job em execução</div>
+                </div>
+            </div>
+            
+            <!-- Jobs Concluídos -->
+            <div class="job-section">
+                <div class="section-header">
+                    <h3 class="section-title completed">✅ Jobs Concluídos</h3>
+                    <button class="btn btn-small btn-danger" onclick="clearJobsByStatus('completed')" id="clearCompletedBtn">
+                        🗑️ Remover Todos
+                    </button>
+                </div>
+                <div id="completedJobsList">
+                    <div class="no-data">Nenhum job concluído</div>
+                </div>
+            </div>
+            
+            <!-- Jobs Falhados -->
+            <div class="job-section">
+                <div class="section-header">
+                    <h3 class="section-title failed">❌ Jobs Falhados</h3>
+                    <button class="btn btn-small btn-danger" onclick="clearJobsByStatus('failed')" id="clearFailedBtn">
+                        🗑️ Remover Todos
+                    </button>
+                </div>
+                <div id="failedJobsList">
+                    <div class="no-data">Nenhum job falhado</div>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- Toast Notifications -->
     <div id="toast" class="toast"></div>
+
+    <!-- Job Details Modal -->
+    <div id="jobModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📊 Detalhes do Job</h3>
+                <span class="modal-close" onclick="closeJobModal()">&times;</span>
+            </div>
+            <div class="modal-body" id="jobModalBody">
+                <div class="loading">Carregando informações do job...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Media Viewer Modal -->
+    <div id="mediaModal" class="modal" style="display: none;">
+        <div class="modal-content media-modal">
+            <div class="modal-header">
+                <h3 id="mediaModalTitle">🎬 Visualizar Arquivo</h3>
+                <span class="modal-close" onclick="closeMediaModal()">&times;</span>
+            </div>
+            <div class="modal-body" id="mediaModalBody">
+                <div class="loading">Carregando arquivo...</div>
+            </div>
+        </div>
+    </div>
 
     <script src="/ui/scripts.js"></script>
 </body>

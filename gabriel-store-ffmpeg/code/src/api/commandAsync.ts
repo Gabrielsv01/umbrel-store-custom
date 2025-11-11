@@ -1,5 +1,3 @@
-
-import { exec } from 'child_process';
 import { randomUUID } from 'crypto';
 import { Request, Response } from 'express';
 import { Job } from '../types';

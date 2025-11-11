@@ -906,6 +906,49 @@ curl http://localhost:5135/files/compressed.mp4
 - **Streaming Friendly**: Suporte a range requests para vídeo
 - **Cache Headers**: Headers de cache otimizados
 
+#### `GET /files/:type/:filename`
+Acesso direto a arquivos por tipo (input/output) para visualização/streaming ou download.
+
+**Parâmetros:**
+- `type` (path, obrigatório): `input` ou `output`
+- `filename` (path, obrigatório): nome do arquivo
+
+**Observações:**
+- Permite acesso a arquivos tanto do diretório input quanto output
+- Validação de segurança contra path traversal
+- Suporte a range requests para streaming
+- Headers apropriados baseados no tipo de arquivo
+
+**Exemplo:**
+```bash
+# Acessar arquivo do diretório input
+curl http://localhost:5135/files/input/video.mp4
+
+# Acessar arquivo do diretório output
+curl http://localhost:5135/files/output/processed.mp4
+```
+
+**Resposta de Sucesso:**
+- Arquivo servido diretamente com headers apropriados
+- Content-Type baseado na extensão do arquivo
+- Suporte a partial content (range requests)
+
+**Resposta de Erro (404):**
+```json
+{
+  "error": "Arquivo não encontrado",
+  "type": "input",
+  "filename": "inexistente.mp4"
+}
+```
+
+**Resposta de Erro (tipo inválido):**
+```json
+{
+  "error": "Tipo de diretório inválido. Use 'input' ou 'output'"
+}
+```
+
 ### 📚 Documentação
 
 #### `GET /`
