@@ -7,6 +7,45 @@ const HEARTBEAT_CONFIG = {
     maxSilentTime: 120000 // 2 minutos sem atividade = considera morto
 };
 
+// Configuração da fila
+const QUEUE_CONFIG = {
+    maxConcurrentJobs: Number(process.env.MAX_CONCURRENT_JOBS) || 3 // Máximo de jobs processando simultaneamente
+};
+
+// Função para processar o próximo job da fila
+function processNextInQueue(completedJobId: string, jobs: Map<string, Job>, queue: { currentQueueProcessing: string[], queue: string[] }) {
+    console.log(`🔄 Processando próximo job na fila após conclusão/falha de ${completedJobId}`);
+    
+    // Remover o job concluído/falho da fila de processamento
+    const indexInProcessing = queue.currentQueueProcessing.indexOf(completedJobId);
+    if (indexInProcessing > -1) {
+        queue.currentQueueProcessing.splice(indexInProcessing, 1);
+        console.log(`📤 Job ${completedJobId} removido da fila de processamento`);
+    }
+    
+    // Verificar se há jobs aguardando na fila
+    if (queue.queue.length > 0 && queue.currentQueueProcessing.length < QUEUE_CONFIG.maxConcurrentJobs) {
+        const nextJobId = queue.queue.shift(); // Remove o primeiro da fila de espera
+        if (nextJobId) {
+            const nextJob = jobs.get(nextJobId);
+            if (nextJob && nextJob.status === 'queued') {
+                // Adicionar à fila de processamento
+                queue.currentQueueProcessing.push(nextJobId);
+                nextJob.status = 'running';
+                
+                console.log(`▶️  Iniciando próximo job da fila: ${nextJobId}`);
+                console.log(`📊 Fila de processamento: ${queue.currentQueueProcessing.length}/${QUEUE_CONFIG.maxConcurrentJobs}`);
+                console.log(`⏳ Jobs aguardando: ${queue.queue.length}`);
+                
+                // Executar o próximo job
+                setImmediate(() => {
+                    executeFFmpegJobWithHeartbeat(nextJobId, nextJob.command, jobs, true, queue);
+                });
+            }
+        }
+    }
+}
+
 // Função para verificar processos FFmpeg ativos
 function checkRunningFFmpegProcesses(): Promise<string[]> {
     return new Promise((resolve, reject) => {
@@ -29,7 +68,7 @@ function checkRunningFFmpegProcesses(): Promise<string[]> {
 }
 
 // Versão principal com heartbeat check
-async function executeFFmpegJobWithHeartbeat(jobId: string, command: string, jobs: Map<string, Job>) {
+async function executeFFmpegJobWithHeartbeat(jobId: string, command: string, jobs: Map<string, Job>, isQueueEnabled: boolean = false, queue?: { currentQueueProcessing: string[], queue: string[] }) {
     const job = jobs.get(jobId);
     if (!job) return;
 
@@ -84,6 +123,12 @@ async function executeFFmpegJobWithHeartbeat(jobId: string, command: string, job
                 console.log(`✅ Job ${jobId} concluído. Arquivo de saída:`, updatedJob.outputFile);
             }
         }
+
+        // Se está usando fila, remover da fila de processamento e processar próximo
+        // Tanto para jobs concluídos quanto falhos
+        if (isQueueEnabled && queue) {
+            processNextInQueue(jobId, jobs, queue);
+        }
     });
 
     // Configurar heartbeat check
@@ -125,6 +170,11 @@ async function executeFFmpegJobWithHeartbeat(jobId: string, command: string, job
                     currentJob.error = `Processo interrompido - heartbeat perdido após ${Math.round(timeSinceLastHeartbeat/1000)}s`;
                     currentJob.endTime = new Date();
                     
+                    // Se está usando fila, processar próximo job
+                    if (isQueueEnabled && queue) {
+                        processNextInQueue(jobId, jobs, queue);
+                    }
+                    
                     clearInterval(heartbeatInterval);
                 } else {
                     console.log(`⏳ Job ${jobId} sem processo detectado, mas dentro do limite de heartbeat`);
@@ -156,7 +206,7 @@ async function executeFFmpegJobWithHeartbeat(jobId: string, command: string, job
 }
 
 // Função para sincronizar jobs órfãos (executar periodicamente)
-async function syncJobsWithRunningProcesses(jobs: Map<string, Job>) {
+async function syncJobsWithRunningProcesses(jobs: Map<string, Job>, queue?: { currentQueueProcessing: string[], queue: string[] }) {
     try {
         const runningProcesses = await checkRunningFFmpegProcesses();
         console.log(`🔍 Verificando sincronização: ${runningProcesses.length} processos FFmpeg ativos`);
@@ -193,11 +243,33 @@ async function syncJobsWithRunningProcesses(jobs: Map<string, Job>) {
                                 delete job.heartbeatInterval;
                             }
                             
+                            // Se está usando fila, processar próximo job
+                            if (queue) {
+                                processNextInQueue(jobId, jobs, queue);
+                            }
+                            
                             orphanedJobs++;
                         }
                     }
                 }
             }
+        }
+        
+        // Limpar fila de jobs que não existem mais
+        if (queue) {
+            // Limpar fila de processamento
+            queue.currentQueueProcessing = queue.currentQueueProcessing.filter(jobId => {
+                const job = jobs.get(jobId);
+                return job && (job.status === 'running' || job.status === 'pending');
+            });
+            
+            // Limpar fila de espera
+            queue.queue = queue.queue.filter(jobId => {
+                const job = jobs.get(jobId);
+                return job && job.status === 'queued';
+            });
+            
+            console.log(`📊 Estado da fila - Processando: ${queue.currentQueueProcessing.length}, Aguardando: ${queue.queue.length}`);
         }
         
         if (orphanedJobs > 0) {
@@ -264,5 +336,7 @@ export {
     syncJobsWithRunningProcesses,
     cleanupOldJobs, 
     JOB_CLEANUP_CONFIG,
-    HEARTBEAT_CONFIG 
+    HEARTBEAT_CONFIG,
+    processNextInQueue,
+    QUEUE_CONFIG
 };

@@ -21,10 +21,18 @@ import getJobById from './api/jobs/getJobById';
 import jobsStatus from './api/jobs/jobsStatus';
 import retryById from './api/jobs/retryById';
 import filesbyNmae from './api/filesbyName';
+import queueStatus from './api/queue/queueStatus';
 
 const app = express();
 
 const jobs: Map<string, Job> = new Map();
+const queue: {
+    currentQueueProcessing: string[],
+    queue: string[]
+} = {
+    currentQueueProcessing: [],
+    queue: []
+}
 
 // Configurar multer para salvar arquivos na pasta shared/input
 const storage = multer.diskStorage({
@@ -123,7 +131,7 @@ app.post('/ffmpeg', command);
 
 // Endpoint assíncrono para FFmpeg
 app.post('/ffmpeg-async', (req: Request, res: Response) => {
-    return commandAsync(req, res, jobs);
+    return commandAsync(req, res, jobs, queue);
 });
 
 // Endpoint para verificar status do job
@@ -148,7 +156,12 @@ app.get('/jobs', (req: Request, res: Response) => {
 
 // Endpoint para cancelar/remover job
 app.delete('/job/:jobId', (req: Request, res: Response) => {
-   return DeleteJobById(req, res, jobs);
+   return DeleteJobById(req, res, jobs, queue);
+});
+
+// Endpoint para verificar status da fila
+app.get('/queue/status', (req: Request, res: Response) => {
+    return queueStatus(req, res, jobs, queue);
 });
 
 // Endpoint para criar diretórios se não existirem
@@ -175,8 +188,8 @@ app.get('/ui', ui);
 
 // Iniciar limpeza automática
 setInterval(() => cleanupOldJobs(jobs), JOB_CLEANUP_CONFIG.cleanupInterval);
-// Adicionar sincronização de jobs órfãos
-setInterval(() => syncJobsWithRunningProcesses(jobs), JOB_CLEANUP_CONFIG.syncInterval);
+// Adicionar sincronização de jobs órfãos com suporte à fila
+setInterval(() => syncJobsWithRunningProcesses(jobs, queue), JOB_CLEANUP_CONFIG.syncInterval);
 
 
 const PORT = process.env.PORT || 3001;

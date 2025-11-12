@@ -167,15 +167,18 @@ async function loadJobs() {
             return dateB - dateA; // Ordem decrescente (mais recente primeiro)
         });
 
-        // Separar jobs por status (mantendo a ordenação)
-        const runningJobs = sortedJobs.filter(job => job.status === 'running');
-        const completedJobs = sortedJobs.filter(job => job.status === 'completed');
-        const failedJobs = sortedJobs.filter(job => job.status === 'failed');
 
-        // Renderizar cada seção
-        renderJobSection('runningJobsList', runningJobs, 'Nenhum job em execução');
-        renderJobSection('completedJobsList', completedJobs, 'Nenhum job concluído');
-        renderJobSection('failedJobsList', failedJobs, 'Nenhum job falhado');
+    // Separar jobs por status (mantendo a ordenação)
+    const runningJobs = sortedJobs.filter(job => job.status === 'running');
+    const queuedJobs = sortedJobs.filter(job => job.status === 'queued');
+    const completedJobs = sortedJobs.filter(job => job.status === 'completed');
+    const failedJobs = sortedJobs.filter(job => job.status === 'failed');
+
+    // Renderizar cada seção
+    renderJobSection('runningJobsList', runningJobs, 'Nenhum job em execução');
+    renderJobSection('queuedJobsList', queuedJobs, 'Nenhum job em fila');
+    renderJobSection('completedJobsList', completedJobs, 'Nenhum job concluído');
+    renderJobSection('failedJobsList', failedJobs, 'Nenhum job falhado');
 
     } catch (error) {
         console.error('Erro ao carregar jobs:', error);

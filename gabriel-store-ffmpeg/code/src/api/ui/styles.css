@@ -258,6 +258,11 @@ body {
     background: linear-gradient(145deg, #fffaf0 0%, #fef5e7 100%);
 }
 
+.job-item.queued {
+    border-left-color: #c9ce31;
+    background: linear-gradient(145deg, #ebf8ff 0%, #e3eefe 100%);
+}
+
 .job-header {
     display: flex;
     justify-content: space-between;
@@ -722,6 +727,12 @@ body {
     border-left-color: #e53e3e;
     color: #742a2a;
     background: linear-gradient(135deg, #fed7d7, #feb2b2);
+}
+
+.section-title.queued {
+    border-left-color: #c9ce31;
+    color: #6b6c1c;
+    background: linear-gradient(135deg, #f8f6ce, #fefcbf);
 }
 
 .job-section:last-child {

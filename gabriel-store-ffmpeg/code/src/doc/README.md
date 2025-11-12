@@ -1,4 +1,9 @@
 # FFmpeg API Documentation
+# 🆕 Novidades
+
+- **Sistema de Fila de Jobs**: Jobs assíncronos agora são controlados por uma fila, com limite de processamento simultâneo configurável.
+- **Limite de Concorrência Configurável**: Defina o número máximo de jobs simultâneos via variável de ambiente `MAX_CONCURRENT_JOBS`.
+- **Visualização da Fila**: Endpoints e UI mostram jobs em processamento, em espera, concluídos e com falha.
 
 Uma API REST completa para processamento de vídeo e áudio usando FFmpeg em containers Docker.
 
@@ -10,6 +15,8 @@ Esta API fornece uma interface HTTP para executar comandos FFmpeg, gerenciar arq
 
 - **API REST Completa**: Endpoints para todas as operações FFmpeg
 - **Sistema de Jobs**: Processamento assíncrono com heartbeat monitoring
+- **Fila de Jobs**: Jobs aguardam na fila se o limite de concorrência for atingido
+- **Configuração via Ambiente**: Limite de jobs simultâneos ajustável com `MAX_CONCURRENT_JOBS`
 - **Upload Flexível**: Suporte a base64 e multipart/form-data até 500MB
 - **Gerenciamento de Arquivos**: Upload, download, listagem e informações de mídia
 - **Validação de Segurança**: Path traversal protection e validação de arquivos
@@ -33,6 +40,74 @@ docker-compose up -d
 A API estará disponível em `http://localhost:5135`
 
 ## 📖 Endpoints da API
+### 🆕 Endpoints de Fila
+
+#### `GET /queue/status`
+Retorna o status atual da fila de jobs assíncronos.
+
+**Exemplo:**
+```bash
+curl http://localhost:5135/queue/status
+```
+
+**Resposta:**
+```json
+{
+  "queue": {
+    "maxConcurrentJobs": 3,
+    "currentlyProcessing": {
+      "count": 2,
+      "jobs": [
+        {
+          "id": "jobId1",
+          "status": "running",
+          "command": "ffmpeg ...",
+          "startTime": "2025-11-12T10:00:00.000Z",
+          "progress": null
+        },
+        {
+          "id": "jobId2",
+          "status": "running",
+          "command": "ffmpeg ...",
+          "startTime": "2025-11-12T10:01:00.000Z",
+          "progress": null
+        }
+      ]
+    },
+    "waiting": {
+      "count": 2,
+      "jobs": [
+        {
+          "id": "jobId3",
+          "status": "queued",
+          "command": "ffmpeg ...",
+          "startTime": "2025-11-12T10:02:00.000Z",
+          "positionInQueue": 1
+        },
+        {
+          "id": "jobId4",
+          "status": "queued",
+          "command": "ffmpeg ...",
+          "startTime": "2025-11-12T10:03:00.000Z",
+          "positionInQueue": 2
+        }
+      ]
+    }
+  },
+  "statistics": {
+    "totalJobs": 10,
+    "completedJobs": 5,
+    "failedJobs": 2,
+    "runningJobs": 2,
+    "queuedJobs": 2
+  },
+  "timestamp": "2025-11-12T10:05:00.000Z"
+}
+```
+
+**Notas:**
+- O valor de `maxConcurrentJobs` pode ser alterado via variável de ambiente `MAX_CONCURRENT_JOBS`.
+- Jobs em `currentlyProcessing.jobs` estão sendo executados; jobs em `waiting.jobs` aguardam vaga na fila.
 
 ### 🔍 Status e Monitoramento
 
@@ -411,6 +486,22 @@ curl -X POST http://localhost:5135/ffmpeg \
 #### `POST /ffmpeg-async`
 Executa comandos FFmpeg assíncronos com sistema de jobs avançado.
 
+**Novidade:** Agora o endpoint controla a fila de jobs. Se o limite de concorrência for atingido, o job é adicionado à fila de espera e processado assim que possível.
+
+**Como executar por filas:**
+Para que o job seja processado usando o sistema de filas, envie o parâmetro `useQueue` como `true` no corpo da requisição JSON:
+
+```bash
+curl -X POST http://localhost:5135/ffmpeg-async \
+  -H "Content-Type: application/json" \
+  -d '{
+    "command": "ffmpeg -i /shared/input/video.mp4 -c:v libx264 -crf 23 /shared/output/compressed.mp4",
+    "useQueue": true
+  }'
+```
+
+Se `useQueue` não for enviado ou for `false`, o job será executado diretamente (sem controle de fila).
+
 **Parâmetros:**
 - **Body JSON**: 
   - `command` (string, obrigatório): comando FFmpeg completo
@@ -423,6 +514,7 @@ Executa comandos FFmpeg assíncronos com sistema de jobs avançado.
 - Sem timeout (monitored via heartbeat)
 - Processamento assíncrono (retorna job ID imediatamente)
 - Job é monitorado via heartbeat system
+ - **Controle de Fila:** Se o número de jobs em processamento atingir o limite (`MAX_CONCURRENT_JOBS`), o job será adicionado à fila de espera e processado assim que possível.
 
 **Exemplo:**
 ```bash
@@ -442,6 +534,17 @@ curl -X POST http://localhost:5135/ffmpeg-async \
   "statusUrl": "/job/f47ac10b-58cc-4372-a567-0e02b2c3d479",
   "status": "pending"
 }
+**Resposta de Sucesso (job adicionado à fila):**
+```json
+{
+  "success": true,
+  "jobId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "message": "Job adicionado à fila de espera",
+  "status": "queued",
+  "queuePosition": 2,
+  "statusUrl": "/job/f47ac10b-58cc-4372-a567-0e02b2c3d479"
+}
+```
 ```
 
 **Resposta de Erro (comando vazio):**
@@ -1109,6 +1212,7 @@ const JOB_CLEANUP_CONFIG = {
 
 ```bash
 PORT=3001                    # Porta da API (padrão: 3001)
+MAX_CONCURRENT_JOBS=3        # Máximo de jobs FFmpeg assíncronos em processamento simultâneo (padrão: 3)
 ```
 
 ### Limites e Timeouts
@@ -1118,6 +1222,7 @@ PORT=3001                    # Porta da API (padrão: 3001)
 - **Command Timeout**: 5 minutos (300 segundos)
 - **Job Heartbeat**: 30 segundos de intervalo
 - **Job Max Silent**: 2 minutos sem atividade
+- **Job Concorrentes**: Definido por `MAX_CONCURRENT_JOBS` (default: 3)
 
 ### Health Check
 
@@ -1146,6 +1251,7 @@ docker ps | grep ffmpeg
 cd code
 npm install
 npm run dev
+export MAX_CONCURRENT_JOBS=5 # Exemplo para rodar com 5 jobs simultâneos
 ```
 
 ### Build
