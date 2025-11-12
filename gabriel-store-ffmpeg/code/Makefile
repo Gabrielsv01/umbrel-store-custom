@@ -16,14 +16,14 @@ build:
 # Build image with version tag
 build-version:
 ifndef VERSION
-	$(error VERSION is required. Usage: make build-version VERSION=v1.2.3)
+	$(error VERSION is required. Usage: make build-version VERSION=1.2.3)
 endif
 	docker build -t $(IMAGE_NAME):$(VERSION) -t $(IMAGE_NAME):latest .
 
 # Tag image with version
 tag-version:
 ifndef VERSION
-	$(error VERSION is required. Usage: make tag-version VERSION=v1.2.3)
+	$(error VERSION is required. Usage: make tag-version VERSION=1.2.3)
 endif
 	docker tag $(IMAGE_NAME):latest $(FULL_IMAGE_NAME):$(VERSION)
 	docker tag $(IMAGE_NAME):latest $(FULL_IMAGE_NAME):latest
@@ -35,10 +35,10 @@ push-version: tag-version
 
 # Complete release: build, tag and push
 # Faz tudo: build + tag + push em um comando
-# make release VERSION=v1.0.0
+# make release VERSION=1.0.0
 release:
 ifndef VERSION
-	$(error VERSION is required. Usage: make release VERSION=v1.2.3)
+	$(error VERSION is required. Usage: make release VERSION=1.2.3)
 endif
 	@echo "Building version $(VERSION)..."
 	docker build -t $(IMAGE_NAME):$(VERSION) -t $(IMAGE_NAME):latest .
