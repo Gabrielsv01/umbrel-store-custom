@@ -5,7 +5,7 @@ import { executeFFmpegJobWithHeartbeat } from './jobs/utils';
 
 // Configuração da fila
 const QUEUE_CONFIG = {
-    maxConcurrentJobs: 1
+    maxConcurrentJobs: Number(process.env.MAX_CONCURRENT_JOBS) || 3
 };
 
 const commandAsync = (req: Request, res: Response, jobs: Map<string, Job>, queue: { currentQueueProcessing: string[], queue: string[] }) => {

@@ -13,7 +13,7 @@ services:
     command: ["-c", "while true; do sleep 30; done"]
 
   ffmpeg-api:
-    image: gabrielsv01/ffmpeg-api:1.0.8
+    image: gabrielsv01/ffmpeg-api:1.0.9
     container_name: ffmpeg-api
     environment:
       - PORT=5135
