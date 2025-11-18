@@ -1,0 +1,28 @@
+version: "3.7"
+
+services:
+  html-to-image-api:
+    image: gabrielsv01/html-to-image-api:1.0.1
+    container_name: html-to-image-api
+    environment:
+      - PORT=3001
+      - TIMER_LOAD_MS=2000
+      - BROWSER_WS_URL=ws://playwright:3000?ignoreHTTPSErrors=true
+    ports:
+      - "5137:3001"
+    restart: unless-stopped
+    depends_on:
+      - playwright
+  
+  playwright: 
+    hostname: playwright
+    image: dgtlmoon/sockpuppetbrowser:latest
+    restart: unless-stopped
+    tmpfs:
+      - /tmp   
+    environment:
+        - SCREEN_WIDTH=1920
+        - SCREEN_HEIGHT=1024
+        - SCREEN_DEPTH=16
+        - MAX_CONCURRENT_CHROME_PROCESSES=10
+        - STATS_REFRESH_SECONDS=120
