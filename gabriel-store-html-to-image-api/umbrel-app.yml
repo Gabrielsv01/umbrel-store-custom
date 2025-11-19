@@ -4,7 +4,7 @@ name: html-to-image-api
 tagline: Your personal HTML to Image tool
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-html-to-image-api/icon.svg
 category: Utilities
-version: "1.0.1"
+version: "1.0.2"
 port: 5137
 description: >-
   HTML to Image is a tool for converting HTML content into image files.
