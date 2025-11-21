@@ -16,7 +16,7 @@ services:
   
   playwright: 
     hostname: playwright
-    image: dgtlmoon/sockpuppetbrowser:latest
+    image: gabrielsv01/playwright-with-fonts-fallback:1.0.0
     restart: unless-stopped
     tmpfs:
       - /tmp   

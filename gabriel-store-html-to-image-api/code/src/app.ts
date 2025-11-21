@@ -76,7 +76,7 @@ async function captureHtml(htmlContent: string, viewportOptions: Viewport): Prom
         await page.setViewport(viewportOptions);
 
         // 2. Carrega o HTML.
-        await page.setContent(htmlContent, { waitUntil: 'domcontentloaded' }); 
+        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
         // 3. Espera o tempo definido
         await new Promise(r => setTimeout(r, TIMER_LOAD_MS)); 
