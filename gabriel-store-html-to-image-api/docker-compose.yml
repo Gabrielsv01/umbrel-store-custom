@@ -6,7 +6,7 @@ services:
     container_name: html-to-image-api
     environment:
       - PORT=3001
-      - TIMER_LOAD_MS=2000
+      - TIMER_LOAD_MS=9000
       - BROWSER_WS_URL=ws://playwright:3000?ignoreHTTPSErrors=true
     ports:
       - "5137:3001"
