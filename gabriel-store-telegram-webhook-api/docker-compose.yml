@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   telegram-webhook-api:
-    image: gabrielsv01/telegram-webhook-api:1.0.12
+    image: gabrielsv01/telegram-webhook-api:1.0.13
     container_name: telegram-webhook-api
     environment:
       - PORT=5125
@@ -9,6 +9,7 @@ services:
       - URI_BASE=/api/telegram
       - WEBHOOK_URL=https://ngrok-free.app
       - FORWARD_ENDPOINT=http://umbrel.local
+      - NGROK_WEB_URL=http://umbrel.local:4040/status
     ports:
       - 5125:5125
     restart: unless-stopped
