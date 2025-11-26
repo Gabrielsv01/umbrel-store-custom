@@ -145,6 +145,12 @@ app.post('/html-body-to-image', express.text({ type: '*/*', limit: '20mb' }), as
 
 // --- INICIALIZAÇÃO ---
 
+
+// Endpoint de healthcheck
+app.get('/', (req: Request, res: Response) => {
+    res.status(200).json({ status: 'ok' });
+});
+
 const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, () => {

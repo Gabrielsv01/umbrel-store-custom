@@ -2,7 +2,7 @@ version: "3.7"
 
 services:
   html-to-image-api:
-    image: gabrielsv01/html-to-image-api:1.0.2
+    image: gabrielsv01/html-to-image-api:1.0.3
     container_name: html-to-image-api
     environment:
       - PORT=3001
@@ -16,6 +16,7 @@ services:
   
   playwright: 
     hostname: playwright
+    container_name: html-to-image-playwright
     image: gabrielsv01/playwright-with-fonts-fallback:1.0.0
     restart: unless-stopped
     tmpfs:
