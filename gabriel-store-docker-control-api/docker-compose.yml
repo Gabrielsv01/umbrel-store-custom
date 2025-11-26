@@ -1,11 +1,12 @@
 version: "3.7"
 services:
   docker-api:
-    image: gabrielsv01/docker-control-api:1.0.3
+    image: gabrielsv01/docker-control-api:1.0.4
     container_name: docker-control-api
     environment:
       - USERNAME=admin
       - PASSWORD=password123
+      - AUTHORIZED_CONTAINERS_ENV=container_name1,container_name2
     ports:
       - 5123:5123
     volumes:

@@ -14,7 +14,8 @@ app.secret_key = secrets.token_hex(16)
 AUTH_FILE = 'authorized_containers.json'
 API_TOKEN = secrets.token_hex(16)
 USERNAME = os.environ.get("USERNAME", "admin")
-PASSWORD = os.environ.get("PASSWORD", "senha123") 
+PASSWORD = os.environ.get("PASSWORD", "senha123")
+AUTHORIZED_CONTAINERS_ENV = os.environ.get("AUTHORIZED_CONTAINERS", "")
 
 
 def login_required(f):
@@ -35,6 +36,11 @@ def require_token(f):
     return decorated
 
 def load_authorized_containers():
+    # Se o arquivo não existe e a env está definida, inicializa e salva
+    if not os.path.exists(AUTH_FILE) and AUTHORIZED_CONTAINERS_ENV:
+        containers = [c.strip() for c in AUTHORIZED_CONTAINERS_ENV.split(",") if c.strip()]
+        save_authorized_containers(containers)
+        return containers
     try:
         with open(AUTH_FILE, 'r') as f:
             return json.load(f)
@@ -138,4 +144,8 @@ def iniciar_container(nome_container):
     return executar_comando_docker("start", nome_container)
 
 if __name__ == '__main__':
+    # Inicializa containers autorizados via ENV na primeira execução
+    if AUTHORIZED_CONTAINERS_ENV and not os.path.exists(AUTH_FILE):
+        containers = [c.strip() for c in AUTHORIZED_CONTAINERS_ENV.split(",") if c.strip()]
+        save_authorized_containers(containers)
     app.run(host='0.0.0.0', port=5123)
