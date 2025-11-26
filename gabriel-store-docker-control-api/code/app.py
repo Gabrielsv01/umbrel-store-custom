@@ -1,4 +1,3 @@
-
 import os
 import subprocess
 import json
@@ -108,6 +107,14 @@ def index():
 def get_authorized_containers():
     return jsonify(load_authorized_containers())
 
+@app.route('/api/token', methods=['POST'])
+def get_api_token():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+    if username == USERNAME and password == PASSWORD:
+        return jsonify({"api_token": API_TOKEN}), 200
+    return jsonify({"erro": "Usuário ou senha inválidos"}), 401
 
 @app.route('/api/authorized-containers', methods=['POST'])
 @require_token
@@ -144,7 +151,6 @@ def iniciar_container(nome_container):
     return executar_comando_docker("start", nome_container)
 
 if __name__ == '__main__':
-    # Inicializa containers autorizados via ENV na primeira execução
     if AUTHORIZED_CONTAINERS_ENV and not os.path.exists(AUTH_FILE):
         containers = [c.strip() for c in AUTHORIZED_CONTAINERS_ENV.split(",") if c.strip()]
         save_authorized_containers(containers)

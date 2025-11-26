@@ -4,7 +4,7 @@ name: Docker Control API
 tagline: Expose your docker Umbrell 
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-docker-control-api/icon.svg
 category: Utilities
-version: "1.0.4"
+version: "1.0.5"
 port: 5123
 description: >-
   This app creates a api to control the docker
