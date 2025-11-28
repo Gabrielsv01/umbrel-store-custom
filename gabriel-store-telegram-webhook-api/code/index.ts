@@ -12,22 +12,51 @@ const webhookURL = `${WEBHOOK_URL}${URI}`;
 const app = express();
 app.use(express.json());
 
+
+type NgrokTunnel = {
+    name: string;
+    ID: string;
+    uri: string;
+    public_url: string;
+    proto: string;
+    config: object;
+    metrics: object;
+};
+
+async function ngrokApi(url: string): Promise<string | null> {
+    try {
+        const res = await axios.get(url);
+        console.log('JSON recebido:', res.data);
+        const tunnels: NgrokTunnel[] = res.data.tunnels;
+        if (tunnels && tunnels.length > 0) {
+            const publicUrl = tunnels[0].public_url;
+            console.log('public_url:', publicUrl);
+            return publicUrl;
+        } else {
+            console.log('Nenhum túnel encontrado.');
+            return null;
+        }
+    } catch (err) {
+        console.error('Erro ao buscar URL:', err);
+        return null;
+    }
+}
+
+
 async function getNgrokPublicUrl(): Promise<string | null> {
-    const ngrokWebUrl = process.env.NGROK_WEB_URL;
-    if (!ngrokWebUrl) {
+    const ngrokApiUrl = process.env.NGROK_WEB_URL;
+    if (!ngrokApiUrl) {
         console.error('Variável de ambiente NGROK_WEB_URL não definida');
         return null;
     }
     try {
-        const res = await axios.get(ngrokWebUrl);
-        const html = res.data as string;
-        const match = html.match(/<th>URL<\/th><td>(https:\/\/[^<]+)<\/td>/);
-        if (match && match[1]) {
-            return match[1];
+        const publicUrl = await ngrokApi(ngrokApiUrl);
+        if (publicUrl) {
+            return publicUrl;
         }
         return null;
     } catch (err) {
-        console.error('Erro ao buscar ngrok web interface:', err);
+        console.error('Erro ao buscar ngrok API:', err);
         return null;
     }
 }
