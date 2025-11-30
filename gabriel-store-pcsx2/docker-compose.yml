@@ -14,7 +14,7 @@ services:
       - ./games:/games # Crie uma pasta 'games' e coloque as ISOs lá
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
-      - 5138:3000 # Acesso via navegador
+      - 5138:3001 # Acesso via navegador
     devices:
       - /dev/dri:/dev/dri # Acesso à placa de vídeo Intel
       - /dev/input:/dev/input # Acesso ao controle Bluetooth/USB
