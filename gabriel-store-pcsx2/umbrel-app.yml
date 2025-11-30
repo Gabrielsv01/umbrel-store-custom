@@ -4,7 +4,7 @@ name: PCSX2
 tagline: Play PlayStation 2 games on your Umbrel
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-pcsx2/icon.svg
 category: Games
-version: "1.0.1"
+version: "1.0.2"
 port: 5138
 description: >-
   PCSX2 is a free and open-source PlayStation 2 (PS2) emulator.
