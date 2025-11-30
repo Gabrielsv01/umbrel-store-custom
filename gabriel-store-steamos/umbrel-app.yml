@@ -13,13 +13,17 @@ description: >-
   If Steam fails to open, you need to install DBus manually.
   Open the Terminal inside the browser (Right Click > Open Terminal) and run these 3 commands:
   
-  1. Update system:
+  1. kill app:
+  pkill -9 steam
+  pkill -9 steamwebhelper
+
+  2. Update system:
   sudo pacman -Sy
   
-  2. Install DBus:
+  3. Install DBus:
   sudo pacman -S dbus --noconfirm
   
-  3. Start Steam:
+  4. Start Steam:
   dbus-launch steam -no-sandbox
 developer: Valve / LinuxServer.io
 website: https://store.steampowered.com/
