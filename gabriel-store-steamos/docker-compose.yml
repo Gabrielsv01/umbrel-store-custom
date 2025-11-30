@@ -33,7 +33,7 @@ services:
       - /dev/input:/dev/input
     ports:
       # Porta Web
-      - 5139:3000
+      - 5139:3001
       # Portas opcionais para Steam Link / Remote Play (Caso queira jogar do celular)
       - 27031-27036:27031-27036/udp
       - 27031-27036:27031-27036

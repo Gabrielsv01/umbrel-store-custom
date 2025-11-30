@@ -4,7 +4,7 @@ name: SteamOS
 tagline: Run Steam Big Picture on your Umbrel
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-steamos/icon.svg
 category: Games
-version: "1.0.2"
+version: "1.0.3"
 port: 5139
 description: >-
   SteamOS (via Docker) allows you to run the Steam client in Big Picture mode directly in your browser.
