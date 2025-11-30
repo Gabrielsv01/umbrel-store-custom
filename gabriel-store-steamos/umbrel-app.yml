@@ -1,8 +1,8 @@
 manifestVersion: 1
-id: gabriel-store-pcsx2
-name: PCSX2
-tagline: Play PlayStation 2 games on your Umbrel
-icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-pcsx2/icon.svg
+id: gabriel-store-steamos
+name: steamos
+tagline: Run steamos on your Umbrel
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-steamos/icon.svg
 category: Games
 version: "1.0.4"
 port: 5138
