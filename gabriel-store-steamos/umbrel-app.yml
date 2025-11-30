@@ -4,20 +4,23 @@ name: SteamOS
 tagline: Run Steam Big Picture on your Umbrel
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-steamos/icon.svg
 category: Games
-version: "1.0.1"
+version: "1.0.2"
 port: 5139
 description: >-
   SteamOS (via Docker) allows you to run the Steam client in Big Picture mode directly in your browser.
   
-  Turn your Umbrel into a gaming machine and stream games to any device.
+  🚨 CRITICAL FIX (Run if Steam crashes/black screen):
+  If Steam fails to open, you need to install DBus manually.
+  Open the Terminal inside the browser (Right Click > Open Terminal) and run these 3 commands:
   
-  ⚠️ SETUP INSTRUCTIONS:
-  1. Login with your Steam account.
-  2. Go to Settings > Storage.
-  3. Add the folder '/steam-library' as a drive. This maps directly to your Umbrel's 'Downloads/steam-games' folder.
-  4. Set it as default to ensure games are saved to your Downloads folder.
+  1. Update system:
+  sudo pacman -Sy
   
-  A controller connected via USB or Bluetooth is highly recommended.
+  2. Install DBus:
+  sudo pacman -S dbus --noconfirm
+  
+  3. Start Steam:
+  dbus-launch steam -no-sandbox
 developer: Valve / LinuxServer.io
 website: https://store.steampowered.com/
 submitter: Gabriel Vieira
@@ -29,7 +32,7 @@ gallery:
 permissions:
   - STORAGE_DOWNLOADS
 releaseNotes: >-
-  First version of the SteamOS app for Umbrel using LinuxServer.io image.
+  Added critical DBus installation instructions for stability.
 dependencies: []
 path: "/"
 defaultUsername: ""
