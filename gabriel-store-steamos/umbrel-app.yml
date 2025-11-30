@@ -1,31 +1,35 @@
 manifestVersion: 1
 id: gabriel-store-steamos
-name: steamos
-tagline: Run steamos on your Umbrel
+name: SteamOS
+tagline: Run Steam Big Picture on your Umbrel
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-steamos/icon.svg
 category: Games
-version: "1.0.4"
-port: 5138
+version: "1.0.0"
+port: 5139
 description: >-
-  PCSX2 is a free and open-source PlayStation 2 (PS2) emulator.
+  SteamOS (via Docker) allows you to run the Steam client in Big Picture mode directly in your browser.
   
-  It allows you to play PS2 games on your Umbrel through a web interface.
+  Turn your Umbrel into a gaming machine and stream games to any device.
   
-  ⚠️ REQUIREMENTS:
-  1. You must upload your BIOS files to the 'config/bios' folder.
-  2. You must upload your Game ISOs to the 'games' folder.
-  3. A controller connected via USB or Bluetooth is recommended.
-developer: PCSX2 Team
-website: https://pcsx2.net
+  ⚠️ SETUP INSTRUCTIONS:
+  1. Login with your Steam account.
+  2. Go to Settings > Storage.
+  3. Add the folder '/steam-library' as a drive. This maps directly to your Umbrel's 'Downloads/steam-games' folder.
+  4. Set it as default to ensure games are saved to your Downloads folder.
+  
+  A controller connected via USB or Bluetooth is highly recommended.
+developer: Valve / LinuxServer.io
+website: https://store.steampowered.com/
 submitter: Gabriel Vieira
 submission: https://github.com/Gabrielsv01/umbrel-store-custom
 repo: https://github.com/Gabrielsv01/umbrel-store-custom
 support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
-gallery: []
+gallery:
+  - https://cdn.cloudflare.steamstatic.com/store/home/store_home_share.jpg
 permissions:
   - STORAGE_DOWNLOADS
 releaseNotes: >-
-  First version of the PCSX2 app for Umbrel using LinuxServer.io image.
+  First version of the SteamOS app for Umbrel using LinuxServer.io image.
 dependencies: []
 path: "/"
 defaultUsername: ""
