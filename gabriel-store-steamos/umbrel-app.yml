@@ -11,7 +11,7 @@ description: >-
   
   🚨 CRITICAL FIX (Run if Steam crashes/black screen):
   If Steam fails to open, you need to install DBus manually.
-  Open the Terminal inside the browser (Right Click > Open Terminal) and run these 3 commands:
+  Open the Terminal inside the browser (Right Click > Open Terminal) and run these commands:
   
   1. kill app:
   pkill -9 steam
@@ -22,9 +22,13 @@ description: >-
   
   3. Install DBus:
   sudo pacman -S dbus --noconfirm
-  
+
   4. Start Steam:
   dbus-launch steam -no-sandbox
+
+  5. Start Steam Big Picture:
+  dbus-launch steam -no-browser -no-sandbox -bigpicture
+  
 developer: Valve / LinuxServer.io
 website: https://store.steampowered.com/
 submitter: Gabriel Vieira
