@@ -5,7 +5,7 @@ tagline: Run Steam Big Picture on your Umbrel
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-steam-headless/icon.svg
 category: Games
 version: "1.0.3"
-port: 5139
+port: 5140
 description: >-
   Steam Headless is a lightweight Docker container that allows you to run Steam in Big Picture mode on your Umbrel device. Perfect for gaming enthusiasts who want to enjoy their Steam library on a headless setup, Steam Headless provides an optimized environment for streaming games to various devices, including smartphones and tablets.
 
