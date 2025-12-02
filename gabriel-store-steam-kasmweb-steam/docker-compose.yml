@@ -3,7 +3,8 @@ services:
   kasmweb-steam:
     image: kasmweb/steam:1.18.0-rolling-daily
     container_name: kasmweb-steam
-    network_mode: host
+    ports:
+      - 5140:6901
     devices:
       - /dev/dri:/dev/dri
     security_opt:
