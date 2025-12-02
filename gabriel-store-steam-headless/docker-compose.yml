@@ -3,14 +3,7 @@ services:
   steam-headless:
     image: josh5/steam-headless:latest
     container_name: steam-headless
-    ports:
-      - 5140:8080
-      # Portas opcionais para Steam Link / Remote Play (Caso queira jogar do celular)
-      - 27031-27036:27031-27036/udp
-      - 27031-27036:27031-27036
-      - 47984-47990:47984-47990
-      - 48010:48010
-      - 47998-48000:47998-48000/udp
+    network_mode: "host"
     devices:
       - /dev/dri:/dev/dri
       - /dev/uinput:/dev/uinput
