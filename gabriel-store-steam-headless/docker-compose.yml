@@ -1,40 +1,35 @@
-version: "3.9"
+version: '3.9'
 services:
   steam-headless:
     image: josh5/steam-headless:latest
     container_name: steam-headless
-    network_mode: "host"
+    ports:
+      - '5140:8083'
+      - '32036:32036'
+      - '32037:32037'
     devices:
       - /dev/dri:/dev/dri
       - /dev/uinput:/dev/uinput
-      - /dev/fuse:/dev/fuse 
+      - /dev/fuse:/dev/fuse
     security_opt:
       - seccomp=unconfined
+    privileged: true
     ipc: host
     environment:
       - PUID=1000
       - PGID=1000
-      
       - ENABLE_SUNSHINE=true
-      
-      - TZ=America/Sao_Paulo 
-      
+      - TZ=America/Sao_Paulo
       - VNC_USER=steamuser
       - VNC_PASSWORD=123456
-      
       - SHMEM_SIZE=10G
       - KEEP_LIBRARIES=true
       - CONTAINER_DEBUG=false
       - APP_NAME=Steam Headless
-      
       - FORCE_X11_DUMMY_CONFIG=true
-    
     volumes:
       - /dev/input/:/dev/input/:ro
       - ${APP_DATA_DIR}/data/config:/config
-      - ${APP_DATA_DIR}/data/steam-games:/home/default/.steam:rw 
-      
-      - /run/dbus:/run/dbus:ro            
+      - ${APP_DATA_DIR}/data/steam-games:/home/default/.steam:rw
       - /run/udev/data:/run/udev/data:ro
-      
     restart: unless-stopped
