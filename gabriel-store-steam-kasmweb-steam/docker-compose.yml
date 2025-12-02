@@ -1,0 +1,17 @@
+version: '3.9'
+services:
+  kasmweb-steam:
+    image: kasmweb/steam:1.18.0-rolling-daily
+    container_name: kasmweb-steam
+    network_mode: host
+    devices:
+      - /dev/dri:/dev/dri
+    security_opt:
+      - seccomp=unconfined
+    privileged: true
+
+    volumes:
+      - /dev/input/:/dev/input/:ro
+      - ${APP_DATA_DIR}/data/config:/config
+      - ${APP_DATA_DIR}/data/steam-games:/home/default/.steam:rw
+    restart: unless-stopped
