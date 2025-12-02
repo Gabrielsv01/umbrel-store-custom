@@ -1,10 +1,10 @@
 version: '3.9'
 services:
-  kasmweb-steam:
+  steam:
     image: kasmweb/steam:1.18.0-rolling-daily
     container_name: kasmweb-steam
     ports:
-      - 5140:6901
+      - '5140:6901'
     devices:
       - /dev/dri:/dev/dri
     security_opt:
@@ -16,3 +16,6 @@ services:
       - ${APP_DATA_DIR}/data/config:/config
       - ${APP_DATA_DIR}/data/steam-games:/home/default/.steam:rw
     restart: unless-stopped
+    environment:
+      - VNC_PW=password
+    shm_size: 512m
