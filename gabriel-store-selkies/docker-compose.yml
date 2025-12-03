@@ -1,6 +1,6 @@
 services:
   selkies:
-    image: lsiobase/selkies:fedora42-version-3f40d8e2
+    image: ghcr.io/selkies-project/nvidia-glx-desktop:22.04-20251107145840
     container_name: selkies
     security_opt:
       - seccomp:unconfined

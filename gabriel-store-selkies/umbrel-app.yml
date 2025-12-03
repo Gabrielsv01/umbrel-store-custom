@@ -4,7 +4,7 @@ name: Selkies
 tagline: Run selkies base on your Umbrel
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-selkies/icon.svg
 category: Utilities
-version: "1.0.0"
+version: "1.0.1"
 port: 5140
 description: >-
   Selkies is a web interface for the Desktop
