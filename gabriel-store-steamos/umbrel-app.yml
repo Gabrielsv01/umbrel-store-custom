@@ -17,11 +17,36 @@ description: >-
   pkill -9 steam
   pkill -9 steamwebhelper
 
+  1.1 Vulkan drivers reinstallation (Optional, but recommended):
+  sudo pacman -Sy vulkan-intel lib32-vulkan-intel vulkan-mesa-layers
+  sudo pacman -Sy vulkan-tools
+
+  1.2 Vulkan teste:
+  vulkaninfo | grep "deviceName"
+
+  1.3 Vulkan fix (if the above command returns errors):
+  sudo pacman -Sy vulkan-intel lib32-vulkan-intel vulkan-tools
+
+  1.4 Remove conflicting packages (if issues persist):
+  sudo pacman -Sy vulkan-intel lib32-vulkan-intel vulkan-mesa-layers vulkan-mesa-device-select lib32-vulkan-mesa-device-select
+
+  1.5 Remove mesa layers (if issues still persist), after run again 1.1 step, else run 2 step:
+  sudo pacman -Rns lib32-vulkan-mesa-layers
+
+  1.6 Vulkan teste:
+  vulkaninfo | grep "deviceName"
+
   2. Update system:
-  sudo pacman -Sy
-  
-  3. Install DBus:
-  sudo pacman -S dbus --noconfirm
+  sudo pacman -Syu
+  sudo pacman -Sy wayland lib32-wayland # Garante que o Wayland esteja atualizado
+  sudo pacman -Sy vulkan-intel lib32-vulkan-intel vulkan-tools # Reinstala os drivers
+
+  2.1 Vulkan teste:
+  vulkaninfo | grep "deviceName"
+
+  3. "OpenGL renderer string" (Optional, para checar se o driver está funcionando)
+  sudo pacman -Sy mesa-utils
+  glxinfo | grep "OpenGL renderer string"
 
   4. Start Steam:
   dbus-launch steam -no-sandbox
