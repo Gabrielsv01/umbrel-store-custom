@@ -15,7 +15,7 @@ services:
       - ${APP_DATA_DIR}/data/config:/config
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
-      - 5138:3001
+      - 5140:3001
     devices:
       - /dev/dri:/dev/dri
       - /dev/input:/dev/input
