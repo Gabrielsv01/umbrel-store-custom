@@ -1,0 +1,23 @@
+services:
+  selkies:
+    image: lsiobase/selkies:fedora42-version-3f40d8e2
+    container_name: selkies
+    security_opt:
+      - seccomp:unconfined
+    privileged: true
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Sao_Paulo
+      - DISPLAY_WIDTH=1280
+      - DISPLAY_HEIGHT=720
+    volumes:
+      - ${APP_DATA_DIR}/data/config:/config
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - 5138:3001
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/input:/dev/input
+    shm_size: "10gb"
+    restart: unless-stopped

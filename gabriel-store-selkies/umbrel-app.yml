@@ -1,0 +1,25 @@
+manifestVersion: 1
+id: gabriel-store-selkies
+name: Selkies
+tagline: Run selkies base on your Umbrel
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-selkies/icon.svg
+category: Utilities
+version: "1.0.0"
+port: 5140
+description: >-
+  Selkies is a web interface for the Desktop
+developer: selkies Team
+website: https://github.com/linuxserver/docker-baseimage-selkies
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+permissions:
+  - STORAGE_DOWNLOADS
+releaseNotes: >-
+  First version of the selkies app for Umbrel using LinuxServer.io image.
+dependencies: []
+path: "/"
+defaultUsername: ""
+defaultPassword: ""
