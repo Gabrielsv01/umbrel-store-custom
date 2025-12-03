@@ -1,0 +1,31 @@
+manifestVersion: 1
+id: gabriel-store-retroarch
+name: Retroarch
+tagline: Play a variety of Retro games on your Umbrel
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-retroarch/icon.svg
+category: Games
+version: "1.0.0"
+port: 5140
+description: >-
+  Retroarch is a frontend for emulators, game engines and media players.
+  
+  It allows you to play a variety of games on your Umbrel through a web interface.
+  
+  ⚠️ REQUIREMENTS:
+  1. You must upload your Game ISOs to the 'games' folder.
+  2. A controller connected via USB or Bluetooth is recommended.
+developer: Retroarch Team
+website: https://retroarch.com
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+permissions:
+  - STORAGE_DOWNLOADS
+releaseNotes: >-
+  First version of the Retroarch app for Umbrel using LinuxServer.io image.
+dependencies: []
+path: "/"
+defaultUsername: ""
+defaultPassword: ""

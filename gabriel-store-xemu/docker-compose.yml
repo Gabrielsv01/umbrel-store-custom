@@ -1,7 +1,7 @@
 services:
-  pcsx2:
-    image: lscr.io/linuxserver/pcsx2:latest
-    container_name: pcsx2
+  xemu:
+    image: linuxserver/xemu:0.8.118
+    container_name: xemu
     security_opt:
       - seccomp:unconfined
     privileged: true
@@ -14,10 +14,9 @@ services:
     volumes:
       - ${APP_DATA_DIR}/data/config:/config
       - ${APP_DATA_DIR}/data/games:/games
-      - ${UMBREL_ROOT}/data/storage/downloads/ps2-games:/download-games
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
-      - 5138:3001
+      - 5141:3001
     devices:
       - /dev/dri:/dev/dri
       - /dev/input:/dev/input
