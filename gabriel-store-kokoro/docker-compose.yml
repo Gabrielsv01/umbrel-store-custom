@@ -1,0 +1,9 @@
+version: '3.7'
+services:
+  web:
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.4
+    user: '1000:1000'
+    restart: on-failure
+    container_name: kokoro_web_1
+    ports:
+      - 8880:8880
