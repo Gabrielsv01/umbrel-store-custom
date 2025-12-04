@@ -6,4 +6,4 @@ services:
     restart: on-failure
     container_name: kokoro_web_1
     ports:
-      - 8880:8880
+      - 5142:8880
