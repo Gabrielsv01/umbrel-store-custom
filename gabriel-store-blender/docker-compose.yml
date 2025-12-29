@@ -1,8 +1,0 @@
-version: '3.7'
-services:
-  blender:
-    image: linuxserver/blender:5.0.1
-    restart: on-failure
-    container_name: blender
-    ports:
-      - 5143:3001
