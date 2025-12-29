@@ -1,0 +1,26 @@
+manifestVersion: 1
+id: gabriel-store-blender
+name: Blender
+tagline: 3D creation suite
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-blender/icon.svg
+category: utility
+version: "0.0.1"
+port: 5143
+description: >-
+  Blender is a program for modeling, rigging, animation, simulation, rendering,
+  compositing, and motion tracking, video editing, and 2D animation pipeline. It
+  is a powerful and versatile tool used by professionals and hobbyists alike for
+  creating stunning visual content.
+developer: Blender Team
+website: https://www.blender.org/
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+releaseNotes: >-
+  Initial release of the Blender app for Umbrel.
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
