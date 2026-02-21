@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  openclaw:
+    image: alpine/openclaw:latest
+    container_name: openclaw_gateway_1
+    restart: unless-stopped
+    ports:
+      - "5143:18789"
+      - "5144:18790"
+    volumes:
+      - openclaw:/data/.openclaw
+    environment:
+      - TZ=America/Sao_Paulo
+      - NODE_ENV=production
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+volumes:
+  openclaw:
+    name: openclaw
