@@ -1,23 +1,29 @@
-version: '3.8'
-
 services:
   openclaw:
     image: alpine/openclaw:latest
     container_name: openclaw_gateway_1
     restart: unless-stopped
+    user: root
     ports:
-      - "5143:18789"
-      - "5144:18790"
+      - 5143:80
     volumes:
-      - openclaw:/data/.openclaw
+      - openclaw:/root/.openclaw
     environment:
       - TZ=America/Sao_Paulo
       - NODE_ENV=production
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-
+  proxy:
+    image: nginx:alpine
+    container_name: openclaw_proxy
+    restart: unless-stopped
+    network_mode: service:openclaw
+    entrypoint: /bin/sh -c
+    command: >
+      "echo 'events {} http { server { listen 80; location / { proxy_pass
+      http://127.0.0.1:18789; proxy_http_version 1.1; proxy_set_header Upgrade
+      $$http_upgrade; proxy_set_header Connection \"upgrade\"; proxy_set_header
+      Host $$host; } } }' > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"
+    depends_on:
+      - openclaw
 volumes:
   openclaw:
     name: openclaw
