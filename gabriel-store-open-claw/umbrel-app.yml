@@ -4,7 +4,7 @@ name: Open Claw
 tagline: Open Claw é um gateway de inteligência artificial que permite criar agentes personalizados para automatizar tarefas, responder a perguntas e interagir com outros serviços. Ele é projetado para ser fácil de usar e altamente personalizável, permitindo que os usuários criem agentes que atendam às suas necessidades específicas.
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-open-claw/icon.svg
 category: ai
-version: "1.0.1"
+version: "1.0.2"
 port: 5143
 description: >-
   Open Claw é um gateway de inteligência artificial que permite criar agentes personalizados para automatizar tarefas, responder a perguntas e interagir com outros serviços. Ele é projetado para ser fácil de usar e altamente personalizável, permitindo que os usuários criem agentes que atendam às suas necessidades específicas.
