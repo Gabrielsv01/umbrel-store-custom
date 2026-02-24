@@ -1,11 +1,13 @@
 services:
-  picoclaw-gateway:
+  picoclaw-agent:
     image: sipeed/picoclaw:v0.1.2
-    container_name: picoclaw_gateway
+    container_name: picoclaw-agent
     restart: unless-stopped
     ports:
       - 5144:8080
     volumes:
+      - ${APP_DATA_DIR}/data:/app/data
+      # - ./data:/app/data
       # - ./config:/root/.picoclaw:ro
       - ${APP_DATA_DIR}/data/config:/root/.picoclaw:ro
     environment:

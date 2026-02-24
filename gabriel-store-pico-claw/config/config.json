@@ -1,9 +1,9 @@
 {
   "agents": {
     "defaults": {
-      "workspace": "~/.picoclaw/workspace",
+      "workspace": "/app/data/workspace",
       "restrict_to_workspace": true,
-      "model_name": "gpt4",
+      "model_name": "qwen-coder",
       "max_tokens": 8192,
       "temperature": 0.7,
       "max_tool_iterations": 20
@@ -11,38 +11,10 @@
   },
   "model_list": [
     {
-      "model_name": "gpt4",
-      "model": "openai/gpt-5.2",
-      "api_key": "sk-your-openai-key",
-      "api_base": "https://api.openai.com/v1"
-    },
-    {
-      "model_name": "claude-sonnet-4.6",
-      "model": "anthropic/claude-sonnet-4.6",
-      "api_key": "sk-ant-your-key",
-      "api_base": "https://api.anthropic.com/v1"
-    },
-    {
-      "model_name": "gemini",
-      "model": "antigravity/gemini-2.0-flash",
-      "auth_method": "oauth"
-    },
-    {
-      "model_name": "deepseek",
-      "model": "deepseek/deepseek-chat",
-      "api_key": "sk-your-deepseek-key"
-    },
-    {
-      "model_name": "loadbalanced-gpt4",
-      "model": "openai/gpt-5.2",
-      "api_key": "sk-key1",
-      "api_base": "https://api1.example.com/v1"
-    },
-    {
-      "model_name": "loadbalanced-gpt4",
-      "model": "openai/gpt-5.2",
-      "api_key": "sk-key2",
-      "api_base": "https://api2.example.com/v1"
+      "model_name": "qwen-coder",
+      "model": "ollama/qwen2.5-coder:7b",
+      "api_base": "http://10.0.0.142:11434/v1",
+      "api_key": "ollama"
     }
   ],
   "channels": {
@@ -187,7 +159,7 @@
     },
     "ollama": {
       "api_key": "",
-      "api_base": "http://localhost:11434/v1"
+      "api_base": "http://10.0.0.142:11434/v1"
     },
     "cerebras": {
       "api_key": "",
