@@ -1,0 +1,15 @@
+services:
+  picoclaw-gateway:
+    image: sipeed/picoclaw:v0.1.2
+    container_name: picoclaw_gateway
+    restart: unless-stopped
+    ports:
+      - 5144:8080
+    volumes:
+      - ${APP_DATA_DIR}/config:/app/config
+      - ${APP_DATA_DIR}/data:/app/data
+    environment:
+      - TZ=America/Sao_Paulo
+      - NODE_ENV=production
+      - PICOCLAW_GATEWAY_HOST=0.0.0.0
+      - PICOCLAW_GATEWAY_PORT=8080

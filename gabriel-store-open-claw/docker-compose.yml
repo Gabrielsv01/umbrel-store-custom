@@ -16,11 +16,22 @@ services:
     container_name: openclaw_proxy
     restart: unless-stopped
     network_mode: service:openclaw
-    entrypoint: /bin/sh -c
     command: >
-      "echo 'events {} http { server { listen 80; location / { proxy_pass
-      http://127.0.0.1:18789; proxy_http_version 1.1; proxy_set_header Upgrade
-      $$http_upgrade; proxy_set_header Connection \"upgrade\"; proxy_set_header
-      Host $$host; } } }' > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"
+      /bin/sh -c "echo 'events {} http { 
+        server { 
+          listen 80; 
+          location / { 
+            proxy_pass http://127.0.0.1:18789; 
+            proxy_http_version 1.1; 
+            proxy_set_header Upgrade $$http_upgrade; 
+            proxy_set_header Connection \"upgrade\"; 
+            
+            # Repassando as informações REAIS da sua rede:
+            proxy_set_header Host $$http_host;
+            proxy_set_header X-Forwarded-For $$remote_addr;
+            proxy_set_header X-Real-IP $$remote_addr;
+          } 
+        } 
+      }' > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"
     depends_on:
       - openclaw
