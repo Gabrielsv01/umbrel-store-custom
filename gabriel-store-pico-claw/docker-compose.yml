@@ -6,7 +6,9 @@ services:
     ports:
       - 5144:8080
     volumes:
-      - ./config:/root/.picoclaw:ro
+      # - ${APP_DATA_DIR}/data:/app/data
+      # - ./config:/root/.picoclaw:ro
+      - ${APP_DATA_DIR}/data:/root/.picoclaw:ro
     environment:
       - TZ=America/Sao_Paulo
       - NODE_ENV=production
