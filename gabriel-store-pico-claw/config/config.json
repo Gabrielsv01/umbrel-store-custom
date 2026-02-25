@@ -3,7 +3,8 @@
     "defaults": {
       "workspace": "/app/data/workspace",
       "restrict_to_workspace": true,
-      "model_name": "qwen-coder",
+      "model_name": "gemini-2.5-flash",
+      "model": "gemini/gemini-2.5-flash",
       "max_tokens": 8192,
       "temperature": 0.7,
       "max_tool_iterations": 20
@@ -11,16 +12,16 @@
   },
   "model_list": [
     {
-      "model_name": "qwen-coder",
-      "model": "ollama/qwen2.5-coder:7b",
-      "api_base": "http://10.0.0.142:11434/v1",
-      "api_key": "ollama"
+      "model_name": "gemini-2.5-flash",
+      "model": "gemini/gemini-2.5-flash",
+      "api_key": "chave",
+      "api_base": "https://generativelanguage.googleapis.com/v1beta"
     }
   ],
   "channels": {
     "telegram": {
-      "enabled": false,
-      "token": "YOUR_TELEGRAM_BOT_TOKEN",
+      "enabled": true,
+      "token": "YOUR_TOKEN",
       "proxy": "",
       "allow_from": [
         "YOUR_USER_ID"
