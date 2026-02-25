@@ -1,15 +1,16 @@
 services:
   picoclaw:
-    image: sipeed/picoclaw:v0.1.2
+    image: gabrielsv01/pico-claw:v0.1.2
     container_name: picoclaw
     restart: unless-stopped
+    # command: ["gateway", "--debug"]
     ports:
       - 5144:8080
     volumes:
       - ${APP_DATA_DIR}/workspace:/app/data/workspace
       # - ./workspace:/app/data/workspace
-      # - ./config:/root/.picoclaw:ro
-      - ${APP_DATA_DIR}/config:/root/.picoclaw:ro
+      # - ./config:/home/picoclaw/.picoclaw:ro
+      - ${APP_DATA_DIR}/config:/home/picoclaw/.picoclaw:ro
     environment:
       - TZ=America/Sao_Paulo
       - NODE_ENV=production
