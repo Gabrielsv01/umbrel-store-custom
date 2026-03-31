@@ -3,8 +3,6 @@ services:
     image: docker.io/sipeed/picoclaw:latest
     container_name: picoclaw
     restart: unless-stopped
-    profiles:
-      - gateway
     ports:
       - 5144:8080
     volumes:
@@ -22,8 +20,6 @@ services:
       image: docker.io/sipeed/picoclaw:launcher
       container_name: picoclaw-launcher
       restart: unless-stopped
-      profiles:
-        - launcher
       environment:
         - PICOCLAW_GATEWAY_HOST=0.0.0.0
       ports:
