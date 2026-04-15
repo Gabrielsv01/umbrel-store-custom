@@ -3,7 +3,7 @@ import webhookConfig from "../webhook-config";
 import { Request, Response } from 'express';
 
 async function webhooks(req: Request, res: Response) {
-    if (!isAuthenticated(req)) {
+    if (!isAuthenticated(req, res)) {
         return res.status(401).send('Não autorizado');
     }
 

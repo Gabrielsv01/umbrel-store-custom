@@ -1,56 +1,81 @@
 document.addEventListener('DOMContentLoaded', () => {
     const servicesContainer = document.getElementById('services-container');
 
-    async function fetchAndRenderWebhooks() {
-        const response = await fetch('/api/webhooks');
-        const webhooks = await response.json();
+    function redirectToLoginIfUnauthorized(status: number): boolean {
+        if (status === 401) {
+            window.location.href = '/';
+            return true;
+        }
 
+        return false;
+    }
+
+    async function fetchAndRenderWebhooks() {
         if (!servicesContainer) {
             console.error('servicesContainer element not found');
             return;
         }
 
-        webhooks.forEach(webhook => {
-            const serviceCard = document.createElement('div');
-            serviceCard.className = 'service-card';
-            serviceCard.innerHTML = `
-                <div class="service-summary">
-                    <h3>api/${webhook.name}</h3>
-                    <span class="expand-icon">›</span>
-                </div>
-                <div class="service-details" style="display: none;">
-                    <div class="controls-container">
-                        <div>
-                            <label for="log-limit-${webhook.name}">Qtd. de Logs:</label>
-                            <input type="number" id="log-limit-${webhook.name}" class="log-limit-input" value="10" min="1">
-                        </div>
-                        <button class="fetch-logs-button" data-service-name="${webhook.name}">Atualizar Logs</button>
-                    </div>
-                    <div id="logs-for-${webhook.name}" class="logs-container"></div>
-                </div>
-            `;
-            servicesContainer.appendChild(serviceCard);
-
-            const summary = serviceCard.querySelector('.service-summary');
-            const details = serviceCard.querySelector('.service-details') as HTMLElement;
-            const fetchButton = serviceCard.querySelector('.fetch-logs-button') as HTMLButtonElement;
-            const logLimitInput = serviceCard.querySelector('.log-limit-input') as HTMLInputElement;
-
-            if (summary) {
-                summary.addEventListener('click', () => {
-                    details.classList.toggle('expanded');
-                    const isExpanded = details.style.display === 'block';
-                    details.style.display = isExpanded ? 'none' : 'block';
-                    if (!isExpanded) {
-                        fetchAndDisplayLogs(webhook.name, parseInt(logLimitInput.value));
-                    }
-                });
+        try {
+            const response = await fetch('/api/webhooks');
+            if (redirectToLoginIfUnauthorized(response.status)) {
+                return;
             }
 
-            fetchButton.addEventListener('click', () => {
-                fetchAndDisplayLogs(webhook.name, parseInt(logLimitInput.value));
+            if (!response.ok) {
+                throw new Error(`Erro ao carregar serviços: HTTP ${response.status}`);
+            }
+
+            const webhooks = await response.json();
+            if (!Array.isArray(webhooks)) {
+                throw new Error('Formato de resposta inválido em /api/webhooks');
+            }
+
+            webhooks.forEach(webhook => {
+                const serviceCard = document.createElement('div');
+                serviceCard.className = 'service-card';
+                serviceCard.innerHTML = `
+                    <div class="service-summary">
+                        <h3>api/${webhook.name}</h3>
+                        <span class="expand-icon">›</span>
+                    </div>
+                    <div class="service-details" style="display: none;">
+                        <div class="controls-container">
+                            <div>
+                                <label for="log-limit-${webhook.name}">Qtd. de Logs:</label>
+                                <input type="number" id="log-limit-${webhook.name}" class="log-limit-input" value="10" min="1">
+                            </div>
+                            <button class="fetch-logs-button" data-service-name="${webhook.name}">Atualizar Logs</button>
+                        </div>
+                        <div id="logs-for-${webhook.name}" class="logs-container"></div>
+                    </div>
+                `;
+                servicesContainer.appendChild(serviceCard);
+
+                const summary = serviceCard.querySelector('.service-summary');
+                const details = serviceCard.querySelector('.service-details') as HTMLElement;
+                const fetchButton = serviceCard.querySelector('.fetch-logs-button') as HTMLButtonElement;
+                const logLimitInput = serviceCard.querySelector('.log-limit-input') as HTMLInputElement;
+
+                if (summary) {
+                    summary.addEventListener('click', () => {
+                        details.classList.toggle('expanded');
+                        const isExpanded = details.style.display === 'block';
+                        details.style.display = isExpanded ? 'none' : 'block';
+                        if (!isExpanded) {
+                            fetchAndDisplayLogs(webhook.name, parseInt(logLimitInput.value));
+                        }
+                    });
+                }
+
+                fetchButton.addEventListener('click', () => {
+                    fetchAndDisplayLogs(webhook.name, parseInt(logLimitInput.value));
+                });
             });
-        });
+        } catch (error) {
+            servicesContainer.innerHTML = '<p>Erro ao carregar serviços do dashboard.</p>';
+            console.error(error);
+        }
     }
 
     async function fetchAndDisplayLogs(serviceName: string, limit: number) {
@@ -63,11 +88,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const response = await fetch(`/api/logs/${serviceName}?limit=${limit}`);
+            if (redirectToLoginIfUnauthorized(response.status)) {
+                return;
+            }
+            if (!response.ok) {
+                throw new Error(`Erro ao carregar logs: HTTP ${response.status}`);
+            }
+
             const logs = await response.json();
-            
+
             logsContainer.innerHTML = '';
             if (logs.length === 0) {
-                logsContainer.innerHTML = `<p>Nenhum log encontrado para este serviço.</p>`;
+                logsContainer.innerHTML = '<p>Nenhum log encontrado para este serviço.</p>';
                 return;
             }
 
@@ -97,7 +129,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 logsContainer.appendChild(logCard);
             });
         } catch (error) {
-            logsContainer.innerHTML = `<p>Erro ao carregar os logs.</p>`;
+            logsContainer.innerHTML = '<p>Erro ao carregar os logs.</p>';
+            console.error(error);
         }
     }
 

@@ -3,7 +3,7 @@ import { isAuthenticated } from '../utils';
 import { webhookLogs } from '../logs';
 
 async function logs(req: Request, res: Response) {
-    if (!isAuthenticated(req)) {
+    if (!isAuthenticated(req, res)) {
         return res.status(401).send('Não autorizado');
     }
 

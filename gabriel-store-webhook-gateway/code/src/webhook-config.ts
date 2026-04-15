@@ -1,6 +1,7 @@
 
 import * as yaml from 'js-yaml';
 import * as fs from 'fs';
+import * as path from 'path';
 import { WebhookConfig } from './types';
 import { telegramFilter, alexaskillFilter, noFilter } from './filters';
 
@@ -32,7 +33,7 @@ const substituteEnvVars = (obj: any) => {
 
 const loadConfig = () => {
     try {
-        const configPath = './webhooks.yml';
+        const configPath = process.env.WEBHOOK_CONFIG_PATH || path.resolve(__dirname, '..', 'webhooks.yml');
         const fileContents = fs.readFileSync(configPath, 'utf8');
         const parsedYaml: any = yaml.load(fileContents);
 
@@ -47,6 +48,10 @@ const loadConfig = () => {
                 authorizedChatIds?: string;
                 authorizedUsernames?: string;
                 applicationId?: string;
+                signatureSecret?: string;
+                signatureHeader?: string;
+                signaturePrefix?: string;
+                hmacAlgorithm?: string;
                 filter?: keyof typeof filterFunctions;
             }
 
@@ -55,6 +60,10 @@ const loadConfig = () => {
                 authorizedChatIds: string[];
                 authorizedUsernames: string[];
                 applicationId?: string;
+                signatureSecret?: string;
+                signatureHeader?: string;
+                signaturePrefix?: string;
+                hmacAlgorithm?: string;
                 filter?: (payload: any, headers?: any) => boolean;
             }
 
@@ -65,6 +74,10 @@ const loadConfig = () => {
                 authorizedChatIds: serviceTyped.authorizedChatIds ? serviceTyped.authorizedChatIds.split(',').map((id: string) => id.trim()) : [],
                 authorizedUsernames: serviceTyped.authorizedUsernames ? serviceTyped.authorizedUsernames.split(',').map((username: string) => username.trim()) : [],
                 applicationId: serviceTyped.applicationId!,
+                signatureSecret: serviceTyped.signatureSecret || undefined,
+                signatureHeader: serviceTyped.signatureHeader?.toLowerCase() || undefined,
+                signaturePrefix: serviceTyped.signaturePrefix || undefined,
+                hmacAlgorithm: serviceTyped.hmacAlgorithm || 'sha256',
                 filter: serviceTyped.filter ? (payload: any, headers: any) => filterFunctions[serviceTyped.filter as keyof typeof filterFunctions](payload, loadedConfig[serviceName], headers) : undefined,
             } as LoadedServiceConfig;
         }

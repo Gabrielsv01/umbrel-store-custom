@@ -5,6 +5,8 @@ import path from 'path';
 import cookieParser from 'cookie-parser';
 import {
     PORT,
+    JSON_BODY_LIMIT,
+    URLENCODED_BODY_LIMIT,
     loginLimiter,
     webhookLimiter
 } from './constants';
@@ -22,7 +24,12 @@ if (process.env.ENABLE_HELMET === 'true') {
     }));
 }
 app.set('trust proxy', 1);
-app.use(express.json());
+app.use(express.json({
+    limit: JSON_BODY_LIMIT,
+    verify: (req, _res, buf) => {
+        (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buf);
+    }
+}));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -34,7 +41,7 @@ app.post('/api/:serviceName/webhook-test/:id/webhook', webhookLimiter, processWe
 app.get('/api/webhooks', webhooks);
 app.get('/api/logs/:serviceName', logs);
 app.get('/dashboard', dashboard);
-app.post('/', loginLimiter, express.urlencoded({ extended: false }), auth);
+app.post('/', loginLimiter, express.urlencoded({ extended: false, limit: URLENCODED_BODY_LIMIT }), auth);
 
 app.listen(PORT, () => {
     console.log(`API de Guarda de Webhooks rodando na porta ${PORT}`);

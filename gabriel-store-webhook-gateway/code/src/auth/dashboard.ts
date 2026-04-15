@@ -3,7 +3,7 @@ import path from 'path';
 import { isAuthenticated } from '../utils';
 
 async function dashboard(req: Request, res: Response) {
-    if (isAuthenticated(req)) {
+    if (isAuthenticated(req, res)) {
          return res.sendFile(path.join(__dirname, '..', 'public', 'dashboard.html'));
     } else {
         return res.redirect('/');
