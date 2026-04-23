@@ -9,7 +9,7 @@ services:
       - ${APP_DATA_DIR}/workspace:/app/data/workspace
       # - ./workspace:/app/data/workspace
       # - ./config/config.json:/root/.picoclaw/config.json:ro
-      - ${APP_DATA_DIR}/config/config.json:/root/.picoclaw/config.json:ro
+      - ${APP_DATA_DIR}/config:/root/.picoclaw
     environment:
       - TZ=America/Sao_Paulo
       - NODE_ENV=production
@@ -29,4 +29,4 @@ services:
         - ${APP_DATA_DIR}/workspace:/app/data/workspace
         # - ./workspace:/app/data/workspace
         # - ./config/config.json:/root/.picoclaw/config.json:ro
-        - ${APP_DATA_DIR}/config/config.json:/root/.picoclaw/config.json:ro
+        - ${APP_DATA_DIR}/config:/root/.picoclaw
