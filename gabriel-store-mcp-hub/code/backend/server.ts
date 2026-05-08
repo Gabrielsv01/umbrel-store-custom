@@ -1,9 +1,11 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import fastifyStatic from '@fastify/static'
+import fastifyWebsocket from '@fastify/websocket'
 import Docker from 'dockerode'
 import fs from 'node:fs'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { Readable } from 'node:stream'
 
 const fastify = Fastify({ logger: false })
@@ -24,6 +26,7 @@ interface McpMeta {
   command?: string
   env?: Record<string, string>
   port?: number | string
+  transport?: 'http' | 'stdio'
 }
 
 interface McpRecord {
@@ -36,6 +39,7 @@ interface DeployBody {
   command?: string
   env?: Record<string, string>
   port?: number | string
+  transport?: 'http' | 'stdio'
 }
 
 interface UpdateBody {
@@ -44,10 +48,16 @@ interface UpdateBody {
   command?: string
   env?: Record<string, string>
   port?: number | string
+  transport?: 'http' | 'stdio'
 }
 
 interface ActionBody {
   action: 'start' | 'stop' | 'remove'
+}
+
+interface StdioWsMessage {
+  type?: 'input'
+  data?: string
 }
 
 interface PullImageBody {
@@ -56,6 +66,17 @@ interface PullImageBody {
 
 interface PullImageQuery {
   image?: string
+}
+
+interface StdioProxyMessageQuery {
+  sessionId?: string
+}
+
+interface StdioProxySession {
+  sessionId: string
+  container: Docker.Container
+  stream: NodeJS.ReadWriteStream
+  closed: boolean
 }
 
 interface DockerImageSummary {
@@ -78,6 +99,8 @@ interface DockerVolumeSummary {
   inUse: boolean
   containersUsing: number
 }
+
+const stdioProxySessions = new Map<string, StdioProxySession>()
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -131,10 +154,115 @@ async function ensureImageAvailable(image: string): Promise<void> {
   }
 }
 
+function createDockerMultiplexDecoder(
+  onPayload: (payload: string, streamType: number) => void,
+): (chunk: Buffer) => void {
+  let pending = Buffer.alloc(0)
+
+  return (chunk: Buffer) => {
+    const data = pending.length > 0 ? Buffer.concat([pending, chunk]) : chunk
+    let offset = 0
+
+    while (data.length - offset >= 8) {
+      // Docker multiplexed stream header: [stream, 0, 0, 0, size(4 bytes)]
+      const b1 = data[offset + 1]
+      const b2 = data[offset + 2]
+      const b3 = data[offset + 3]
+      if (b1 !== 0 || b2 !== 0 || b3 !== 0) {
+        onPayload(data.subarray(offset).toString('utf8'), 1)
+        pending = Buffer.alloc(0)
+        return
+      }
+
+      const streamType = data[offset]
+      const size = data.readUInt32BE(offset + 4)
+      if (data.length - offset < 8 + size) {
+        break
+      }
+
+      const payload = data.subarray(offset + 8, offset + 8 + size).toString('utf8')
+      onPayload(payload, streamType)
+      offset += 8 + size
+    }
+
+    pending = offset < data.length ? Buffer.from(data.subarray(offset)) : Buffer.alloc(0)
+  }
+}
+
+function createLineDecoder(onLine: (line: string) => void): (chunk: string) => void {
+  let pending = ''
+
+  return (chunk: string) => {
+    pending += chunk
+
+    while (true) {
+      const idx = pending.indexOf('\n')
+      if (idx === -1) break
+
+      const line = pending.slice(0, idx).replace(/\r$/, '')
+      pending = pending.slice(idx + 1)
+      if (line.trim().length === 0) continue
+      onLine(line)
+    }
+  }
+}
+
+async function resolveStdioContainer(idPrefix: string): Promise<{
+  container: Docker.Container
+  shortId: string
+}> {
+  const all = await docker.listContainers({
+    all: true,
+    filters: JSON.stringify({ label: [`${MCP_LABEL}=true`] }),
+  })
+  const match = all.find((c) => c.Id.startsWith(idPrefix))
+  if (!match) {
+    throw new Error('container not found')
+  }
+
+  const shortId = match.Id.slice(0, 12)
+  const meta = loadData()[shortId]
+  if ((meta?.transport ?? 'http') !== 'stdio') {
+    throw new Error('session only available for stdio')
+  }
+
+  const container = docker.getContainer(match.Id)
+  const info = await container.inspect().catch(() => null)
+  if (!info) {
+    throw new Error('container not available')
+  }
+
+  if (!info.State.Running) {
+    await container.start()
+  }
+
+  return { container, shortId }
+}
+
+async function closeStdioProxySession(sessionId: string): Promise<void> {
+  const session = stdioProxySessions.get(sessionId)
+  if (!session || session.closed) return
+
+  session.closed = true
+  stdioProxySessions.delete(sessionId)
+
+  try {
+    ;(session.stream as unknown as Readable).destroy()
+  } catch {
+    // ignore stream close errors
+  }
+
+  const latest = await session.container.inspect().catch(() => null)
+  if (latest?.State?.Running) {
+    await session.container.stop().catch(() => undefined)
+  }
+}
+
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
 ensureDataDir()
 await fastify.register(cors, { origin: true })
+await fastify.register(fastifyWebsocket)
 
 if (HAS_STATIC) {
   await fastify.register(fastifyStatic, {
@@ -167,7 +295,9 @@ fastify.get('/api/mcps', async () => {
     name: c.Names[0]?.replace('/', '') ?? c.Id.slice(0, 12),
     image: c.Image,
     status: c.State,
-    ports: c.Ports.filter((p) => p.PublicPort).map((p) => p.PublicPort),
+    ports: (Array.isArray(c.Ports) ? c.Ports : [])
+      .filter((p) => p.PublicPort)
+      .map((p) => p.PublicPort),
     meta: stored[c.Id.slice(0, 12)] ?? {},
   }))
 })
@@ -436,7 +566,7 @@ fastify.delete<{ Params: { name: string } }>(
 // ─── POST /api/deploy ─────────────────────────────────────────────────────────
 
 fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
-  const { name, image, command, env = {}, port } = req.body ?? {}
+  const { name, image, command, env = {}, port, transport = 'http' } = req.body ?? {}
 
   if (!name?.trim() || !image?.trim()) {
     return reply.code(400).send({ error: 'name and image are required' })
@@ -451,10 +581,11 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
   const cmd = command?.trim() ? command.trim().split(/\s+/) : undefined
 
   const portStr = port ? String(port) : undefined
-  const exposedPorts: Record<string, Record<string, never>> = portStr
+  const exposePort = transport !== 'stdio' && !!portStr
+  const exposedPorts: Record<string, Record<string, never>> = exposePort
     ? { [`${portStr}/tcp`]: {} }
     : {}
-  const portBindings: Docker.PortMap = portStr
+  const portBindings: Docker.PortMap = exposePort
     ? { [`${portStr}/tcp`]: [{ HostPort: portStr }] }
     : {}
 
@@ -463,22 +594,36 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
     Image: image.trim(),
     Cmd: cmd,
     Env: envArr,
+    OpenStdin: transport === 'stdio',
+    AttachStdin: transport === 'stdio',
+    AttachStdout: transport === 'stdio',
+    AttachStderr: transport === 'stdio',
+    Tty: false,
     Labels: { [MCP_LABEL]: 'true' },
     ExposedPorts: exposedPorts,
     HostConfig: {
       PortBindings: portBindings,
-      RestartPolicy: { Name: 'unless-stopped' },
+      RestartPolicy: { Name: transport === 'stdio' ? 'no' : 'unless-stopped' },
     },
   })
 
-  await container.start()
+  if (transport !== 'stdio') {
+    await container.start()
+  }
 
   const shortId = container.id.slice(0, 12)
   const data = loadData()
-  data[shortId] = { name: name.trim(), image: image.trim(), command, env, port }
+  data[shortId] = {
+    name: name.trim(),
+    image: image.trim(),
+    command,
+    env,
+    port,
+    transport,
+  }
   saveData(data)
 
-  return { id: shortId, status: 'running' }
+  return { id: shortId, status: transport === 'stdio' ? 'created' : 'running' }
 })
 
 // ─── PUT /api/mcps/:id (recreate container with updated config) ─────────────
@@ -486,7 +631,7 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
 fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
   '/api/mcps/:id',
   async (req, reply) => {
-    const { name, image, command, env = {}, port } = req.body ?? {}
+    const { name, image, command, env = {}, port, transport = 'http' } = req.body ?? {}
 
     if (!name?.trim() || !image?.trim()) {
       return reply.code(400).send({ error: 'name and image are required' })
@@ -510,10 +655,11 @@ fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
 
     const cmd = command?.trim() ? command.trim().split(/\s+/) : undefined
     const portStr = port ? String(port) : undefined
-    const exposedPorts: Record<string, Record<string, never>> = portStr
+    const exposePort = transport !== 'stdio' && !!portStr
+    const exposedPorts: Record<string, Record<string, never>> = exposePort
       ? { [`${portStr}/tcp`]: {} }
       : {}
-    const portBindings: Docker.PortMap = portStr
+    const portBindings: Docker.PortMap = exposePort
       ? { [`${portStr}/tcp`]: [{ HostPort: portStr }] }
       : {}
 
@@ -525,15 +671,22 @@ fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
       Image: image.trim(),
       Cmd: cmd,
       Env: envArr,
+      OpenStdin: transport === 'stdio',
+      AttachStdin: transport === 'stdio',
+      AttachStdout: transport === 'stdio',
+      AttachStderr: transport === 'stdio',
+      Tty: false,
       Labels: { [MCP_LABEL]: 'true' },
       ExposedPorts: exposedPorts,
       HostConfig: {
         PortBindings: portBindings,
-        RestartPolicy: { Name: 'unless-stopped' },
+        RestartPolicy: { Name: transport === 'stdio' ? 'no' : 'unless-stopped' },
       },
     })
 
-    await container.start()
+    if (transport !== 'stdio') {
+      await container.start()
+    }
 
     const newShortId = container.id.slice(0, 12)
     const data = loadData()
@@ -544,12 +697,196 @@ fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
       command,
       env,
       port,
+      transport,
     }
     saveData(data)
 
-    return { id: newShortId, status: 'running' }
+    return { id: newShortId, status: transport === 'stdio' ? 'created' : 'running' }
   },
 )
+
+// ─── WS /api/stdio/session/:id (interactive stdio bridge) ──────────────────
+
+fastify.get<{ Params: { id: string } }>(
+  '/api/stdio/session/:id',
+  { websocket: true },
+  async (socket, req) => {
+    let container: Docker.Container
+
+    try {
+      const resolved = await resolveStdioContainer(req.params.id)
+      container = resolved.container
+    } catch (err) {
+      socket.send(
+        JSON.stringify({
+          type: 'error',
+          error: err instanceof Error ? err.message : 'failed to open session',
+        }),
+      )
+      socket.close()
+      return
+    }
+
+    const stream = await container.attach({
+      stream: true,
+      stdin: true,
+      stdout: true,
+      stderr: true,
+      logs: false,
+      hijack: true,
+    })
+
+    socket.send(JSON.stringify({ type: 'ready' }))
+
+    const decodeChunk = createDockerMultiplexDecoder((payload) => {
+      socket.send(JSON.stringify({ type: 'output', data: payload }))
+    })
+
+    stream.on('data', (chunk: Buffer) => {
+      decodeChunk(chunk)
+    })
+
+    const closeSession = async () => {
+      try {
+        ;(stream as unknown as Readable).destroy()
+      } catch {
+        // ignore stream close errors
+      }
+
+      const latest = await container.inspect().catch(() => null)
+      if (latest?.State?.Running) {
+        await container.stop().catch(() => undefined)
+      }
+    }
+
+    socket.on('message', (raw: unknown) => {
+      try {
+        const message = JSON.parse(String(raw)) as StdioWsMessage
+        if (message.type !== 'input') return
+        stream.write(message.data ?? '')
+      } catch {
+        // ignore malformed client frames
+      }
+    })
+
+    socket.on('close', () => {
+      void closeSession()
+    })
+  },
+)
+
+// ─── GET /api/stdio/proxy/:id/sse (external MCP SSE adapter) ───────────────
+
+fastify.get<{ Params: { id: string } }>('/api/stdio/proxy/:id/sse', async (req, reply) => {
+  let container: Docker.Container
+
+  try {
+    const resolved = await resolveStdioContainer(req.params.id)
+    container = resolved.container
+  } catch (err) {
+    return reply
+      .code(404)
+      .send({ error: err instanceof Error ? err.message : 'container not found' })
+  }
+
+  const stream = await container.attach({
+    stream: true,
+    stdin: true,
+    stdout: true,
+    stderr: true,
+    logs: false,
+    hijack: true,
+  })
+
+  const sessionId = randomUUID()
+  stdioProxySessions.set(sessionId, {
+    sessionId,
+    container,
+    stream,
+    closed: false,
+  })
+
+  reply.hijack()
+  reply.raw.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  })
+
+  const sendEvent = (event: string, data: string) => {
+    reply.raw.write(`event: ${event}\n`)
+    reply.raw.write(`data: ${data}\n\n`)
+  }
+
+  const proto = (req.headers['x-forwarded-proto'] as string | undefined) ?? req.protocol
+  const host = req.headers.host
+  const endpointUrl = `${proto}://${host}/api/stdio/proxy/${req.params.id}/message?sessionId=${sessionId}`
+  sendEvent('endpoint', endpointUrl)
+
+  const onStdoutLine = createLineDecoder((line) => {
+    try {
+      const parsed = JSON.parse(line) as Record<string, unknown>
+      sendEvent('message', JSON.stringify(parsed))
+    } catch {
+      // ignore non-JSON lines from stdout
+    }
+  })
+
+  const decodeChunk = createDockerMultiplexDecoder((payload, streamType) => {
+    if (streamType === 1) {
+      onStdoutLine(payload)
+    }
+  })
+
+  stream.on('data', (chunk: Buffer) => {
+    decodeChunk(chunk)
+  })
+
+  stream.on('end', () => {
+    sendEvent('close', JSON.stringify({ reason: 'stream ended' }))
+    reply.raw.end()
+    void closeStdioProxySession(sessionId)
+  })
+
+  stream.on('error', (err: Error) => {
+    sendEvent('error', JSON.stringify({ error: err.message }))
+    reply.raw.end()
+    void closeStdioProxySession(sessionId)
+  })
+
+  req.raw.on('close', () => {
+    reply.raw.end()
+    void closeStdioProxySession(sessionId)
+  })
+})
+
+// ─── POST /api/stdio/proxy/:id/message?sessionId=... ────────────────────────
+
+fastify.post<{
+  Params: { id: string }
+  Querystring: StdioProxyMessageQuery
+  Body: Record<string, unknown>
+}>('/api/stdio/proxy/:id/message', async (req, reply) => {
+  const sessionId = req.query.sessionId?.trim()
+  if (!sessionId) {
+    return reply.code(400).send({ error: 'sessionId is required' })
+  }
+
+  const session = stdioProxySessions.get(sessionId)
+  if (!session || session.closed) {
+    return reply.code(404).send({ error: 'session not found' })
+  }
+
+  const payload = req.body
+  if (!payload || typeof payload !== 'object') {
+    return reply.code(400).send({ error: 'json body is required' })
+  }
+
+  const wire = `${JSON.stringify(payload)}\n`
+  session.stream.write(wire)
+
+  return reply.code(202).send({ ok: true })
+})
 
 // ─── POST /api/action/:id ─────────────────────────────────────────────────────
 
@@ -608,16 +945,12 @@ fastify.get<{ Params: { id: string } }>('/api/logs/:id', async (req, reply) => {
     tail: 200,
   })
 
+  const decodeChunk = createDockerMultiplexDecoder((payload) => {
+    reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`)
+  })
+
   stream.on('data', (chunk: Buffer) => {
-    // Docker multiplexed stream has an 8-byte header per frame
-    let offset = 0
-    while (offset < chunk.length) {
-      if (chunk.length < offset + 8) break
-      const size = chunk.readUInt32BE(offset + 4)
-      const payload = chunk.slice(offset + 8, offset + 8 + size).toString('utf8')
-      reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`)
-      offset += 8 + size
-    }
+    decodeChunk(chunk)
   })
 
   stream.on('end', () => reply.raw.end())

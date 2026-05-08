@@ -5,5 +5,11 @@
     "command": "--transport streamable-http --host 0.0.0.0 --port 8001 --path /mcp",
     "env": {},
     "port": 8001
+  },
+  "88b559341f5a": {
+    "name": "mcp-stdio-test",
+    "image": "mcp/wikipedia-mcp",
+    "env": {},
+    "transport": "stdio"
   }
 }

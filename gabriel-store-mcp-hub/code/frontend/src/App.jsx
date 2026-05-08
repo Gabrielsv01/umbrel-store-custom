@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import MCPCard from './components/MCPCard'
 import DeployForm from './components/DeployForm'
 import LogConsole from './components/LogConsole'
+import StdioConsole from './components/StdioConsole'
 import ImagesModal from './components/ImagesModal'
 import VolumesModal from './components/VolumesModal'
 
@@ -23,6 +24,7 @@ export default function App() {
   const [volumesError, setVolumesError] = useState(null)
   const [removingVolumeName, setRemovingVolumeName] = useState(null)
   const [logTarget, setLogTarget] = useState(null) // { id, name }
+  const [stdioTarget, setStdioTarget] = useState(null) // { id, name }
   const [actionLoading, setActionLoading] = useState({})
 
   const fetchMCPs = useCallback(async () => {
@@ -306,11 +308,13 @@ export default function App() {
                 actionLoading={actionLoading[mcp.id]}
                 onAction={handleAction}
                 onViewLogs={() => setLogTarget({ id: mcp.id, name: mcp.name })}
+                onOpenSession={() => setStdioTarget({ id: mcp.id, name: mcp.name })}
                 onEdit={() =>
                   setEditingMcp({
                     id: mcp.id,
                     name: mcp.meta?.name || mcp.name,
                     image: mcp.meta?.image || mcp.image,
+                    transport: mcp.meta?.transport || 'http',
                     command: mcp.meta?.command || '',
                     port: mcp.meta?.port || mcp.ports?.[0] || '',
                     env: mcp.meta?.env || {},
@@ -342,6 +346,14 @@ export default function App() {
           id={logTarget.id}
           name={logTarget.name}
           onClose={() => setLogTarget(null)}
+        />
+      )}
+
+      {stdioTarget && (
+        <StdioConsole
+          id={stdioTarget.id}
+          name={stdioTarget.name}
+          onClose={() => setStdioTarget(null)}
         />
       )}
 

@@ -15,6 +15,21 @@ const STATUS_BADGE = {
 }
 
 function buildClaudeConfig(mcp) {
+  if (mcp.meta?.transport === 'stdio') {
+    return JSON.stringify(
+      {
+        mcpServers: {
+          [mcp.name]: {
+            command: 'docker',
+            args: ['exec', '-i', mcp.name, '/bin/sh', '-lc', mcp.meta?.command || ''],
+          },
+        },
+      },
+      null,
+      2,
+    )
+  }
+
   const port = mcp.ports?.[0]
   const host = window.location.hostname
   const url = port ? `http://${host}:${port}/sse` : `http://${host}:3000/sse`
@@ -31,6 +46,7 @@ export default function MCPCard({
   actionLoading,
   onViewLogs,
   onEdit,
+  onOpenSession,
 }) {
   const [copied, setCopied] = useState(false)
   const isRunning = mcp.status === 'running'
@@ -42,6 +58,7 @@ export default function MCPCard({
   }
 
   const busy = !!actionLoading
+  const isStdio = (mcp.meta?.transport ?? 'http') === 'stdio'
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-gray-800 bg-gray-900 p-4">
@@ -95,12 +112,21 @@ export default function MCPCard({
           </button>
         )}
 
-        <button
-          onClick={onViewLogs}
-          className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs transition-colors hover:bg-gray-700"
-        >
-          Logs
-        </button>
+        {isStdio ? (
+          <button
+            onClick={() => onOpenSession(mcp)}
+            className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs transition-colors hover:bg-gray-700"
+          >
+            Session
+          </button>
+        ) : (
+          <button
+            onClick={onViewLogs}
+            className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs transition-colors hover:bg-gray-700"
+          >
+            Logs
+          </button>
+        )}
 
         <button
           onClick={() => onEdit(mcp)}

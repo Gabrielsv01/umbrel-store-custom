@@ -24,6 +24,7 @@ export default function DeployForm({
 
   const [name, setName] = useState(initialValues?.name ?? '')
   const [image, setImage] = useState(initialValues?.image ?? '')
+  const [transport, setTransport] = useState(initialValues?.transport ?? 'http')
   const [command, setCommand] = useState(initialValues?.command ?? '')
   const [port, setPort] = useState(initialValues?.port ? String(initialValues.port) : '')
   const [envPairs, setEnvPairs] = useState(initialEnvPairs)
@@ -50,8 +51,9 @@ export default function DeployForm({
       await onDeploy({
         name: name.trim(),
         image: image.trim(),
+        transport,
         command: command.trim() || undefined,
-        port: port ? Number(port) : undefined,
+        port: transport === 'http' && port ? Number(port) : undefined,
         env,
       })
     } catch (err) {
@@ -100,6 +102,17 @@ export default function DeployForm({
             />
           </Field>
 
+          <Field label="Transport">
+            <select
+              value={transport}
+              onChange={(e) => setTransport(e.target.value)}
+              className="input"
+            >
+              <option value="http">http/sse (long-running)</option>
+              <option value="stdio">stdio (session on demand)</option>
+            </select>
+          </Field>
+
           <Field label="Start Command">
             <input
               value={command}
@@ -109,17 +122,19 @@ export default function DeployForm({
             />
           </Field>
 
-          <Field label="Host Port (host:container mapped to same number)">
-            <input
-              type="number"
-              min={1}
-              max={65535}
-              value={port}
-              onChange={(e) => setPort(e.target.value)}
-              placeholder="3001"
-              className="input"
-            />
-          </Field>
+          {transport === 'http' && (
+            <Field label="Host Port (host:container mapped to same number)">
+              <input
+                type="number"
+                min={1}
+                max={65535}
+                value={port}
+                onChange={(e) => setPort(e.target.value)}
+                placeholder="3001"
+                className="input"
+              />
+            </Field>
+          )}
 
           {/* Dynamic env vars */}
           <div>

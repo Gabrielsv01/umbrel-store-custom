@@ -13,6 +13,7 @@ O MCP Hub foi pensado para rodar no Umbrel, mas também funciona localmente com 
 - Pull manual de imagens com progresso em tempo real
 - Pull automático de imagem quando faltar no deploy/update
 - Gestão de volumes Docker com proteção contra remoção em uso
+- Suporte a servidores MCP em `stdio` com sessão interativa sob demanda
 
 ## Arquitetura
 
@@ -130,16 +131,46 @@ Base URL: `http://localhost:5146/api`
 - `POST /deploy`
 	- Cria e inicia novo MCP
 	- Faz pull automático da imagem se não existir localmente
+	- Suporta `transport: "http" | "stdio"` (`http` por padrão)
 
 - `PUT /mcps/:id`
 	- Recria contêiner com nova configuração
 	- Também garante pull automático da imagem
+	- Suporta `transport: "http" | "stdio"`
 
 - `POST /action/:id`
 	- Body: `{ "action": "start" | "stop" | "remove" }`
 
 - `GET /logs/:id`
 	- Stream SSE de logs do contêiner
+
+### Sessão stdio
+
+- `GET /stdio/session/:id` (WebSocket)
+	- Abre sessão interativa de MCP `stdio`
+	- Ponte bidirecional cliente <-> stdin/stdout do contêiner
+	- Mensagem enviada pelo cliente:
+		- `{ "type": "input", "data": "texto\\n" }`
+	- Mensagens recebidas do servidor:
+		- `{ "type": "ready" }`
+		- `{ "type": "output", "data": "..." }`
+		- `{ "type": "error", "error": "..." }`
+
+### Proxy stdio para clientes externos (VS Code/Claude)
+
+- `GET /stdio/proxy/:id/sse` (SSE)
+	- Abre uma sessão stdio interna e expõe interface MCP via SSE
+	- Retorna evento `endpoint` com URL de envio de mensagens
+	- Retorna evento `message` com respostas JSON-RPC do MCP
+
+- `POST /stdio/proxy/:id/message?sessionId=<uuid>`
+	- Envia request JSON-RPC para o MCP stdio associado à sessão SSE
+	- Body: objeto JSON-RPC completo (ex.: `initialize`, `tools/list`, `tools/call`)
+
+Observações:
+
+- Esse proxy permite conectar um MCP `stdio` do Hub como se fosse um servidor MCP HTTP/SSE externo.
+- A sessão é encerrada quando a conexão SSE é fechada.
 
 ### Imagens
 
@@ -170,6 +201,89 @@ Base URL: `http://localhost:5146/api`
 - `DELETE /volumes/:name`
 	- Remove volume
 	- Bloqueia se estiver em uso
+
+## Exemplo prático: Playwright MCP
+
+Para o Playwright MCP funcionar de forma contínua no MCP Hub, ele precisa iniciar em modo servidor HTTP/SSE com porta explícita.
+
+Configuração que funcionou no teste:
+
+- Name: `mcp-playwright-test`
+- Image: `mcp/playwright`
+- Command: `--host 0.0.0.0 --port 8931 --headless`
+- Port: `8931`
+
+Payload de deploy via API:
+
+```json
+{
+	"name": "mcp-playwright-test",
+	"image": "mcp/playwright",
+	"command": "--host 0.0.0.0 --port 8931 --headless",
+	"port": 8931
+}
+```
+
+Observação:
+
+- Se subir sem `--port`, esse container pode entrar em restart loop dependendo do modo padrão de inicialização.
+
+## Exemplo prático: MCP em stdio
+
+Para servidores MCP que trabalham via stdio, selecione `transport=stdio` no deploy.
+
+Exemplo de payload:
+
+```json
+{
+	"name": "mcp-stdio-test",
+	"image": "mcp/wikipedia-mcp",
+	"transport": "stdio"
+}
+```
+
+Depois de deployado, abra a sessão interativa no card do MCP pelo botão `Session`.
+
+Para cliente externo (ex.: VS Code), use o proxy SSE:
+
+1. Descubra o ID do MCP:
+
+```bash
+curl -sS http://localhost:5146/api/mcps
+```
+
+2. Abra SSE no ID desejado:
+
+```bash
+curl -N http://localhost:5146/api/stdio/proxy/<id>/sse
+```
+
+3. Use a URL recebida no evento `endpoint` para enviar requests JSON-RPC via `POST`.
+
+## Como descobrir os parâmetros de uma imagem MCP
+
+Fluxo recomendado para qualquer imagem MCP nova:
+
+1. Verifique se a imagem existe e veja os argumentos suportados:
+
+```bash
+docker run --rm <imagem> --help
+```
+
+2. Se o contêiner ficar reiniciando no MCP Hub, cheque se a imagem exige modo servidor/porta.
+
+3. Ajuste `command` e `port` no deploy e valide status:
+
+```bash
+curl -sS http://localhost:5146/api/mcps
+docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+```
+
+4. Se necessário, veja logs para confirmar motivo de restart:
+
+```bash
+docker logs <container>
+```
 
 ## Persistência
 
