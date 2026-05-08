@@ -49,6 +49,7 @@ export default function MCPCard({
   onOpenSession,
 }) {
   const [copied, setCopied] = useState(false)
+  const [copiedId, setCopiedId] = useState(false)
   const isRunning = mcp.status === 'running'
 
   const copyConfig = () => {
@@ -59,6 +60,12 @@ export default function MCPCard({
 
   const busy = !!actionLoading
   const isStdio = (mcp.meta?.transport ?? 'http') === 'stdio'
+
+  const copyId = () => {
+    navigator.clipboard.writeText(mcp.id)
+    setCopiedId(true)
+    setTimeout(() => setCopiedId(false), 1500)
+  }
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-gray-800 bg-gray-900 p-4">
@@ -91,6 +98,20 @@ export default function MCPCard({
           </span>
         </p>
       )}
+
+      <div className="flex items-center gap-2 text-xs text-gray-400">
+        <span className="shrink-0">ID:</span>
+        <span className="min-w-0 truncate rounded bg-gray-800 px-2 py-0.5 font-mono text-gray-300">
+          {mcp.id}
+        </span>
+        <button
+          onClick={copyId}
+          className="rounded bg-gray-800 px-2 py-0.5 text-[11px] text-gray-300 transition-colors hover:bg-gray-700"
+          title="Copy MCP ID"
+        >
+          {copiedId ? 'Copied' : 'Copy ID'}
+        </button>
+      </div>
 
       {/* Actions */}
       <div className="mt-auto flex items-center gap-2 border-t border-gray-800 pt-3">
