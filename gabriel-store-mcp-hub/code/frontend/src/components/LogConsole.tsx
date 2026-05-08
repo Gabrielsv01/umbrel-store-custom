@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
+import type { ConsoleProps } from '../types/components'
 
-export default function LogConsole({ id, name, onClose }) {
-  const [lines, setLines] = useState([])
+export default function LogConsole({ id, name, onClose }: ConsoleProps) {
+  const [lines, setLines] = useState<string[]>([])
   const [connected, setConnected] = useState(true)
-  const bottomRef = useRef(null)
+  const bottomRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     setLines([])
@@ -12,7 +13,7 @@ export default function LogConsole({ id, name, onClose }) {
     const es = new EventSource(`/api/logs/${id}`)
 
     es.onmessage = (e) => {
-      const text = JSON.parse(e.data)
+      const text = String(JSON.parse(e.data))
       setLines((prev) => [...prev, text])
     }
 

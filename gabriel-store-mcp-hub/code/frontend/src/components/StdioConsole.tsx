@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
+import type { ConsoleProps } from '../types/components'
 
-export default function StdioConsole({ id, name, onClose }) {
+type SessionPayload = {
+  type?: string
+  data?: string
+  error?: string
+}
+
+export default function StdioConsole({ id, name, onClose }: ConsoleProps) {
   const [connected, setConnected] = useState(false)
-  const [lines, setLines] = useState([])
+  const [lines, setLines] = useState<string[]>([])
   const [input, setInput] = useState('')
-  const wsRef = useRef(null)
-  const bottomRef = useRef(null)
+  const wsRef = useRef<WebSocket | null>(null)
+  const bottomRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     setLines([])
@@ -24,7 +31,7 @@ export default function StdioConsole({ id, name, onClose }) {
 
     ws.onmessage = (event) => {
       try {
-        const payload = JSON.parse(event.data)
+        const payload = JSON.parse(String(event.data)) as SessionPayload
         if (payload.type === 'output') {
           setLines((prev) => [...prev, payload.data ?? ''])
           return

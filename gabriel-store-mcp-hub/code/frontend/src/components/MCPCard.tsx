@@ -1,20 +1,22 @@
 import { useState } from 'react'
+import type { MCPCardProps, McpAction } from '../types/components'
+import type { McpContainer } from '../types/mcp'
 
-const STATUS_DOT = {
+const STATUS_DOT: Record<string, string> = {
   running: 'bg-green-500',
   exited: 'bg-red-500',
   created: 'bg-yellow-500',
   paused: 'bg-yellow-500',
 }
 
-const STATUS_BADGE = {
+const STATUS_BADGE: Record<string, string> = {
   running: 'bg-green-500/15 text-green-400',
   exited: 'bg-red-500/15 text-red-400',
   created: 'bg-yellow-500/15 text-yellow-400',
   paused: 'bg-yellow-500/15 text-yellow-400',
 }
 
-function buildClaudeConfig(mcp) {
+function buildClaudeConfig(mcp: McpContainer): string {
   if (mcp.meta?.transport === 'stdio') {
     return JSON.stringify(
       {
@@ -33,11 +35,7 @@ function buildClaudeConfig(mcp) {
   const port = mcp.ports?.[0]
   const host = window.location.hostname
   const url = port ? `http://${host}:${port}/sse` : `http://${host}:3000/sse`
-  return JSON.stringify(
-    { mcpServers: { [mcp.name]: { url } } },
-    null,
-    2,
-  )
+  return JSON.stringify({ mcpServers: { [mcp.name]: { url } } }, null, 2)
 }
 
 export default function MCPCard({
@@ -50,7 +48,7 @@ export default function MCPCard({
   onCheckHealth,
   health,
   healthLoading,
-}) {
+}: MCPCardProps) {
   const [copied, setCopied] = useState(false)
   const [copiedId, setCopiedId] = useState(false)
   const [showHealthTip, setShowHealthTip] = useState(false)
@@ -70,12 +68,12 @@ export default function MCPCard({
     !isStdio
       ? 'bg-gray-700 text-gray-400'
       : health?.status === 'healthy'
-      ? 'bg-green-500/15 text-green-400'
-      : health?.status === 'degraded'
-        ? 'bg-yellow-500/15 text-yellow-400'
-        : health?.status === 'unhealthy'
-          ? 'bg-red-500/15 text-red-400'
-          : 'bg-gray-700 text-gray-400'
+        ? 'bg-green-500/15 text-green-400'
+        : health?.status === 'degraded'
+          ? 'bg-yellow-500/15 text-yellow-400'
+          : health?.status === 'unhealthy'
+            ? 'bg-red-500/15 text-red-400'
+            : 'bg-gray-700 text-gray-400'
 
   const copyId = () => {
     navigator.clipboard.writeText(mcp.id)
@@ -83,7 +81,7 @@ export default function MCPCard({
     setTimeout(() => setCopiedId(false), 1500)
   }
 
-  const runAction = (action) => {
+  const runAction = (action: McpAction) => {
     setShowMenu(false)
     onAction(mcp.id, action)
   }
@@ -114,9 +112,7 @@ export default function MCPCard({
         `status: ${health.status || 'unknown'}`,
         `initialize: ${health.handshake?.initializeOk ? 'ok' : 'failed'}`,
         `tools/list: ${health.handshake?.toolsListOk ? 'ok' : 'failed'}`,
-        typeof health.handshake?.toolCount === 'number'
-          ? `tools: ${health.handshake.toolCount}`
-          : null,
+        typeof health.handshake?.toolCount === 'number' ? `tools: ${health.handshake.toolCount}` : null,
         health.networkProbe?.attempted
           ? `network probe: ${health.networkProbe.ok ? 'ok' : 'failed'}${health.networkProbe.toolName ? ` (${health.networkProbe.toolName})` : ''}`
           : health.networkProbe?.reason
@@ -133,23 +129,16 @@ export default function MCPCard({
 
   return (
     <div className="relative flex flex-col gap-3 rounded-xl border border-gray-800 bg-gray-900 p-4">
-      {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-white">
-            {mcp.name}
-          </h3>
-          <p className="mt-0.5 truncate font-mono text-xs text-gray-400">
-            {mcp.image}
-          </p>
+          <h3 className="truncate text-sm font-semibold text-white">{mcp.name}</h3>
+          <p className="mt-0.5 truncate font-mono text-xs text-gray-400">{mcp.image}</p>
         </div>
         <div className="relative flex shrink-0 items-center gap-2">
           <span
             className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs ${STATUS_BADGE[mcp.status] ?? 'bg-gray-700 text-gray-400'}`}
           >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[mcp.status] ?? 'bg-gray-500'}`}
-            />
+            <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[mcp.status] ?? 'bg-gray-500'}`} />
             {mcp.status}
           </span>
           <button
@@ -208,11 +197,7 @@ export default function MCPCard({
                 title={isStdio ? 'Run health check' : 'Available only for stdio MCPs'}
                 className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900 disabled:opacity-50"
               >
-                {healthLoading
-                  ? 'Checking health...'
-                  : isStdio
-                    ? 'Health'
-                    : 'Health (stdio only)'}
+                {healthLoading ? 'Checking health...' : isStdio ? 'Health' : 'Health (stdio only)'}
               </button>
 
               <button
@@ -244,21 +229,15 @@ export default function MCPCard({
         </div>
       </div>
 
-      {/* Ports */}
-      {mcp.ports?.length > 0 && (
+      {mcp.ports?.length ? (
         <p className="text-xs text-gray-400">
-          Port:{' '}
-          <span className="font-mono text-blue-400">
-            {mcp.ports.join(', ')}
-          </span>
+          Port: <span className="font-mono text-blue-400">{mcp.ports.join(', ')}</span>
         </p>
-      )}
+      ) : null}
 
       <div className="flex items-center gap-2 text-xs text-gray-400">
         <span className="shrink-0">ID:</span>
-        <span className="min-w-0 truncate rounded bg-gray-800 px-2 py-0.5 font-mono text-gray-300">
-          {mcp.id}
-        </span>
+        <span className="min-w-0 truncate rounded bg-gray-800 px-2 py-0.5 font-mono text-gray-300">{mcp.id}</span>
         <button
           onClick={copyId}
           className="rounded bg-gray-800 px-2 py-0.5 text-[11px] text-gray-300 transition-colors hover:bg-gray-700"
@@ -277,13 +256,7 @@ export default function MCPCard({
           title={isStdio ? 'Show health details' : 'Available only for stdio MCPs'}
           disabled={!isStdio}
         >
-          {healthLoading
-            ? 'checking...'
-            : isStdio
-              ? health?.status
-                ? health.status
-                : 'not checked'
-              : 'stdio only'}
+          {healthLoading ? 'checking...' : isStdio ? health?.status || 'not checked' : 'stdio only'}
         </button>
         {isStdio && health?.networkProbe?.attempted && health?.networkProbe?.ok === false && (
           <span className="truncate text-yellow-300" title={health.networkProbe.error || ''}>
@@ -300,12 +273,10 @@ export default function MCPCard({
                 onClick={() => setShowHealthTip(false)}
                 className="text-gray-500 transition-colors hover:text-white"
               >
-                ×
+                x
               </button>
             </div>
-            <pre className="whitespace-pre-wrap break-words font-mono text-[11px] text-gray-300">
-              {healthSummary}
-            </pre>
+            <pre className="whitespace-pre-wrap break-words font-mono text-[11px] text-gray-300">{healthSummary}</pre>
           </div>
         )}
       </div>
