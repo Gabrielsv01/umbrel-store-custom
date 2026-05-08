@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
 import Docker from 'dockerode';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,6 +9,9 @@ const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 const MCP_LABEL = 'gabriel.mcp-hub';
 const DATA_DIR = process.env.DATA_DIR ?? '/data';
 const DATA_FILE = path.join(DATA_DIR, 'mcps.json');
+const STATIC_DIR = process.env.STATIC_DIR ?? path.resolve(process.cwd(), 'public');
+const HAS_STATIC = fs.existsSync(STATIC_DIR);
+const INDEX_FILE = path.join(STATIC_DIR, 'index.html');
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function ensureDataDir() {
     if (!fs.existsSync(DATA_DIR)) {
@@ -28,6 +32,22 @@ function saveData(data) {
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 ensureDataDir();
 await fastify.register(cors, { origin: true });
+if (HAS_STATIC) {
+    await fastify.register(fastifyStatic, {
+        root: STATIC_DIR,
+        prefix: '/',
+    });
+    fastify.setNotFoundHandler((req, reply) => {
+        if (req.url.startsWith('/api/')) {
+            return reply.code(404).send({ error: 'not found' });
+        }
+        if (!fs.existsSync(INDEX_FILE)) {
+            return reply.code(404).send({ error: 'frontend not found' });
+        }
+        reply.type('text/html; charset=utf-8');
+        return reply.send(fs.createReadStream(INDEX_FILE));
+    });
+}
 // ─── GET /api/mcps ────────────────────────────────────────────────────────────
 fastify.get('/api/mcps', async () => {
     const list = await docker.listContainers({
