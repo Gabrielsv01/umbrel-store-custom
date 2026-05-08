@@ -15,6 +15,8 @@ export default function App() {
   const [imagesLoading, setImagesLoading] = useState(false)
   const [imagesError, setImagesError] = useState(null)
   const [removingImageId, setRemovingImageId] = useState(null)
+  const [pullingImage, setPullingImage] = useState(false)
+  const [pullProgress, setPullProgress] = useState(null)
   const [showVolumes, setShowVolumes] = useState(false)
   const [volumes, setVolumes] = useState([])
   const [volumesLoading, setVolumesLoading] = useState(false)
@@ -131,6 +133,71 @@ export default function App() {
       setImagesError(err.message || 'Failed to remove image')
     } finally {
       setRemovingImageId(null)
+    }
+  }
+
+  const handlePullImage = async (imageRef, onSuccess) => {
+    const ref = imageRef.trim()
+    if (!ref) return
+
+    setPullingImage(true)
+    setImagesError(null)
+    setPullProgress({ image: ref, status: 'Starting pull…', percent: null })
+
+    try {
+      await new Promise((resolve, reject) => {
+        const source = new EventSource(
+          `/api/images/pull/stream?image=${encodeURIComponent(ref)}`,
+        )
+
+        source.onmessage = (event) => {
+          try {
+            const payload = JSON.parse(event.data)
+
+            if (payload.type === 'progress') {
+              setPullProgress({
+                image: ref,
+                status: payload.status || 'Pulling…',
+                id: payload.id || null,
+                current: Number(payload.overallCurrent) || 0,
+                total: Number(payload.overallTotal) || 0,
+                percent:
+                  typeof payload.overallPercent === 'number'
+                    ? payload.overallPercent
+                    : null,
+              })
+              return
+            }
+
+            if (payload.type === 'done') {
+              source.close()
+              resolve()
+              return
+            }
+
+            if (payload.type === 'error') {
+              source.close()
+              reject(new Error(payload.error || 'Failed to pull image'))
+            }
+          } catch {
+            source.close()
+            reject(new Error('Failed to parse pull progress'))
+          }
+        }
+
+        source.onerror = () => {
+          source.close()
+          reject(new Error('Pull connection failed'))
+        }
+      })
+
+      if (typeof onSuccess === 'function') onSuccess()
+      await fetchImages()
+    } catch (err) {
+      setImagesError(err.message || 'Failed to pull image')
+    } finally {
+      setPullingImage(false)
+      setPullProgress(null)
     }
   }
 
@@ -287,6 +354,9 @@ export default function App() {
           onRefresh={fetchImages}
           onRemove={handleRemoveImage}
           removingId={removingImageId}
+          onPull={handlePullImage}
+          pulling={pullingImage}
+          pullProgress={pullProgress}
         />
       )}
 

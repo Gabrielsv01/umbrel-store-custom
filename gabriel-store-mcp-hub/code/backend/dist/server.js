@@ -29,6 +29,32 @@ function loadData() {
 function saveData(data) {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
+function isImageMissingError(err) {
+    const maybeError = err;
+    return (maybeError?.statusCode === 404 ||
+        (typeof maybeError?.message === 'string' &&
+            maybeError.message.toLowerCase().includes('no such image')));
+}
+async function pullImage(image) {
+    const stream = await docker.pull(image);
+    await new Promise((resolve, reject) => {
+        docker.modem.followProgress(stream, (err) => {
+            if (err)
+                return reject(err);
+            resolve();
+        }, () => undefined);
+    });
+}
+async function ensureImageAvailable(image) {
+    try {
+        await docker.getImage(image).inspect();
+    }
+    catch (err) {
+        if (!isImageMissingError(err))
+            throw err;
+        await pullImage(image);
+    }
+}
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 ensureDataDir();
 await fastify.register(cors, { origin: true });
@@ -93,6 +119,91 @@ fastify.get('/api/images', async () => {
     })
         .sort((a, b) => b.created - a.created);
     return result;
+});
+// ─── POST /api/images/pull ───────────────────────────────────────────────────
+fastify.post('/api/images/pull', async (req, reply) => {
+    const image = req.body?.image?.trim();
+    if (!image) {
+        return reply.code(400).send({ error: 'image is required' });
+    }
+    await pullImage(image);
+    return { ok: true, image };
+});
+// ─── GET /api/images/pull/stream (SSE progress) ─────────────────────────────
+fastify.get('/api/images/pull/stream', async (req, reply) => {
+    const image = req.query?.image?.trim();
+    if (!image) {
+        return reply.code(400).send({ error: 'image is required' });
+    }
+    reply.hijack();
+    reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+    });
+    let stream;
+    let closed = false;
+    const layerProgress = new Map();
+    const send = (payload) => {
+        if (closed)
+            return;
+        reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
+    };
+    req.raw.on('close', () => {
+        closed = true;
+        stream?.destroy();
+    });
+    try {
+        stream = await docker.pull(image);
+        send({ type: 'start', image });
+        await new Promise((resolve, reject) => {
+            docker.modem.followProgress(stream, (err) => {
+                if (err)
+                    return reject(err);
+                resolve();
+            }, (event) => {
+                const layerId = event.id ?? '_unknown';
+                const previous = layerProgress.get(layerId) ?? { current: 0, total: 0 };
+                let nextCurrent = Math.max(previous.current, Number(event.progressDetail?.current ?? 0));
+                const nextTotal = Math.max(previous.total, Number(event.progressDetail?.total ?? 0));
+                const statusText = (event.status ?? '').toLowerCase();
+                const isLayerCompleted = statusText.includes('download complete') ||
+                    statusText.includes('pull complete') ||
+                    statusText.includes('already exists');
+                if (isLayerCompleted && nextTotal > 0) {
+                    nextCurrent = nextTotal;
+                }
+                layerProgress.set(layerId, { current: nextCurrent, total: nextTotal });
+                let overallCurrent = 0;
+                let overallTotal = 0;
+                for (const value of layerProgress.values()) {
+                    overallCurrent += value.current;
+                    overallTotal += value.total;
+                }
+                const percent = overallTotal > 0
+                    ? Math.min(100, Math.floor((overallCurrent / overallTotal) * 100))
+                    : null;
+                send({
+                    type: 'progress',
+                    image,
+                    id: event.id,
+                    status: event.status,
+                    current: nextCurrent,
+                    total: nextTotal,
+                    overallCurrent,
+                    overallTotal,
+                    overallPercent: percent,
+                });
+            });
+        });
+        send({ type: 'done', image });
+        reply.raw.end();
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : 'failed to pull image';
+        send({ type: 'error', error: message });
+        reply.raw.end();
+    }
 });
 // ─── DELETE /api/images/:id ──────────────────────────────────────────────────
 fastify.delete('/api/images/:id', async (req, reply) => {
@@ -182,6 +293,7 @@ fastify.post('/api/deploy', async (req, reply) => {
     if (!name?.trim() || !image?.trim()) {
         return reply.code(400).send({ error: 'name and image are required' });
     }
+    await ensureImageAvailable(image.trim());
     const envArr = Object.entries(env)
         .filter(([k]) => k.trim())
         .map(([k, v]) => `${k.trim()}=${v}`);
@@ -218,6 +330,7 @@ fastify.put('/api/mcps/:id', async (req, reply) => {
     if (!name?.trim() || !image?.trim()) {
         return reply.code(400).send({ error: 'name and image are required' });
     }
+    await ensureImageAvailable(image.trim());
     const all = await docker.listContainers({
         all: true,
         filters: JSON.stringify({ label: [`${MCP_LABEL}=true`] }),

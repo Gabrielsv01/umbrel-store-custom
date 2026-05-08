@@ -25,8 +25,12 @@ export default function ImagesModal({
   onRefresh,
   onRemove,
   removingId,
+  onPull,
+  pulling,
+  pullProgress,
 }) {
   const [query, setQuery] = useState('')
+  const [pullRef, setPullRef] = useState('')
 
   const filteredImages = useMemo(() => {
     const term = query.trim().toLowerCase()
@@ -38,6 +42,8 @@ export default function ImagesModal({
       return tagsText.includes(term) || idText.includes(term)
     })
   }, [images, query])
+
+  const hasPercent = Number.isFinite(pullProgress?.percent)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -66,6 +72,50 @@ export default function ImagesModal({
         </div>
 
         <div className="overflow-auto p-4">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              value={pullRef}
+              onChange={(e) => setPullRef(e.target.value)}
+              placeholder="mcp/wikipedia-mcp:latest"
+              className="input max-w-xl"
+            />
+            <button
+              onClick={() => onPull(pullRef, () => setPullRef(''))}
+              disabled={pulling || !pullRef.trim()}
+              className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+            >
+              {pulling ? (hasPercent ? `Pulling ${pullProgress.percent}%` : 'Pulling…') : 'Pull Image'}
+            </button>
+          </div>
+
+          {pulling && pullProgress && (
+            <div className="mb-3 rounded-lg border border-blue-900/50 bg-blue-950/30 p-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-blue-200">
+                <span className="font-medium">{pullProgress.image}</span>
+                <span>
+                  {pullProgress.status || 'Pulling…'}
+                  {pullProgress.id ? ` (${pullProgress.id})` : ''}
+                </span>
+              </div>
+
+              {pullProgress.total > 0 && (
+                <>
+                  <div className="mt-2 h-2 w-full overflow-hidden rounded bg-blue-950/80">
+                    <div
+                      className="h-full bg-blue-500 transition-all"
+                      style={{ width: `${pullProgress.percent ?? 0}%` }}
+                    />
+                  </div>
+                  <div className="mt-1 text-right text-[11px] text-blue-300">
+                    {formatBytes(pullProgress.current || 0)} /{' '}
+                    {formatBytes(pullProgress.total || 0)}
+                      {hasPercent ? ` (${pullProgress.percent}%)` : ''}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <input
               value={query}

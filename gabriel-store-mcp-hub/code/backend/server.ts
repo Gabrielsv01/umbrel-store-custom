@@ -4,6 +4,7 @@ import fastifyStatic from '@fastify/static'
 import Docker from 'dockerode'
 import fs from 'node:fs'
 import path from 'node:path'
+import { Readable } from 'node:stream'
 
 const fastify = Fastify({ logger: false })
 const docker = new Docker({ socketPath: '/var/run/docker.sock' })
@@ -49,6 +50,14 @@ interface ActionBody {
   action: 'start' | 'stop' | 'remove'
 }
 
+interface PullImageBody {
+  image: string
+}
+
+interface PullImageQuery {
+  image?: string
+}
+
 interface DockerImageSummary {
   id: string
   shortId: string
@@ -88,6 +97,38 @@ function loadData(): McpRecord {
 
 function saveData(data: McpRecord): void {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2))
+}
+
+function isImageMissingError(err: unknown): boolean {
+  const maybeError = err as { statusCode?: number; message?: string }
+  return (
+    maybeError?.statusCode === 404 ||
+    (typeof maybeError?.message === 'string' &&
+      maybeError.message.toLowerCase().includes('no such image'))
+  )
+}
+
+async function pullImage(image: string): Promise<void> {
+  const stream = await docker.pull(image)
+  await new Promise<void>((resolve, reject) => {
+    docker.modem.followProgress(
+      stream,
+      (err) => {
+        if (err) return reject(err)
+        resolve()
+      },
+      () => undefined,
+    )
+  })
+}
+
+async function ensureImageAvailable(image: string): Promise<void> {
+  try {
+    await docker.getImage(image).inspect()
+  } catch (err) {
+    if (!isImageMissingError(err)) throw err
+    await pullImage(image)
+  }
 }
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
@@ -165,6 +206,121 @@ fastify.get('/api/images', async () => {
 
   return result
 })
+
+// ─── POST /api/images/pull ───────────────────────────────────────────────────
+
+fastify.post<{ Body: PullImageBody }>('/api/images/pull', async (req, reply) => {
+  const image = req.body?.image?.trim()
+  if (!image) {
+    return reply.code(400).send({ error: 'image is required' })
+  }
+
+  await pullImage(image)
+  return { ok: true, image }
+})
+
+// ─── GET /api/images/pull/stream (SSE progress) ─────────────────────────────
+
+fastify.get<{ Querystring: PullImageQuery }>(
+  '/api/images/pull/stream',
+  async (req, reply) => {
+    const image = req.query?.image?.trim()
+    if (!image) {
+      return reply.code(400).send({ error: 'image is required' })
+    }
+
+    reply.hijack()
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    })
+
+    let stream: NodeJS.ReadableStream | undefined
+    let closed = false
+    const layerProgress = new Map<string, { current: number; total: number }>()
+
+    const send = (payload: unknown) => {
+      if (closed) return
+      reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`)
+    }
+
+    req.raw.on('close', () => {
+      closed = true
+      ;(stream as Readable | undefined)?.destroy()
+    })
+
+    try {
+      stream = await docker.pull(image)
+      send({ type: 'start', image })
+
+      await new Promise<void>((resolve, reject) => {
+        docker.modem.followProgress(
+          stream as NodeJS.ReadableStream,
+          (err) => {
+            if (err) return reject(err)
+            resolve()
+          },
+          (event) => {
+            const layerId = event.id ?? '_unknown'
+            const previous = layerProgress.get(layerId) ?? { current: 0, total: 0 }
+            let nextCurrent = Math.max(
+              previous.current,
+              Number(event.progressDetail?.current ?? 0),
+            )
+            const nextTotal = Math.max(
+              previous.total,
+              Number(event.progressDetail?.total ?? 0),
+            )
+
+            const statusText = (event.status ?? '').toLowerCase()
+            const isLayerCompleted =
+              statusText.includes('download complete') ||
+              statusText.includes('pull complete') ||
+              statusText.includes('already exists')
+
+            if (isLayerCompleted && nextTotal > 0) {
+              nextCurrent = nextTotal
+            }
+
+            layerProgress.set(layerId, { current: nextCurrent, total: nextTotal })
+
+            let overallCurrent = 0
+            let overallTotal = 0
+            for (const value of layerProgress.values()) {
+              overallCurrent += value.current
+              overallTotal += value.total
+            }
+
+            const percent =
+              overallTotal > 0
+                ? Math.min(100, Math.floor((overallCurrent / overallTotal) * 100))
+                : null
+
+            send({
+              type: 'progress',
+              image,
+              id: event.id,
+              status: event.status,
+              current: nextCurrent,
+              total: nextTotal,
+              overallCurrent,
+              overallTotal,
+              overallPercent: percent,
+            })
+          },
+        )
+      })
+
+      send({ type: 'done', image })
+      reply.raw.end()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'failed to pull image'
+      send({ type: 'error', error: message })
+      reply.raw.end()
+    }
+  },
+)
 
 // ─── DELETE /api/images/:id ──────────────────────────────────────────────────
 
@@ -286,6 +442,8 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
     return reply.code(400).send({ error: 'name and image are required' })
   }
 
+  await ensureImageAvailable(image.trim())
+
   const envArr = Object.entries(env)
     .filter(([k]) => k.trim())
     .map(([k, v]) => `${k.trim()}=${v}`)
@@ -333,6 +491,8 @@ fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
     if (!name?.trim() || !image?.trim()) {
       return reply.code(400).send({ error: 'name and image are required' })
     }
+
+    await ensureImageAvailable(image.trim())
 
     const all = await docker.listContainers({
       all: true,
@@ -461,7 +621,7 @@ fastify.get<{ Params: { id: string } }>('/api/logs/:id', async (req, reply) => {
   })
 
   stream.on('end', () => reply.raw.end())
-  req.raw.on('close', () => (stream as import('stream').Readable).destroy())
+  req.raw.on('close', () => (stream as Readable).destroy())
 })
 
 // ─── Start ────────────────────────────────────────────────────────────────────
