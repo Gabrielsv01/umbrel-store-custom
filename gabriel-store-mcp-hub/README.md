@@ -132,17 +132,74 @@ Base URL: `http://localhost:5146/api`
 	- Cria e inicia novo MCP
 	- Faz pull automático da imagem se não existir localmente
 	- Suporta `transport: "http" | "stdio"` (`http` por padrão)
+	- Suporta `runtime` avançado para `entrypoint`, `args`, mounts, rede, usuário e privilégios
 
 - `PUT /mcps/:id`
 	- Recria contêiner com nova configuração
 	- Também garante pull automático da imagem
 	- Suporta `transport: "http" | "stdio"`
+	- Suporta o mesmo bloco `runtime` do deploy
 
 - `POST /action/:id`
 	- Body: `{ "action": "start" | "stop" | "remove" }`
 
 - `GET /logs/:id`
 	- Stream SSE de logs do contêiner
+
+### Runtime avançado por MCP
+
+Os endpoints de deploy e update aceitam um objeto opcional `runtime` para casos em que o MCP precisa de configuração Docker mais ampla do que `image`, `command`, `env` e `port`.
+
+Campos suportados:
+
+- `entrypoint`: sobrescreve o entrypoint do contêiner
+- `args`: array de argumentos para `Cmd`
+- `workingDir`: diretório de trabalho
+- `volumes`: named volumes em sintaxe Docker (`volume:/destino[:modo]`)
+- `bindMounts`: bind mounts em sintaxe Docker (`/host:/destino[:modo]`)
+- `extraHosts`: entradas `host:ip`
+- `dns`: lista de servidores DNS
+- `networkMode`: por exemplo `bridge`, `host`, `container:<id>`
+- `user`: por exemplo `1000:1000`
+- `privileged`: `true` para contêiner privilegiado
+- `devices`: entradas como `/dev/kvm:/dev/kvm:rwm`
+- `shmSize`: inteiro em bytes ou string com sufixo (`256m`, `1g`)
+
+Observação:
+
+- Quando `runtime.args` é informado, ele tem precedência sobre `command` para montar o `Cmd` do container.
+
+Exemplo:
+
+```json
+{
+	"name": "mcp-browser-heavy",
+	"image": "mcp/playwright",
+	"transport": "http",
+	"port": 8931,
+	"runtime": {
+		"entrypoint": "npx",
+		"args": [
+			"@playwright/mcp@latest",
+			"--host",
+			"0.0.0.0",
+			"--port",
+			"8931",
+			"--headless"
+		],
+		"workingDir": "/workspace",
+		"volumes": ["mcp-cache:/data"],
+		"bindMounts": ["/Users/me/project:/workspace"],
+		"extraHosts": ["host.docker.internal:host-gateway"],
+		"dns": ["1.1.1.1", "8.8.8.8"],
+		"networkMode": "bridge",
+		"user": "1000:1000",
+		"privileged": false,
+		"devices": ["/dev/kvm:/dev/kvm:rwm"],
+		"shmSize": "1g"
+	}
+}
+```
 
 ### Sessão stdio
 
@@ -271,7 +328,7 @@ curl -N http://localhost:5146/api/stdio/proxy/<id>/sse
 
 3. Use a URL recebida no evento `endpoint` para enviar requests JSON-RPC via `POST`.
 
-Na UI do MCP Hub, use o botão `Health` (em cards `stdio`) para rodar esse diagnóstico antes de conectar o cliente externo.
+Na UI do MCP Hub, a seção `Health` aparece em todos os cards, mas a execução do check é disponível apenas para MCPs `stdio`.
 
 ## Como descobrir os parâmetros de uma imagem MCP
 

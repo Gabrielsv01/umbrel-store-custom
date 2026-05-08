@@ -27,6 +27,22 @@ interface McpMeta {
   env?: Record<string, string>
   port?: number | string
   transport?: 'http' | 'stdio'
+  runtime?: McpRuntimeConfig
+}
+
+interface McpRuntimeConfig {
+  entrypoint?: string
+  args?: string[]
+  workingDir?: string
+  volumes?: string[]
+  bindMounts?: string[]
+  extraHosts?: string[]
+  dns?: string[]
+  networkMode?: string
+  user?: string
+  privileged?: boolean
+  devices?: string[]
+  shmSize?: number | string
 }
 
 interface McpRecord {
@@ -40,6 +56,7 @@ interface DeployBody {
   env?: Record<string, string>
   port?: number | string
   transport?: 'http' | 'stdio'
+  runtime?: McpRuntimeConfig
 }
 
 interface UpdateBody {
@@ -49,6 +66,7 @@ interface UpdateBody {
   env?: Record<string, string>
   port?: number | string
   transport?: 'http' | 'stdio'
+  runtime?: McpRuntimeConfig
 }
 
 interface ActionBody {
@@ -234,6 +252,147 @@ function detectNetworkIssues(lines: string[]): string[] {
   }
 
   return Array.from(issues)
+}
+
+function splitCommand(value?: string): string[] | undefined {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed.split(/\s+/) : undefined
+}
+
+function cleanStringArray(values?: string[]): string[] | undefined {
+  const cleaned = (values ?? []).map((value) => value.trim()).filter(Boolean)
+  return cleaned.length > 0 ? cleaned : undefined
+}
+
+function parseShmSize(value?: number | string): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return Math.floor(value)
+  }
+
+  if (typeof value !== 'string') return undefined
+
+  const trimmed = value.trim().toLowerCase()
+  if (!trimmed) return undefined
+  if (/^\d+$/.test(trimmed)) {
+    return Number(trimmed)
+  }
+
+  const match = trimmed.match(/^(\d+(?:\.\d+)?)([kmgt])b?$/i)
+  if (!match) return undefined
+
+  const amount = Number(match[1])
+  const units: Record<string, number> = {
+    k: 1024,
+    m: 1024 ** 2,
+    g: 1024 ** 3,
+    t: 1024 ** 4,
+  }
+
+  return Math.floor(amount * units[match[2].toLowerCase()])
+}
+
+function parseDevices(devices?: string[]): Docker.DeviceMapping[] | undefined {
+  const cleaned = cleanStringArray(devices)
+  if (!cleaned) return undefined
+
+  return cleaned.map((entry) => {
+    const [pathOnHost = '', pathInContainer = '', permissions = 'rwm'] = entry.split(':')
+    return {
+      PathOnHost: pathOnHost.trim(),
+      PathInContainer: (pathInContainer.trim() || pathOnHost.trim()),
+      CgroupPermissions: permissions.trim() || 'rwm',
+    }
+  })
+}
+
+function normalizeRuntimeConfig(runtime?: McpRuntimeConfig): McpRuntimeConfig | undefined {
+  if (!runtime) return undefined
+
+  const normalized: McpRuntimeConfig = {}
+
+  if (runtime.entrypoint?.trim()) normalized.entrypoint = runtime.entrypoint.trim()
+  if (runtime.workingDir?.trim()) normalized.workingDir = runtime.workingDir.trim()
+  if (runtime.networkMode?.trim()) normalized.networkMode = runtime.networkMode.trim()
+  if (runtime.user?.trim()) normalized.user = runtime.user.trim()
+  if (runtime.privileged === true) normalized.privileged = true
+
+  const args = cleanStringArray(runtime.args)
+  if (args) normalized.args = args
+
+  const volumes = cleanStringArray(runtime.volumes)
+  if (volumes) normalized.volumes = volumes
+
+  const bindMounts = cleanStringArray(runtime.bindMounts)
+  if (bindMounts) normalized.bindMounts = bindMounts
+
+  const extraHosts = cleanStringArray(runtime.extraHosts)
+  if (extraHosts) normalized.extraHosts = extraHosts
+
+  const dns = cleanStringArray(runtime.dns)
+  if (dns) normalized.dns = dns
+
+  const devices = cleanStringArray(runtime.devices)
+  if (devices) normalized.devices = devices
+
+  const shmSize = parseShmSize(runtime.shmSize)
+  if (shmSize) normalized.shmSize = shmSize
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined
+}
+
+function buildContainerOptions(input: {
+  name: string
+  image: string
+  command?: string
+  env?: Record<string, string>
+  port?: number | string
+  transport?: 'http' | 'stdio'
+  runtime?: McpRuntimeConfig
+}): Docker.ContainerCreateOptions {
+  const envArr = Object.entries(input.env ?? {})
+    .filter(([key]) => key.trim())
+    .map(([key, value]) => `${key.trim()}=${value}`)
+
+  const runtime = normalizeRuntimeConfig(input.runtime)
+  const cmd = runtime?.args && runtime.args.length > 0 ? runtime.args : splitCommand(input.command)
+  const entrypoint = splitCommand(runtime?.entrypoint)
+  const portStr = input.port ? String(input.port) : undefined
+  const exposePort = input.transport !== 'stdio' && !!portStr
+  const exposedPorts: Record<string, Record<string, never>> = exposePort
+    ? { [`${portStr}/tcp`]: {} }
+    : {}
+  const portBindings: Docker.PortMap = exposePort
+    ? { [`${portStr}/tcp`]: [{ HostPort: portStr }] }
+    : {}
+  const binds = [...(runtime?.volumes ?? []), ...(runtime?.bindMounts ?? [])]
+
+  return {
+    name: input.name.trim(),
+    Image: input.image.trim(),
+    Cmd: cmd,
+    Entrypoint: entrypoint,
+    Env: envArr,
+    WorkingDir: runtime?.workingDir,
+    User: runtime?.user,
+    OpenStdin: input.transport === 'stdio',
+    AttachStdin: input.transport === 'stdio',
+    AttachStdout: input.transport === 'stdio',
+    AttachStderr: input.transport === 'stdio',
+    Tty: false,
+    Labels: { [MCP_LABEL]: 'true' },
+    ExposedPorts: exposedPorts,
+    HostConfig: {
+      PortBindings: portBindings,
+      RestartPolicy: { Name: input.transport === 'stdio' ? 'no' : 'unless-stopped' },
+      Binds: binds.length > 0 ? binds : undefined,
+      ExtraHosts: runtime?.extraHosts,
+      Dns: runtime?.dns,
+      NetworkMode: runtime?.networkMode,
+      Privileged: runtime?.privileged,
+      Devices: parseDevices(runtime?.devices),
+      ShmSize: parseShmSize(runtime?.shmSize),
+    },
+  }
 }
 
 function selectNetworkProbeTool(tools: unknown[]): {
@@ -636,7 +795,7 @@ fastify.delete<{ Params: { name: string } }>(
 // ─── POST /api/deploy ─────────────────────────────────────────────────────────
 
 fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
-  const { name, image, command, env = {}, port, transport = 'http' } = req.body ?? {}
+  const { name, image, command, env = {}, port, transport = 'http', runtime } = req.body ?? {}
 
   if (!name?.trim() || !image?.trim()) {
     return reply.code(400).send({ error: 'name and image are required' })
@@ -644,38 +803,19 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
 
   await ensureImageAvailable(image.trim())
 
-  const envArr = Object.entries(env)
-    .filter(([k]) => k.trim())
-    .map(([k, v]) => `${k.trim()}=${v}`)
+  const normalizedRuntime = normalizeRuntimeConfig(runtime)
 
-  const cmd = command?.trim() ? command.trim().split(/\s+/) : undefined
-
-  const portStr = port ? String(port) : undefined
-  const exposePort = transport !== 'stdio' && !!portStr
-  const exposedPorts: Record<string, Record<string, never>> = exposePort
-    ? { [`${portStr}/tcp`]: {} }
-    : {}
-  const portBindings: Docker.PortMap = exposePort
-    ? { [`${portStr}/tcp`]: [{ HostPort: portStr }] }
-    : {}
-
-  const container = await docker.createContainer({
-    name: name.trim(),
-    Image: image.trim(),
-    Cmd: cmd,
-    Env: envArr,
-    OpenStdin: transport === 'stdio',
-    AttachStdin: transport === 'stdio',
-    AttachStdout: transport === 'stdio',
-    AttachStderr: transport === 'stdio',
-    Tty: false,
-    Labels: { [MCP_LABEL]: 'true' },
-    ExposedPorts: exposedPorts,
-    HostConfig: {
-      PortBindings: portBindings,
-      RestartPolicy: { Name: transport === 'stdio' ? 'no' : 'unless-stopped' },
-    },
-  })
+  const container = await docker.createContainer(
+    buildContainerOptions({
+      name,
+      image,
+      command,
+      env,
+      port,
+      transport,
+      runtime: normalizedRuntime,
+    }),
+  )
 
   if (transport !== 'stdio') {
     await container.start()
@@ -690,6 +830,7 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
     env,
     port,
     transport,
+    runtime: normalizedRuntime,
   }
   saveData(data)
 
@@ -701,7 +842,7 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
 fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
   '/api/mcps/:id',
   async (req, reply) => {
-    const { name, image, command, env = {}, port, transport = 'http' } = req.body ?? {}
+    const { name, image, command, env = {}, port, transport = 'http', runtime } = req.body ?? {}
 
     if (!name?.trim() || !image?.trim()) {
       return reply.code(400).send({ error: 'name and image are required' })
@@ -719,40 +860,22 @@ fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
     const oldContainer = docker.getContainer(match.Id)
     const oldShortId = match.Id.slice(0, 12)
 
-    const envArr = Object.entries(env)
-      .filter(([k]) => k.trim())
-      .map(([k, v]) => `${k.trim()}=${v}`)
-
-    const cmd = command?.trim() ? command.trim().split(/\s+/) : undefined
-    const portStr = port ? String(port) : undefined
-    const exposePort = transport !== 'stdio' && !!portStr
-    const exposedPorts: Record<string, Record<string, never>> = exposePort
-      ? { [`${portStr}/tcp`]: {} }
-      : {}
-    const portBindings: Docker.PortMap = exposePort
-      ? { [`${portStr}/tcp`]: [{ HostPort: portStr }] }
-      : {}
+    const normalizedRuntime = normalizeRuntimeConfig(runtime)
 
     await oldContainer.stop().catch(() => undefined)
     await oldContainer.remove()
 
-    const container = await docker.createContainer({
-      name: name.trim(),
-      Image: image.trim(),
-      Cmd: cmd,
-      Env: envArr,
-      OpenStdin: transport === 'stdio',
-      AttachStdin: transport === 'stdio',
-      AttachStdout: transport === 'stdio',
-      AttachStderr: transport === 'stdio',
-      Tty: false,
-      Labels: { [MCP_LABEL]: 'true' },
-      ExposedPorts: exposedPorts,
-      HostConfig: {
-        PortBindings: portBindings,
-        RestartPolicy: { Name: transport === 'stdio' ? 'no' : 'unless-stopped' },
-      },
-    })
+    const container = await docker.createContainer(
+      buildContainerOptions({
+        name,
+        image,
+        command,
+        env,
+        port,
+        transport,
+        runtime: normalizedRuntime,
+      }),
+    )
 
     if (transport !== 'stdio') {
       await container.start()
@@ -768,6 +891,7 @@ fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
       env,
       port,
       transport,
+      runtime: normalizedRuntime,
     }
     saveData(data)
 

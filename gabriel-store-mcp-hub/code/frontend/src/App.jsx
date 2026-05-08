@@ -345,6 +345,7 @@ export default function App() {
                     command: mcp.meta?.command || '',
                     port: mcp.meta?.port || mcp.ports?.[0] || '',
                     env: mcp.meta?.env || {},
+                    runtime: mcp.meta?.runtime || {},
                   })
                 }
               />

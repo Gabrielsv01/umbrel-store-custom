@@ -67,7 +67,9 @@ export default function MCPCard({
   const busy = !!actionLoading
   const isStdio = (mcp.meta?.transport ?? 'http') === 'stdio'
   const healthTone =
-    health?.status === 'healthy'
+    !isStdio
+      ? 'bg-gray-700 text-gray-400'
+      : health?.status === 'healthy'
       ? 'bg-green-500/15 text-green-400'
       : health?.status === 'degraded'
         ? 'bg-yellow-500/15 text-yellow-400'
@@ -103,6 +105,7 @@ export default function MCPCard({
 
   const runHealth = () => {
     setShowMenu(false)
+    if (!isStdio) return
     onCheckHealth(mcp.id)
   }
 
@@ -198,16 +201,19 @@ export default function MCPCard({
                 </button>
               )}
 
-              {isStdio && (
-                <button
-                  type="button"
-                  onClick={runHealth}
-                  disabled={healthLoading}
-                  className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900 disabled:opacity-50"
-                >
-                  {healthLoading ? 'Checking health...' : 'Health'}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={runHealth}
+                disabled={!isStdio || healthLoading}
+                title={isStdio ? 'Run health check' : 'Available only for stdio MCPs'}
+                className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900 disabled:opacity-50"
+              >
+                {healthLoading
+                  ? 'Checking health...'
+                  : isStdio
+                    ? 'Health'
+                    : 'Health (stdio only)'}
+              </button>
 
               <button
                 type="button"
@@ -262,46 +268,47 @@ export default function MCPCard({
         </button>
       </div>
 
-      {isStdio && (
-        <div className="relative flex flex-wrap items-center gap-2 text-xs text-gray-400">
-          <span className="shrink-0">Health:</span>
-          <button
-            type="button"
-            onClick={() => setShowHealthTip((prev) => !prev)}
-            className={`rounded px-2 py-0.5 text-left ${healthTone}`}
-            title="Show health details"
-          >
-            {healthLoading
-              ? 'checking...'
-              : health?.status
+      <div className="relative flex flex-wrap items-center gap-2 text-xs text-gray-400">
+        <span className="shrink-0">Health:</span>
+        <button
+          type="button"
+          onClick={() => isStdio && setShowHealthTip((prev) => !prev)}
+          className={`rounded px-2 py-0.5 text-left ${healthTone}`}
+          title={isStdio ? 'Show health details' : 'Available only for stdio MCPs'}
+          disabled={!isStdio}
+        >
+          {healthLoading
+            ? 'checking...'
+            : isStdio
+              ? health?.status
                 ? health.status
-                : 'not checked'}
-          </button>
-          {health?.networkProbe?.attempted && health?.networkProbe?.ok === false && (
-            <span className="truncate text-yellow-300" title={health.networkProbe.error || ''}>
-              {health.networkProbe.error || 'network warning'}
-            </span>
-          )}
+                : 'not checked'
+              : 'stdio only'}
+        </button>
+        {isStdio && health?.networkProbe?.attempted && health?.networkProbe?.ok === false && (
+          <span className="truncate text-yellow-300" title={health.networkProbe.error || ''}>
+            {health.networkProbe.error || 'network warning'}
+          </span>
+        )}
 
-          {showHealthTip && (
-            <div className="w-full rounded-lg border border-gray-700 bg-gray-950 p-3 text-[11px] leading-relaxed text-gray-300 shadow-lg">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="font-medium text-white">Health details</span>
-                <button
-                  type="button"
-                  onClick={() => setShowHealthTip(false)}
-                  className="text-gray-500 transition-colors hover:text-white"
-                >
-                  ×
-                </button>
-              </div>
-              <pre className="whitespace-pre-wrap break-words font-mono text-[11px] text-gray-300">
-                {healthSummary}
-              </pre>
+        {isStdio && showHealthTip && (
+          <div className="w-full rounded-lg border border-gray-700 bg-gray-950 p-3 text-[11px] leading-relaxed text-gray-300 shadow-lg">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="font-medium text-white">Health details</span>
+              <button
+                type="button"
+                onClick={() => setShowHealthTip(false)}
+                className="text-gray-500 transition-colors hover:text-white"
+              >
+                ×
+              </button>
             </div>
-          )}
-        </div>
-      )}
+            <pre className="whitespace-pre-wrap break-words font-mono text-[11px] text-gray-300">
+              {healthSummary}
+            </pre>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

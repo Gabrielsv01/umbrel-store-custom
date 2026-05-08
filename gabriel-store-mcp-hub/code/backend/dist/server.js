@@ -123,6 +123,132 @@ function detectNetworkIssues(lines) {
     }
     return Array.from(issues);
 }
+function splitCommand(value) {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed.split(/\s+/) : undefined;
+}
+function cleanStringArray(values) {
+    const cleaned = (values ?? []).map((value) => value.trim()).filter(Boolean);
+    return cleaned.length > 0 ? cleaned : undefined;
+}
+function parseShmSize(value) {
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+        return Math.floor(value);
+    }
+    if (typeof value !== 'string')
+        return undefined;
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed)
+        return undefined;
+    if (/^\d+$/.test(trimmed)) {
+        return Number(trimmed);
+    }
+    const match = trimmed.match(/^(\d+(?:\.\d+)?)([kmgt])b?$/i);
+    if (!match)
+        return undefined;
+    const amount = Number(match[1]);
+    const units = {
+        k: 1024,
+        m: 1024 ** 2,
+        g: 1024 ** 3,
+        t: 1024 ** 4,
+    };
+    return Math.floor(amount * units[match[2].toLowerCase()]);
+}
+function parseDevices(devices) {
+    const cleaned = cleanStringArray(devices);
+    if (!cleaned)
+        return undefined;
+    return cleaned.map((entry) => {
+        const [pathOnHost = '', pathInContainer = '', permissions = 'rwm'] = entry.split(':');
+        return {
+            PathOnHost: pathOnHost.trim(),
+            PathInContainer: (pathInContainer.trim() || pathOnHost.trim()),
+            CgroupPermissions: permissions.trim() || 'rwm',
+        };
+    });
+}
+function normalizeRuntimeConfig(runtime) {
+    if (!runtime)
+        return undefined;
+    const normalized = {};
+    if (runtime.entrypoint?.trim())
+        normalized.entrypoint = runtime.entrypoint.trim();
+    if (runtime.workingDir?.trim())
+        normalized.workingDir = runtime.workingDir.trim();
+    if (runtime.networkMode?.trim())
+        normalized.networkMode = runtime.networkMode.trim();
+    if (runtime.user?.trim())
+        normalized.user = runtime.user.trim();
+    if (runtime.privileged === true)
+        normalized.privileged = true;
+    const args = cleanStringArray(runtime.args);
+    if (args)
+        normalized.args = args;
+    const volumes = cleanStringArray(runtime.volumes);
+    if (volumes)
+        normalized.volumes = volumes;
+    const bindMounts = cleanStringArray(runtime.bindMounts);
+    if (bindMounts)
+        normalized.bindMounts = bindMounts;
+    const extraHosts = cleanStringArray(runtime.extraHosts);
+    if (extraHosts)
+        normalized.extraHosts = extraHosts;
+    const dns = cleanStringArray(runtime.dns);
+    if (dns)
+        normalized.dns = dns;
+    const devices = cleanStringArray(runtime.devices);
+    if (devices)
+        normalized.devices = devices;
+    const shmSize = parseShmSize(runtime.shmSize);
+    if (shmSize)
+        normalized.shmSize = shmSize;
+    return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+function buildContainerOptions(input) {
+    const envArr = Object.entries(input.env ?? {})
+        .filter(([key]) => key.trim())
+        .map(([key, value]) => `${key.trim()}=${value}`);
+    const runtime = normalizeRuntimeConfig(input.runtime);
+    const cmd = runtime?.args && runtime.args.length > 0 ? runtime.args : splitCommand(input.command);
+    const entrypoint = splitCommand(runtime?.entrypoint);
+    const portStr = input.port ? String(input.port) : undefined;
+    const exposePort = input.transport !== 'stdio' && !!portStr;
+    const exposedPorts = exposePort
+        ? { [`${portStr}/tcp`]: {} }
+        : {};
+    const portBindings = exposePort
+        ? { [`${portStr}/tcp`]: [{ HostPort: portStr }] }
+        : {};
+    const binds = [...(runtime?.volumes ?? []), ...(runtime?.bindMounts ?? [])];
+    return {
+        name: input.name.trim(),
+        Image: input.image.trim(),
+        Cmd: cmd,
+        Entrypoint: entrypoint,
+        Env: envArr,
+        WorkingDir: runtime?.workingDir,
+        User: runtime?.user,
+        OpenStdin: input.transport === 'stdio',
+        AttachStdin: input.transport === 'stdio',
+        AttachStdout: input.transport === 'stdio',
+        AttachStderr: input.transport === 'stdio',
+        Tty: false,
+        Labels: { [MCP_LABEL]: 'true' },
+        ExposedPorts: exposedPorts,
+        HostConfig: {
+            PortBindings: portBindings,
+            RestartPolicy: { Name: input.transport === 'stdio' ? 'no' : 'unless-stopped' },
+            Binds: binds.length > 0 ? binds : undefined,
+            ExtraHosts: runtime?.extraHosts,
+            Dns: runtime?.dns,
+            NetworkMode: runtime?.networkMode,
+            Privileged: runtime?.privileged,
+            Devices: parseDevices(runtime?.devices),
+            ShmSize: parseShmSize(runtime?.shmSize),
+        },
+    };
+}
 function selectNetworkProbeTool(tools) {
     const toolList = Array.isArray(tools) ? tools : [];
     for (const rawTool of toolList) {
@@ -428,40 +554,21 @@ fastify.delete('/api/volumes/:name', async (req, reply) => {
 });
 // ─── POST /api/deploy ─────────────────────────────────────────────────────────
 fastify.post('/api/deploy', async (req, reply) => {
-    const { name, image, command, env = {}, port, transport = 'http' } = req.body ?? {};
+    const { name, image, command, env = {}, port, transport = 'http', runtime } = req.body ?? {};
     if (!name?.trim() || !image?.trim()) {
         return reply.code(400).send({ error: 'name and image are required' });
     }
     await ensureImageAvailable(image.trim());
-    const envArr = Object.entries(env)
-        .filter(([k]) => k.trim())
-        .map(([k, v]) => `${k.trim()}=${v}`);
-    const cmd = command?.trim() ? command.trim().split(/\s+/) : undefined;
-    const portStr = port ? String(port) : undefined;
-    const exposePort = transport !== 'stdio' && !!portStr;
-    const exposedPorts = exposePort
-        ? { [`${portStr}/tcp`]: {} }
-        : {};
-    const portBindings = exposePort
-        ? { [`${portStr}/tcp`]: [{ HostPort: portStr }] }
-        : {};
-    const container = await docker.createContainer({
-        name: name.trim(),
-        Image: image.trim(),
-        Cmd: cmd,
-        Env: envArr,
-        OpenStdin: transport === 'stdio',
-        AttachStdin: transport === 'stdio',
-        AttachStdout: transport === 'stdio',
-        AttachStderr: transport === 'stdio',
-        Tty: false,
-        Labels: { [MCP_LABEL]: 'true' },
-        ExposedPorts: exposedPorts,
-        HostConfig: {
-            PortBindings: portBindings,
-            RestartPolicy: { Name: transport === 'stdio' ? 'no' : 'unless-stopped' },
-        },
-    });
+    const normalizedRuntime = normalizeRuntimeConfig(runtime);
+    const container = await docker.createContainer(buildContainerOptions({
+        name,
+        image,
+        command,
+        env,
+        port,
+        transport,
+        runtime: normalizedRuntime,
+    }));
     if (transport !== 'stdio') {
         await container.start();
     }
@@ -474,13 +581,14 @@ fastify.post('/api/deploy', async (req, reply) => {
         env,
         port,
         transport,
+        runtime: normalizedRuntime,
     };
     saveData(data);
     return { id: shortId, status: transport === 'stdio' ? 'created' : 'running' };
 });
 // ─── PUT /api/mcps/:id (recreate container with updated config) ─────────────
 fastify.put('/api/mcps/:id', async (req, reply) => {
-    const { name, image, command, env = {}, port, transport = 'http' } = req.body ?? {};
+    const { name, image, command, env = {}, port, transport = 'http', runtime } = req.body ?? {};
     if (!name?.trim() || !image?.trim()) {
         return reply.code(400).send({ error: 'name and image are required' });
     }
@@ -494,37 +602,18 @@ fastify.put('/api/mcps/:id', async (req, reply) => {
         return reply.code(404).send({ error: 'container not found' });
     const oldContainer = docker.getContainer(match.Id);
     const oldShortId = match.Id.slice(0, 12);
-    const envArr = Object.entries(env)
-        .filter(([k]) => k.trim())
-        .map(([k, v]) => `${k.trim()}=${v}`);
-    const cmd = command?.trim() ? command.trim().split(/\s+/) : undefined;
-    const portStr = port ? String(port) : undefined;
-    const exposePort = transport !== 'stdio' && !!portStr;
-    const exposedPorts = exposePort
-        ? { [`${portStr}/tcp`]: {} }
-        : {};
-    const portBindings = exposePort
-        ? { [`${portStr}/tcp`]: [{ HostPort: portStr }] }
-        : {};
+    const normalizedRuntime = normalizeRuntimeConfig(runtime);
     await oldContainer.stop().catch(() => undefined);
     await oldContainer.remove();
-    const container = await docker.createContainer({
-        name: name.trim(),
-        Image: image.trim(),
-        Cmd: cmd,
-        Env: envArr,
-        OpenStdin: transport === 'stdio',
-        AttachStdin: transport === 'stdio',
-        AttachStdout: transport === 'stdio',
-        AttachStderr: transport === 'stdio',
-        Tty: false,
-        Labels: { [MCP_LABEL]: 'true' },
-        ExposedPorts: exposedPorts,
-        HostConfig: {
-            PortBindings: portBindings,
-            RestartPolicy: { Name: transport === 'stdio' ? 'no' : 'unless-stopped' },
-        },
-    });
+    const container = await docker.createContainer(buildContainerOptions({
+        name,
+        image,
+        command,
+        env,
+        port,
+        transport,
+        runtime: normalizedRuntime,
+    }));
     if (transport !== 'stdio') {
         await container.start();
     }
@@ -538,6 +627,7 @@ fastify.put('/api/mcps/:id', async (req, reply) => {
         env,
         port,
         transport,
+        runtime: normalizedRuntime,
     };
     saveData(data);
     return { id: newShortId, status: transport === 'stdio' ? 'created' : 'running' };
