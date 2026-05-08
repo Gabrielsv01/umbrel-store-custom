@@ -4,6 +4,11 @@ services:
       context: ./code
       dockerfile: Dockerfile
     container_name: mcp-hub
+    environment:
+      - NODE_ENV=production
+      - DATA_DIR=/data
+      - STATIC_DIR=/app/public
+      - TZ=${TZ:-UTC}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${APP_DATA_DIR:-./.appdata}/data:/data
