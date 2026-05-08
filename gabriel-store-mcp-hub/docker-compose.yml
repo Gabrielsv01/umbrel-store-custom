@@ -1,0 +1,18 @@
+services:
+  mcp-hub-backend:
+    build: ./code/backend
+    container_name: mcp-hub-backend
+    # Docker socket gives the backend control over sibling containers
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${APP_DATA_DIR:-./.appdata}/data:/data
+    restart: unless-stopped
+
+  mcp-hub-frontend:
+    build: ./code/frontend
+    container_name: mcp-hub-frontend
+    ports:
+      - "${APP_PORT:-5146}:80"
+    depends_on:
+      - mcp-hub-backend
+    restart: unless-stopped

@@ -1,0 +1,30 @@
+manifestVersion: 1
+id: gabriel-store-mcp-hub
+name: MCP Hub
+tagline: Deploy and manage MCP servers on your Umbrel
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-mcp-hub/icon.svg
+category: MCP
+version: "1.0.0"
+port: 5146
+description: >-
+  MCP Hub is a visual control panel for running MCP servers as Docker containers on Umbrel.
+
+  Features:
+  - Deploy MCP servers from Docker images
+  - Start, stop, edit, remove, and inspect logs
+  - Copy MCP client config snippets
+  - Manage local Docker images and volumes safely
+developer: Gabriel Vieira
+website: https://github.com/Gabrielsv01/umbrel-store-custom/tree/main/gabriel-store-mcp-hub
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+permissions: []
+releaseNotes: >-
+  First release of MCP Hub with container lifecycle management, logs, image and volume cleanup.
+dependencies: []
+path: "/"
+defaultUsername: ""
+defaultPassword: ""

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-labelledby="title desc">
+  <title id="title">MCP Hub Icon</title>
+  <desc id="desc">A central hub connected to service nodes, representing MCP server orchestration.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="100%" stop-color="#15243d"/>
+    </linearGradient>
+    <linearGradient id="hub" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#33d17a"/>
+      <stop offset="100%" stop-color="#1fa45a"/>
+    </linearGradient>
+    <linearGradient id="node" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7ecbff"/>
+      <stop offset="100%" stop-color="#4aa8f0"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect x="4" y="4" width="184" height="184" rx="40" fill="url(#bg)"/>
+
+  <g stroke="#2f4568" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.95">
+    <line x1="96" y1="96" x2="48" y2="48"/>
+    <line x1="96" y1="96" x2="144" y2="48"/>
+    <line x1="96" y1="96" x2="48" y2="144"/>
+    <line x1="96" y1="96" x2="144" y2="144"/>
+    <line x1="96" y1="96" x2="96" y2="32"/>
+    <line x1="96" y1="96" x2="96" y2="160"/>
+  </g>
+
+  <g fill="url(#node)" stroke="#c9ecff" stroke-width="2">
+    <rect x="34" y="34" width="28" height="28" rx="7"/>
+    <rect x="130" y="34" width="28" height="28" rx="7"/>
+    <rect x="34" y="130" width="28" height="28" rx="7"/>
+    <rect x="130" y="130" width="28" height="28" rx="7"/>
+    <rect x="82" y="18" width="28" height="28" rx="7"/>
+    <rect x="82" y="146" width="28" height="28" rx="7"/>
+  </g>
+
+  <g filter="url(#glow)">
+    <circle cx="96" cy="96" r="27" fill="url(#hub)"/>
+    <circle cx="96" cy="96" r="27" fill="none" stroke="#b6ffd8" stroke-width="2.5" opacity="0.9"/>
+  </g>
+
+  <g fill="#eafff2" opacity="0.95">
+    <rect x="84" y="86" width="24" height="7" rx="2"/>
+    <rect x="84" y="98" width="14" height="7" rx="2"/>
+    <circle cx="104" cy="101.5" r="3.5" fill="#0f8d4d"/>
+  </g>
+</svg>
