@@ -47,19 +47,33 @@ export default function MCPCard({
   onViewLogs,
   onEdit,
   onOpenSession,
+  onCheckHealth,
+  health,
+  healthLoading,
 }) {
   const [copied, setCopied] = useState(false)
   const [copiedId, setCopiedId] = useState(false)
+  const [showHealthTip, setShowHealthTip] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
   const isRunning = mcp.status === 'running'
 
   const copyConfig = () => {
     navigator.clipboard.writeText(buildClaudeConfig(mcp))
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+    setShowMenu(false)
   }
 
   const busy = !!actionLoading
   const isStdio = (mcp.meta?.transport ?? 'http') === 'stdio'
+  const healthTone =
+    health?.status === 'healthy'
+      ? 'bg-green-500/15 text-green-400'
+      : health?.status === 'degraded'
+        ? 'bg-yellow-500/15 text-yellow-400'
+        : health?.status === 'unhealthy'
+          ? 'bg-red-500/15 text-red-400'
+          : 'bg-gray-700 text-gray-400'
 
   const copyId = () => {
     navigator.clipboard.writeText(mcp.id)
@@ -67,8 +81,55 @@ export default function MCPCard({
     setTimeout(() => setCopiedId(false), 1500)
   }
 
+  const runAction = (action) => {
+    setShowMenu(false)
+    onAction(mcp.id, action)
+  }
+
+  const openSession = () => {
+    setShowMenu(false)
+    onOpenSession(mcp)
+  }
+
+  const openLogs = () => {
+    setShowMenu(false)
+    onViewLogs()
+  }
+
+  const openEdit = () => {
+    setShowMenu(false)
+    onEdit(mcp)
+  }
+
+  const runHealth = () => {
+    setShowMenu(false)
+    onCheckHealth(mcp.id)
+  }
+
+  const healthSummary = health
+    ? [
+        `status: ${health.status || 'unknown'}`,
+        `initialize: ${health.handshake?.initializeOk ? 'ok' : 'failed'}`,
+        `tools/list: ${health.handshake?.toolsListOk ? 'ok' : 'failed'}`,
+        typeof health.handshake?.toolCount === 'number'
+          ? `tools: ${health.handshake.toolCount}`
+          : null,
+        health.networkProbe?.attempted
+          ? `network probe: ${health.networkProbe.ok ? 'ok' : 'failed'}${health.networkProbe.toolName ? ` (${health.networkProbe.toolName})` : ''}`
+          : health.networkProbe?.reason
+            ? `network probe: ${health.networkProbe.reason}`
+            : null,
+        health.networkProbe?.error ? `error: ${health.networkProbe.error}` : null,
+        ...(Array.isArray(health.diagnostics?.issues)
+          ? health.diagnostics.issues.slice(0, 2).map((issue) => `issue: ${issue}`)
+          : []),
+      ]
+        .filter(Boolean)
+        .join('\n')
+    : 'Run the health check to see details.'
+
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-gray-800 bg-gray-900 p-4">
+    <div className="relative flex flex-col gap-3 rounded-xl border border-gray-800 bg-gray-900 p-4">
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -79,14 +140,102 @@ export default function MCPCard({
             {mcp.image}
           </p>
         </div>
-        <span
-          className={`flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs ${STATUS_BADGE[mcp.status] ?? 'bg-gray-700 text-gray-400'}`}
-        >
+        <div className="relative flex shrink-0 items-center gap-2">
           <span
-            className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[mcp.status] ?? 'bg-gray-500'}`}
-          />
-          {mcp.status}
-        </span>
+            className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs ${STATUS_BADGE[mcp.status] ?? 'bg-gray-700 text-gray-400'}`}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[mcp.status] ?? 'bg-gray-500'}`}
+            />
+            {mcp.status}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowMenu((prev) => !prev)}
+            className="rounded-lg bg-gray-800 px-2 py-1 text-sm text-gray-300 transition-colors hover:bg-gray-700"
+            title="Open actions menu"
+          >
+            ≡
+          </button>
+
+          {showMenu && (
+            <div className="absolute right-0 top-10 z-10 flex min-w-40 flex-col overflow-hidden rounded-xl border border-gray-700 bg-gray-950 shadow-2xl">
+              {isRunning ? (
+                <button
+                  type="button"
+                  onClick={() => runAction('stop')}
+                  disabled={busy}
+                  className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900 disabled:opacity-50"
+                >
+                  {actionLoading === 'stop' ? 'Stopping...' : 'Stop'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => runAction('start')}
+                  disabled={busy}
+                  className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900 disabled:opacity-50"
+                >
+                  {actionLoading === 'start' ? 'Starting...' : 'Start'}
+                </button>
+              )}
+
+              {isStdio ? (
+                <button
+                  type="button"
+                  onClick={openSession}
+                  className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900"
+                >
+                  Session
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={openLogs}
+                  className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900"
+                >
+                  Logs
+                </button>
+              )}
+
+              {isStdio && (
+                <button
+                  type="button"
+                  onClick={runHealth}
+                  disabled={healthLoading}
+                  className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900 disabled:opacity-50"
+                >
+                  {healthLoading ? 'Checking health...' : 'Health'}
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={openEdit}
+                className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900"
+              >
+                Edit
+              </button>
+
+              <button
+                type="button"
+                onClick={copyConfig}
+                className="px-3 py-2 text-left text-xs text-blue-400 transition-colors hover:bg-gray-900"
+              >
+                {copied ? 'Config copied' : 'Copy Config'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => runAction('remove')}
+                disabled={busy}
+                className="px-3 py-2 text-left text-xs text-red-400 transition-colors hover:bg-gray-900 disabled:opacity-50"
+              >
+                {actionLoading === 'remove' ? 'Removing...' : 'Remove'}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Ports */}
@@ -113,65 +262,46 @@ export default function MCPCard({
         </button>
       </div>
 
-      {/* Actions */}
-      <div className="mt-auto flex items-center gap-2 border-t border-gray-800 pt-3">
-        {isRunning ? (
+      {isStdio && (
+        <div className="relative flex flex-wrap items-center gap-2 text-xs text-gray-400">
+          <span className="shrink-0">Health:</span>
           <button
-            onClick={() => onAction(mcp.id, 'stop')}
-            disabled={busy}
-            className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs transition-colors hover:bg-gray-700 disabled:opacity-50"
+            type="button"
+            onClick={() => setShowHealthTip((prev) => !prev)}
+            className={`rounded px-2 py-0.5 text-left ${healthTone}`}
+            title="Show health details"
           >
-            {actionLoading === 'stop' ? '…' : 'Stop'}
+            {healthLoading
+              ? 'checking...'
+              : health?.status
+                ? health.status
+                : 'not checked'}
           </button>
-        ) : (
-          <button
-            onClick={() => onAction(mcp.id, 'start')}
-            disabled={busy}
-            className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs transition-colors hover:bg-gray-700 disabled:opacity-50"
-          >
-            {actionLoading === 'start' ? '…' : 'Start'}
-          </button>
-        )}
+          {health?.networkProbe?.attempted && health?.networkProbe?.ok === false && (
+            <span className="truncate text-yellow-300" title={health.networkProbe.error || ''}>
+              {health.networkProbe.error || 'network warning'}
+            </span>
+          )}
 
-        {isStdio ? (
-          <button
-            onClick={() => onOpenSession(mcp)}
-            className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs transition-colors hover:bg-gray-700"
-          >
-            Session
-          </button>
-        ) : (
-          <button
-            onClick={onViewLogs}
-            className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs transition-colors hover:bg-gray-700"
-          >
-            Logs
-          </button>
-        )}
-
-        <button
-          onClick={() => onEdit(mcp)}
-          className="rounded-lg bg-gray-800 px-3 py-1.5 text-xs transition-colors hover:bg-gray-700"
-        >
-          Edit
-        </button>
-
-        <button
-          onClick={copyConfig}
-          className="ml-auto rounded-lg bg-blue-600/20 px-3 py-1.5 text-xs text-blue-400 transition-colors hover:bg-blue-600/30"
-        >
-          {copied ? '✓ Copied' : 'Copy Config'}
-        </button>
-
-        <button
-          onClick={() => onAction(mcp.id, 'remove')}
-          disabled={busy}
-          className="rounded-lg bg-red-600/20 px-3 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-600/30 disabled:opacity-50"
-          title="Remove container"
-        >
-          {actionLoading === 'remove' ? '…' : '✕'}
-        </button>
-      </div>
+          {showHealthTip && (
+            <div className="w-full rounded-lg border border-gray-700 bg-gray-950 p-3 text-[11px] leading-relaxed text-gray-300 shadow-lg">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="font-medium text-white">Health details</span>
+                <button
+                  type="button"
+                  onClick={() => setShowHealthTip(false)}
+                  className="text-gray-500 transition-colors hover:text-white"
+                >
+                  ×
+                </button>
+              </div>
+              <pre className="whitespace-pre-wrap break-words font-mono text-[11px] text-gray-300">
+                {healthSummary}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

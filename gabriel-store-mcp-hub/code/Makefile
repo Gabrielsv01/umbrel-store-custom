@@ -16,7 +16,7 @@ APP_DATA_DIR ?= $(APP_DIR)/.appdata
 
 # Build and start containers in detached mode
 up:
-	APP_PORT=$(APP_PORT) APP_DATA_DIR=$(APP_DATA_DIR) docker compose -f $(COMPOSE_FILE) up -d --build
+	APP_PORT=$(APP_PORT) APP_DATA_DIR=$(APP_DATA_DIR) docker compose -f $(COMPOSE_FILE) up -d --build --no-cache
 
 # Just build the containers without starting
 build:

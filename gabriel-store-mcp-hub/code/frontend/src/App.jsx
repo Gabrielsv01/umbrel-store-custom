@@ -26,6 +26,8 @@ export default function App() {
   const [logTarget, setLogTarget] = useState(null) // { id, name }
   const [stdioTarget, setStdioTarget] = useState(null) // { id, name }
   const [actionLoading, setActionLoading] = useState({})
+  const [stdioHealth, setStdioHealth] = useState({})
+  const [stdioHealthLoading, setStdioHealthLoading] = useState({})
 
   const fetchMCPs = useCallback(async () => {
     try {
@@ -89,6 +91,28 @@ export default function App() {
 
     setEditingMcp(null)
     await fetchMCPs()
+  }
+
+  const handleCheckStdioHealth = async (id) => {
+    setStdioHealthLoading((prev) => ({ ...prev, [id]: true }))
+    try {
+      const res = await fetch(`/api/stdio/health/${id}?probe=network`)
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Health check failed')
+      }
+      setStdioHealth((prev) => ({ ...prev, [id]: data }))
+    } catch (err) {
+      setStdioHealth((prev) => ({
+        ...prev,
+        [id]: {
+          status: 'unhealthy',
+          networkProbe: { attempted: false, ok: false, error: err.message || 'Health check failed' },
+        },
+      }))
+    } finally {
+      setStdioHealthLoading((prev) => ({ ...prev, [id]: false }))
+    }
   }
 
   const fetchImages = useCallback(async () => {
@@ -309,6 +333,9 @@ export default function App() {
                 onAction={handleAction}
                 onViewLogs={() => setLogTarget({ id: mcp.id, name: mcp.name })}
                 onOpenSession={() => setStdioTarget({ id: mcp.id, name: mcp.name })}
+                onCheckHealth={handleCheckStdioHealth}
+                health={stdioHealth[mcp.id]}
+                healthLoading={!!stdioHealthLoading[mcp.id]}
                 onEdit={() =>
                   setEditingMcp({
                     id: mcp.id,

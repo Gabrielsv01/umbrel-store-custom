@@ -172,6 +172,17 @@ Observações:
 - Esse proxy permite conectar um MCP `stdio` do Hub como se fosse um servidor MCP HTTP/SSE externo.
 - A sessão é encerrada quando a conexão SSE é fechada.
 
+### Health check stdio
+
+- `GET /stdio/health/:id`
+	- Executa handshake MCP (`initialize` + `tools/list`) em uma sessão temporária
+	- Retorna status: `healthy`, `degraded` ou `unhealthy`
+	- Inclui diagnóstico de erros comuns de rede/TLS detectados no output
+
+- `GET /stdio/health/:id?probe=network`
+	- Além do handshake, tenta um probe de rede com ferramenta compatível (quando disponível)
+	- Útil para antecipar bloqueios antes de usar no VS Code
+
 ### Imagens
 
 - `GET /images`
@@ -259,6 +270,8 @@ curl -N http://localhost:5146/api/stdio/proxy/<id>/sse
 ```
 
 3. Use a URL recebida no evento `endpoint` para enviar requests JSON-RPC via `POST`.
+
+Na UI do MCP Hub, use o botão `Health` (em cards `stdio`) para rodar esse diagnóstico antes de conectar o cliente externo.
 
 ## Como descobrir os parâmetros de uma imagem MCP
 

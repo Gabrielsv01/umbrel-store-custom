@@ -101,6 +101,54 @@ function createLineDecoder(onLine) {
         }
     };
 }
+function detectNetworkIssues(lines) {
+    const issuePatterns = [
+        /certificate verify failed/i,
+        /ssl/i,
+        /tls/i,
+        /unable to get local issuer certificate/i,
+        /max retries exceeded/i,
+        /connection error/i,
+        /econn/i,
+        /timed out|timeout/i,
+    ];
+    const issues = new Set();
+    for (const line of lines) {
+        for (const pattern of issuePatterns) {
+            if (pattern.test(line)) {
+                issues.add(line);
+                break;
+            }
+        }
+    }
+    return Array.from(issues);
+}
+function selectNetworkProbeTool(tools) {
+    const toolList = Array.isArray(tools) ? tools : [];
+    for (const rawTool of toolList) {
+        const tool = rawTool;
+        const name = tool.name ?? '';
+        if (!/(wikipedia|fetch|http|web|search)/i.test(name)) {
+            continue;
+        }
+        const required = Array.isArray(tool.inputSchema?.required)
+            ? tool.inputSchema.required
+            : [];
+        if (required.length === 0) {
+            return { name, arguments: {} };
+        }
+        if (required.includes('url')) {
+            return { name, arguments: { url: 'https://example.com' } };
+        }
+        if (required.includes('query')) {
+            return { name, arguments: { query: 'OpenAI' } };
+        }
+        if (required.includes('q')) {
+            return { name, arguments: { q: 'OpenAI' } };
+        }
+    }
+    return null;
+}
 async function resolveStdioContainer(idPrefix) {
     const all = await docker.listContainers({
         all: true,
@@ -624,6 +672,190 @@ fastify.get('/api/stdio/proxy/:id/sse', async (req, reply) => {
         reply.raw.end();
         void closeStdioProxySession(sessionId);
     });
+});
+// ─── GET /api/stdio/health/:id?probe=network ────────────────────────────────
+fastify.get('/api/stdio/health/:id', async (req, reply) => {
+    let container;
+    try {
+        const resolved = await resolveStdioContainer(req.params.id);
+        container = resolved.container;
+    }
+    catch (err) {
+        return reply
+            .code(404)
+            .send({ error: err instanceof Error ? err.message : 'container not found' });
+    }
+    const stream = await container.attach({
+        stream: true,
+        stdin: true,
+        stdout: true,
+        stderr: true,
+        logs: false,
+        hijack: true,
+    });
+    const jsonQueue = [];
+    const stderrLines = [];
+    const nonJsonStdoutLines = [];
+    const stdoutLineDecoder = createLineDecoder((line) => {
+        try {
+            jsonQueue.push(JSON.parse(line));
+        }
+        catch {
+            nonJsonStdoutLines.push(line);
+        }
+    });
+    const stderrLineDecoder = createLineDecoder((line) => {
+        stderrLines.push(line);
+    });
+    const decodeChunk = createDockerMultiplexDecoder((payload, streamType) => {
+        if (streamType === 2) {
+            stderrLineDecoder(payload);
+        }
+        else {
+            stdoutLineDecoder(payload);
+        }
+    });
+    stream.on('data', (chunk) => {
+        decodeChunk(chunk);
+    });
+    const writeRpc = (payload) => {
+        stream.write(`${JSON.stringify(payload)}\n`);
+    };
+    const waitForMessage = async (predicate, timeoutMs) => {
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+            const idx = jsonQueue.findIndex(predicate);
+            if (idx >= 0) {
+                const [match] = jsonQueue.splice(idx, 1);
+                return match ?? null;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        return null;
+    };
+    let initializeOk = false;
+    let toolsListOk = false;
+    let toolCount = 0;
+    const networkProbe = {
+        attempted: false,
+        ok: null,
+    };
+    try {
+        writeRpc({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'initialize',
+            params: {
+                protocolVersion: '2024-11-05',
+                capabilities: {},
+                clientInfo: { name: 'mcp-hub-health', version: '1.0.0' },
+            },
+        });
+        const initializeResponse = await waitForMessage((msg) => Number(msg.id) === 1, 5000);
+        initializeOk = !!initializeResponse?.result && !initializeResponse?.error;
+        writeRpc({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} });
+        writeRpc({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
+        const toolsResponse = await waitForMessage((msg) => Number(msg.id) === 2, 5000);
+        const toolsResult = (toolsResponse?.result ?? {});
+        const tools = Array.isArray(toolsResult.tools) ? toolsResult.tools : [];
+        toolsListOk = !!toolsResponse?.result && !toolsResponse?.error;
+        toolCount = tools.length;
+        if (req.query?.probe === 'network' && toolsListOk) {
+            const probe = selectNetworkProbeTool(tools);
+            if (!probe) {
+                networkProbe.attempted = false;
+                networkProbe.ok = null;
+                networkProbe.reason = 'no suitable network tool found';
+            }
+            else {
+                networkProbe.attempted = true;
+                networkProbe.toolName = probe.name;
+                writeRpc({
+                    jsonrpc: '2.0',
+                    id: 3,
+                    method: 'tools/call',
+                    params: {
+                        name: probe.name,
+                        arguments: probe.arguments,
+                    },
+                });
+                const probeResponse = await waitForMessage((msg) => Number(msg.id) === 3, 7000);
+                const responseText = JSON.stringify(probeResponse ?? {});
+                const probeResult = (probeResponse?.result ?? {});
+                let probeFailureText = '';
+                if (probeResult.isError === true) {
+                    probeFailureText = 'tool returned isError=true';
+                }
+                else if (probeResult.structuredContent?.status === 'failed') {
+                    probeFailureText = probeResult.structuredContent.error ?? 'tool returned status=failed';
+                }
+                else if (Array.isArray(probeResult.content)) {
+                    for (const item of probeResult.content) {
+                        if (item.type !== 'text' || typeof item.text !== 'string')
+                            continue;
+                        try {
+                            const parsed = JSON.parse(item.text);
+                            if (parsed.status === 'failed' || parsed.error) {
+                                probeFailureText = parsed.error ?? 'tool text payload reported failure';
+                                break;
+                            }
+                        }
+                        catch {
+                            // ignore plain text payloads
+                        }
+                    }
+                }
+                const responseIssues = detectNetworkIssues([responseText, probeFailureText].filter(Boolean));
+                if (!probeResponse) {
+                    networkProbe.ok = false;
+                    networkProbe.error = 'network probe timed out';
+                }
+                else if (probeFailureText || responseIssues.length > 0) {
+                    networkProbe.ok = false;
+                    networkProbe.error = responseIssues[0] ?? probeFailureText;
+                }
+                else {
+                    networkProbe.ok = true;
+                }
+            }
+        }
+    }
+    finally {
+        try {
+            ;
+            stream.destroy();
+        }
+        catch {
+            // ignore stream close errors
+        }
+        const latest = await container.inspect().catch(() => null);
+        if (latest?.State?.Running) {
+            await container.stop().catch(() => undefined);
+        }
+    }
+    const combinedIssues = detectNetworkIssues([...stderrLines, ...nonJsonStdoutLines]);
+    const status = !initializeOk || !toolsListOk
+        ? 'unhealthy'
+        : combinedIssues.length > 0 || networkProbe.ok === false
+            ? 'degraded'
+            : 'healthy';
+    return {
+        id: req.params.id,
+        ok: status !== 'unhealthy',
+        status,
+        handshake: {
+            initializeOk,
+            toolsListOk,
+            toolCount,
+        },
+        networkProbe,
+        diagnostics: {
+            issues: combinedIssues.slice(-10),
+            stderrTail: stderrLines.slice(-10),
+            nonJsonTail: nonJsonStdoutLines.slice(-10),
+        },
+        checkedAt: new Date().toISOString(),
+    };
 });
 // ─── POST /api/stdio/proxy/:id/message?sessionId=... ────────────────────────
 fastify.post('/api/stdio/proxy/:id/message', async (req, reply) => {

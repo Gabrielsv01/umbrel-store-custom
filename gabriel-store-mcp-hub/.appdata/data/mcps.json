@@ -5,5 +5,17 @@
     "command": "--transport streamable-http --host 0.0.0.0 --port 8001 --path /mcp",
     "env": {},
     "port": 8001
+  },
+  "22772a2c850d": {
+    "name": "mcp-time-health",
+    "image": "mcp/time",
+    "env": {},
+    "transport": "stdio"
+  },
+  "884fd6572aeb": {
+    "name": "mcp-wikipedia-health",
+    "image": "mcp/wikipedia-mcp",
+    "env": {},
+    "transport": "stdio"
   }
 }
