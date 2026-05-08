@@ -22,3 +22,13 @@ export interface StdioHealthState {
   handshake?: StdioHandshake
   diagnostics?: StdioDiagnostics
 }
+
+export interface HttpHealthResult {
+  id: string
+  transport: 'http' | 'streamable-http'
+  status: 'healthy' | 'unreachable' | 'error'
+  latencyMs?: number
+  serverInfo?: unknown
+  error?: string
+  checkedAt: string
+}

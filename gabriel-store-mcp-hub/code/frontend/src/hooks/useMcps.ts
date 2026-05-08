@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { deployMcp, getStdioHealth, listMcps, runMcpAction, updateMcp } from '../services/api'
-import type { StdioHealthState } from '../types/health'
+import { deployMcp, getHttpHealth, getStdioHealth, listMcps, runMcpAction, updateMcp } from '../services/api'
+import type { HttpHealthResult, StdioHealthState } from '../types/health'
 import type { DeployPayload, McpContainer } from '../types/mcp'
 import { toErrorMessage } from '../utils/error'
 
@@ -10,6 +10,8 @@ export function useMcps() {
   const [actionLoading, setActionLoading] = useState<Record<string, string | null>>({})
   const [stdioHealth, setStdioHealth] = useState<Record<string, StdioHealthState>>({})
   const [stdioHealthLoading, setStdioHealthLoading] = useState<Record<string, boolean>>({})
+  const [httpHealth, setHttpHealth] = useState<Record<string, HttpHealthResult>>({})
+  const [httpHealthLoading, setHttpHealthLoading] = useState<Record<string, boolean>>({})
 
   const refreshMcps = useCallback(async () => {
     try {
@@ -79,15 +81,39 @@ export function useMcps() {
     }
   }, [])
 
+  const handleCheckHttpHealth = useCallback(async (id: string) => {
+    setHttpHealthLoading((prev) => ({ ...prev, [id]: true }))
+    try {
+      const data = await getHttpHealth(id)
+      setHttpHealth((prev) => ({ ...prev, [id]: data }))
+    } catch (err) {
+      setHttpHealth((prev) => ({
+        ...prev,
+        [id]: {
+          id,
+          transport: 'http',
+          status: 'error',
+          error: toErrorMessage(err, 'Health check failed'),
+          checkedAt: new Date().toISOString(),
+        },
+      }))
+    } finally {
+      setHttpHealthLoading((prev) => ({ ...prev, [id]: false }))
+    }
+  }, [])
+
   return {
     mcps,
     loading,
     actionLoading,
     stdioHealth,
     stdioHealthLoading,
+    httpHealth,
+    httpHealthLoading,
     handleDeploy,
     handleUpdate,
     handleAction,
     handleCheckStdioHealth,
+    handleCheckHttpHealth,
   }
 }

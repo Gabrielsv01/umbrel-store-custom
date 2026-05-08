@@ -9,6 +9,8 @@ import { Readable } from 'node:stream'
 import { registerImageRoutes } from './routes/images.js'
 import { registerStdioRoutes } from './routes/stdio.js'
 import { registerVolumeRoutes } from './routes/volumes.js'
+import { registerHttpHealthRoutes } from './routes/httpHealth.js'
+import { registerCatalogRoutes } from './routes/catalog.js'
 import {
   buildContainerOptions,
   normalizeRuntimeConfig,
@@ -136,22 +138,35 @@ if (HAS_STATIC) {
 
 // ─── GET /api/mcps ────────────────────────────────────────────────────────────
 
+function redactSecrets(meta: import('./types/mcp.js').McpMeta): import('./types/mcp.js').McpMeta {
+  const secretKeys = meta.secretKeys ?? []
+  if (secretKeys.length === 0 || !meta.env) return meta
+  const redactedEnv: Record<string, string> = {}
+  for (const [k, v] of Object.entries(meta.env)) {
+    redactedEnv[k] = secretKeys.includes(k) ? '' : v
+  }
+  return { ...meta, env: redactedEnv }
+}
+
 fastify.get('/api/mcps', async () => {
   const list = await docker.listContainers({
     all: true,
     filters: JSON.stringify({ label: [`${MCP_LABEL}=true`] }),
   })
   const stored = loadData()
-  return list.map((c) => ({
-    id: c.Id.slice(0, 12),
-    name: c.Names[0]?.replace('/', '') ?? c.Id.slice(0, 12),
-    image: c.Image,
-    status: c.State,
-    ports: (Array.isArray(c.Ports) ? c.Ports : [])
-      .filter((p) => p.PublicPort)
-      .map((p) => p.PublicPort),
-    meta: stored[c.Id.slice(0, 12)] ?? {},
-  }))
+  return list.map((c) => {
+    const meta = stored[c.Id.slice(0, 12)] ?? {}
+    return {
+      id: c.Id.slice(0, 12),
+      name: c.Names[0]?.replace('/', '') ?? c.Id.slice(0, 12),
+      image: c.Image,
+      status: c.State,
+      ports: (Array.isArray(c.Ports) ? c.Ports : [])
+        .filter((p) => p.PublicPort)
+        .map((p) => p.PublicPort),
+      meta: redactSecrets(meta),
+    }
+  })
 })
 
 registerImageRoutes(fastify, { docker, pullImage })
@@ -163,11 +178,13 @@ registerStdioRoutes(fastify, {
   detectNetworkIssues,
   selectNetworkProbeTool,
 })
+registerHttpHealthRoutes(fastify, { docker, loadData, mcpLabel: MCP_LABEL })
+registerCatalogRoutes(fastify)
 
 // ─── POST /api/deploy ─────────────────────────────────────────────────────────
 
 fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
-  const { name, image, command, env = {}, port, transport = 'http', runtime } = req.body ?? {}
+  const { name, image, command, env = {}, secretKeys, port, transport = 'http', runtime } = req.body ?? {}
 
   if (!name?.trim() || !image?.trim()) {
     return reply.code(400).send({ error: 'name and image are required' })
@@ -201,6 +218,7 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
     image: image.trim(),
     command,
     env,
+    secretKeys: secretKeys && secretKeys.length > 0 ? secretKeys : undefined,
     port,
     transport,
     runtime: normalizedRuntime,
@@ -215,7 +233,7 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
 fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
   '/api/mcps/:id',
   async (req, reply) => {
-    const { name, image, command, env = {}, port, transport = 'http', runtime } = req.body ?? {}
+    const { name, image, command, env = {}, secretKeys, port, transport = 'http', runtime } = req.body ?? {}
 
     if (!name?.trim() || !image?.trim()) {
       return reply.code(400).send({ error: 'name and image are required' })
@@ -263,6 +281,7 @@ fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
       image: image.trim(),
       command,
       env,
+      secretKeys: secretKeys && secretKeys.length > 0 ? secretKeys : undefined,
       port,
       transport,
       runtime: normalizedRuntime,

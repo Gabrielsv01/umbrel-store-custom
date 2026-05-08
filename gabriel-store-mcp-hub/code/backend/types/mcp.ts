@@ -1,12 +1,15 @@
 import type { McpRuntimeConfig } from './runtime.js'
 
+export type McpTransport = 'http' | 'stdio' | 'streamable-http'
+
 export interface McpMeta {
   name: string
   image: string
   command?: string
   env?: Record<string, string>
+  secretKeys?: string[]
   port?: number | string
-  transport?: 'http' | 'stdio'
+  transport?: McpTransport
   runtime?: McpRuntimeConfig
 }
 
@@ -19,8 +22,9 @@ export interface DeployBody {
   image: string
   command?: string
   env?: Record<string, string>
+  secretKeys?: string[]
   port?: number | string
-  transport?: 'http' | 'stdio'
+  transport?: McpTransport
   runtime?: McpRuntimeConfig
 }
 
@@ -29,8 +33,9 @@ export interface UpdateBody {
   image: string
   command?: string
   env?: Record<string, string>
+  secretKeys?: string[]
   port?: number | string
-  transport?: 'http' | 'stdio'
+  transport?: McpTransport
   runtime?: McpRuntimeConfig
 }
 

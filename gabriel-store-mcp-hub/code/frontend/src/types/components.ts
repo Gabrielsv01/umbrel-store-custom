@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
-import type { StdioHealthState } from './health'
+import type { HttpHealthResult, StdioHealthState } from './health'
 import type { DeployPayload, EditMcpValues, McpContainer } from './mcp'
 import type { ImageRecord, PullProgress, VolumeRecord } from './resources'
+import type { CatalogEntry } from './catalog'
 
 export type DeployFormProps = {
   onDeploy: (payload: DeployPayload) => Promise<void> | void
@@ -29,6 +30,13 @@ export type MCPCardProps = {
   onCheckHealth: (id: string) => void
   health?: StdioHealthState
   healthLoading: boolean
+  httpHealth?: HttpHealthResult
+  httpHealthLoading: boolean
+}
+
+export type CatalogModalProps = {
+  onClose: () => void
+  onSelect: (entry: CatalogEntry) => void
 }
 
 export type ImagesModalProps = {

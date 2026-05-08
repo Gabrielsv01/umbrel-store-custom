@@ -34,6 +34,12 @@ function buildClaudeConfig(mcp: McpContainer): string {
 
   const port = mcp.ports?.[0]
   const host = window.location.hostname
+
+  if (mcp.meta?.transport === 'streamable-http') {
+    const url = port ? `http://${host}:${port}/mcp` : `http://${host}:3000/mcp`
+    return JSON.stringify({ mcpServers: { [mcp.name]: { url } } }, null, 2)
+  }
+
   const url = port ? `http://${host}:${port}/sse` : `http://${host}:3000/sse`
   return JSON.stringify({ mcpServers: { [mcp.name]: { url } } }, null, 2)
 }
@@ -48,6 +54,8 @@ export default function MCPCard({
   onCheckHealth,
   health,
   healthLoading,
+  httpHealth,
+  httpHealthLoading,
 }: MCPCardProps) {
   const [copied, setCopied] = useState(false)
   const [copiedId, setCopiedId] = useState(false)
@@ -64,7 +72,9 @@ export default function MCPCard({
 
   const busy = !!actionLoading
   const isStdio = (mcp.meta?.transport ?? 'http') === 'stdio'
-  const healthTone =
+  const isHttpTransport = !isStdio
+
+  const stdioHealthTone =
     !isStdio
       ? 'bg-gray-700 text-gray-400'
       : health?.status === 'healthy'
@@ -74,6 +84,20 @@ export default function MCPCard({
           : health?.status === 'unhealthy'
             ? 'bg-red-500/15 text-red-400'
             : 'bg-gray-700 text-gray-400'
+
+  const httpHealthTone =
+    !isHttpTransport
+      ? 'bg-gray-700 text-gray-400'
+      : httpHealth?.status === 'healthy'
+        ? 'bg-green-500/15 text-green-400'
+        : httpHealth?.status === 'unreachable'
+          ? 'bg-red-500/15 text-red-400'
+          : httpHealth?.status === 'error'
+            ? 'bg-yellow-500/15 text-yellow-400'
+            : 'bg-gray-700 text-gray-400'
+
+  // Keep backward compat: healthTone used in existing badge
+  const healthTone = isStdio ? stdioHealthTone : httpHealthTone
 
   const copyId = () => {
     navigator.clipboard.writeText(mcp.id)
@@ -103,29 +127,38 @@ export default function MCPCard({
 
   const runHealth = () => {
     setShowMenu(false)
-    if (!isStdio) return
     onCheckHealth(mcp.id)
   }
 
-  const healthSummary = health
-    ? [
-        `status: ${health.status || 'unknown'}`,
-        `initialize: ${health.handshake?.initializeOk ? 'ok' : 'failed'}`,
-        `tools/list: ${health.handshake?.toolsListOk ? 'ok' : 'failed'}`,
-        typeof health.handshake?.toolCount === 'number' ? `tools: ${health.handshake.toolCount}` : null,
-        health.networkProbe?.attempted
-          ? `network probe: ${health.networkProbe.ok ? 'ok' : 'failed'}${health.networkProbe.toolName ? ` (${health.networkProbe.toolName})` : ''}`
-          : health.networkProbe?.reason
-            ? `network probe: ${health.networkProbe.reason}`
-            : null,
-        health.networkProbe?.error ? `error: ${health.networkProbe.error}` : null,
-        ...(Array.isArray(health.diagnostics?.issues)
-          ? health.diagnostics.issues.slice(0, 2).map((issue) => `issue: ${issue}`)
-          : []),
-      ]
-        .filter(Boolean)
-        .join('\n')
-    : 'Run the health check to see details.'
+  const healthSummary = isStdio
+    ? health
+      ? [
+          `status: ${health.status || 'unknown'}`,
+          `initialize: ${health.handshake?.initializeOk ? 'ok' : 'failed'}`,
+          `tools/list: ${health.handshake?.toolsListOk ? 'ok' : 'failed'}`,
+          typeof health.handshake?.toolCount === 'number' ? `tools: ${health.handshake.toolCount}` : null,
+          health.networkProbe?.attempted
+            ? `network probe: ${health.networkProbe.ok ? 'ok' : 'failed'}${health.networkProbe.toolName ? ` (${health.networkProbe.toolName})` : ''}`
+            : health.networkProbe?.reason
+              ? `network probe: ${health.networkProbe.reason}`
+              : null,
+          health.networkProbe?.error ? `error: ${health.networkProbe.error}` : null,
+          ...(Array.isArray(health.diagnostics?.issues)
+            ? health.diagnostics.issues.slice(0, 2).map((issue) => `issue: ${issue}`)
+            : []),
+        ]
+          .filter(Boolean)
+          .join('\n')
+      : 'Run the health check to see details.'
+    : httpHealth
+      ? [
+          `status: ${httpHealth.status}`,
+          typeof httpHealth.latencyMs === 'number' ? `latency: ${httpHealth.latencyMs}ms` : null,
+          httpHealth.error ? `error: ${httpHealth.error}` : null,
+        ]
+          .filter(Boolean)
+          .join('\n')
+      : 'Run the health check to see details.'
 
   return (
     <div className="relative flex flex-col gap-3 rounded-xl border border-gray-800 bg-gray-900 p-4">
@@ -193,11 +226,11 @@ export default function MCPCard({
               <button
                 type="button"
                 onClick={runHealth}
-                disabled={!isStdio || healthLoading}
-                title={isStdio ? 'Run health check' : 'Available only for stdio MCPs'}
+                disabled={healthLoading || httpHealthLoading}
+                title="Run health check"
                 className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900 disabled:opacity-50"
               >
-                {healthLoading ? 'Checking health...' : isStdio ? 'Health' : 'Health (stdio only)'}
+                {(isStdio ? healthLoading : httpHealthLoading) ? 'Checking health...' : 'Health'}
               </button>
 
               <button
@@ -251,20 +284,19 @@ export default function MCPCard({
         <span className="shrink-0">Health:</span>
         <button
           type="button"
-          onClick={() => isStdio && setShowHealthTip((prev) => !prev)}
+          onClick={() => setShowHealthTip((prev) => !prev)}
           className={`rounded px-2 py-0.5 text-left ${healthTone}`}
-          title={isStdio ? 'Show health details' : 'Available only for stdio MCPs'}
-          disabled={!isStdio}
+          title="Show health details"
         >
-          {healthLoading ? 'checking...' : isStdio ? health?.status || 'not checked' : 'stdio only'}
+          {isStdio
+            ? healthLoading ? 'checking...' : health?.status || 'not checked'
+            : httpHealthLoading ? 'checking...' : httpHealth?.status || 'not checked'}
         </button>
-        {isStdio && health?.networkProbe?.attempted && health?.networkProbe?.ok === false && (
-          <span className="truncate text-yellow-300" title={health.networkProbe.error || ''}>
-            {health.networkProbe.error || 'network warning'}
-          </span>
+        {isHttpTransport && httpHealth?.status === 'healthy' && typeof httpHealth.latencyMs === 'number' && (
+          <span className="text-gray-500">{httpHealth.latencyMs}ms</span>
         )}
 
-        {isStdio && showHealthTip && (
+        {showHealthTip && (
           <div className="w-full rounded-lg border border-gray-700 bg-gray-950 p-3 text-[11px] leading-relaxed text-gray-300 shadow-lg">
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="font-medium text-white">Health details</span>

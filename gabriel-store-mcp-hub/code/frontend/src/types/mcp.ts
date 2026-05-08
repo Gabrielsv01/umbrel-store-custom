@@ -1,6 +1,6 @@
 import type { JsonRecord } from './common'
 
-export type McpTransport = 'http' | 'stdio'
+export type McpTransport = 'http' | 'stdio' | 'streamable-http'
 
 export interface McpRuntime {
   entrypoint?: string
@@ -24,6 +24,7 @@ export interface McpMeta {
   command?: string
   port?: number | string
   env?: JsonRecord
+  secretKeys?: string[]
   runtime?: McpRuntime
 }
 
@@ -43,6 +44,7 @@ export interface DeployPayload {
   command?: string
   port?: number
   env: JsonRecord
+  secretKeys?: string[]
   runtime: McpRuntime
 }
 

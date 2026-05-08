@@ -9,7 +9,7 @@ FROM node:20-alpine AS backend-build
 WORKDIR /app/backend
 COPY backend/package.json backend/tsconfig.json ./
 RUN npm install
-COPY backend/server.ts ./
+COPY backend/ ./
 RUN npm run build
 
 FROM node:20-alpine

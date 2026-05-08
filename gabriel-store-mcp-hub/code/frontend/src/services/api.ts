@@ -1,7 +1,8 @@
 import type { JsonRecord } from '../types/common'
-import type { StdioHealthState } from '../types/health'
+import type { HttpHealthResult, StdioHealthState } from '../types/health'
 import type { DeployPayload, McpContainer } from '../types/mcp'
 import type { ImageRecord, VolumeRecord } from '../types/resources'
+import type { CatalogEntry } from '../types/catalog'
 
 type RequestOptions = RequestInit | undefined
 
@@ -100,9 +101,14 @@ export async function listVolumes(): Promise<VolumeRecord[]> {
 }
 
 export async function removeVolume(name: string): Promise<unknown> {
-  return requestJson(
-    `/api/volumes/${encodeURIComponent(name)}`,
-    { method: 'DELETE' },
-    'Failed to remove volume',
-  )
+  return requestJson(`/api/volumes/${encodeURIComponent(name)}`, { method: 'DELETE' }, 'Failed to remove volume')
+}
+
+export async function getHttpHealth(id: string): Promise<HttpHealthResult> {
+  return requestJson(`/api/health/http/${id}`, undefined, 'Health check failed') as Promise<HttpHealthResult>
+}
+
+export async function fetchCatalog(): Promise<CatalogEntry[]> {
+  const payload = await requestJson('/api/catalog', undefined, 'Failed to fetch catalog')
+  return Array.isArray(payload) ? (payload as CatalogEntry[]) : []
 }

@@ -5,9 +5,11 @@ import LogConsole from './components/LogConsole'
 import StdioConsole from './components/StdioConsole'
 import ImagesModal from './components/ImagesModal'
 import VolumesModal from './components/VolumesModal'
+import CatalogModal from './components/CatalogModal'
 import { useMcps } from './hooks/useMcps'
 import { useImages } from './hooks/useImages'
 import { useVolumes } from './hooks/useVolumes'
+import type { CatalogEntry } from './types/catalog'
 import type { DeployPayload, EditMcpValues } from './types/mcp'
 import { mapMcpToEditValues } from './utils/mcpForm'
 
@@ -15,6 +17,7 @@ type LogTarget = { id: string; name: string }
 
 export default function App() {
   const [showForm, setShowForm] = useState(false)
+  const [showCatalog, setShowCatalog] = useState(false)
   const [editingMcp, setEditingMcp] = useState<EditMcpValues | null>(null)
   const [logTarget, setLogTarget] = useState<LogTarget | null>(null)
   const [stdioTarget, setStdioTarget] = useState<LogTarget | null>(null)
@@ -25,10 +28,13 @@ export default function App() {
     actionLoading,
     stdioHealth,
     stdioHealthLoading,
+    httpHealth,
+    httpHealthLoading,
     handleDeploy,
     handleUpdate,
     handleAction,
     handleCheckStdioHealth,
+    handleCheckHttpHealth,
   } = useMcps()
 
   const {
@@ -65,9 +71,39 @@ export default function App() {
 
   const onUpdate = async (formData: DeployPayload) => {
     if (!editingMcp) return
-
+    if (!editingMcp.id) {
+      // Came from catalog — treat as new deploy
+      await handleDeploy(formData)
+      setEditingMcp(null)
+      return
+    }
     await handleUpdate(editingMcp.id, formData)
     setEditingMcp(null)
+  }
+
+  const onCheckHealth = (id: string) => {
+    const mcp = mcps.find((m) => m.id === id)
+    const transport = mcp?.meta?.transport ?? 'http'
+    if (transport === 'stdio') {
+      handleCheckStdioHealth(id)
+    } else {
+      handleCheckHttpHealth(id)
+    }
+  }
+
+  const onCatalogSelect = (entry: CatalogEntry) => {
+    setShowCatalog(false)
+    setEditingMcp({
+      id: '',
+      name: entry.name.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+      image: entry.image,
+      transport: entry.transport,
+      command: entry.command || '',
+      port: entry.port,
+      env: entry.env ?? {},
+      secretKeys: entry.secretKeys,
+      runtime: {},
+    })
   }
 
   return (
@@ -90,6 +126,12 @@ export default function App() {
               className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-gray-100 transition-colors hover:bg-gray-700"
             >
               Images
+            </button>
+            <button
+              onClick={() => setShowCatalog(true)}
+              className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-gray-100 transition-colors hover:bg-gray-700"
+            >
+              Catalog
             </button>
             <button
               onClick={() => setShowForm(true)}
@@ -124,9 +166,11 @@ export default function App() {
                 onAction={handleAction}
                 onViewLogs={() => setLogTarget({ id: mcp.id, name: mcp.name })}
                 onOpenSession={() => setStdioTarget({ id: mcp.id, name: mcp.name })}
-                onCheckHealth={handleCheckStdioHealth}
+                onCheckHealth={onCheckHealth}
                 health={stdioHealth[mcp.id]}
                 healthLoading={!!stdioHealthLoading[mcp.id]}
+                httpHealth={httpHealth[mcp.id]}
+                httpHealthLoading={!!httpHealthLoading[mcp.id]}
                 onEdit={() => setEditingMcp(mapMcpToEditValues(mcp))}
               />
             ))}
@@ -147,11 +191,13 @@ export default function App() {
           onDeploy={onUpdate}
           onClose={() => setEditingMcp(null)}
           initialValues={editingMcp}
-          title={`Edit MCP: ${editingMcp.name}`}
-          submitLabel="Save Changes"
-          submittingLabel="Saving..."
+          title={editingMcp.id ? `Edit MCP: ${editingMcp.name}` : `Deploy from Catalog: ${editingMcp.name}`}
+          submitLabel={editingMcp.id ? 'Save Changes' : 'Deploy'}
+          submittingLabel={editingMcp.id ? 'Saving...' : 'Deploying...'}
         />
       )}
+
+      {showCatalog && <CatalogModal onClose={() => setShowCatalog(false)} onSelect={onCatalogSelect} />}
 
       {logTarget && <LogConsole id={logTarget.id} name={logTarget.name} onClose={() => setLogTarget(null)} />}
 

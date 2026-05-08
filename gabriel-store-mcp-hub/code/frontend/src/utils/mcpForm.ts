@@ -14,6 +14,7 @@ export function mapMcpToEditValues(mcp: McpContainer): EditMcpValues {
           ? mcp.ports[0]
           : undefined,
     env: mcp.meta?.env || {},
+    secretKeys: mcp.meta?.secretKeys,
     runtime: mcp.meta?.runtime || {},
   }
 }

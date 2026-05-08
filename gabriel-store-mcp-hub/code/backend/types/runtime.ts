@@ -19,7 +19,7 @@ export interface BuildContainerOptionsInput {
   command?: string
   env?: Record<string, string>
   port?: number | string
-  transport?: 'http' | 'stdio'
+  transport?: 'http' | 'stdio' | 'streamable-http'
   runtime?: McpRuntimeConfig
   mcpLabel: string
 }

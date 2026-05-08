@@ -4,6 +4,7 @@ import type { DeployFormProps, FieldProps } from '../types/components'
 type EnvPair = {
   key: string
   value: string
+  secret: boolean
 }
 
 function linesToArray(value: string): string[] {
@@ -32,12 +33,16 @@ export default function DeployForm({
 }: DeployFormProps) {
   const initialEnvPairs: EnvPair[] =
     initialValues?.env && Object.keys(initialValues.env).length > 0
-      ? Object.entries(initialValues.env).map(([key, value]) => ({ key, value: String(value ?? '') }))
-      : [{ key: '', value: '' }]
+      ? Object.entries(initialValues.env).map(([key, value]) => ({
+          key,
+          value: String(value ?? ''),
+          secret: initialValues.secretKeys?.includes(key) ?? false,
+        }))
+      : [{ key: '', value: '', secret: false }]
 
   const [name, setName] = useState(initialValues?.name ?? '')
   const [image, setImage] = useState(initialValues?.image ?? '')
-  const [transport, setTransport] = useState(initialValues?.transport ?? 'http')
+  const [transport, setTransport] = useState<'http' | 'stdio' | 'streamable-http'>(initialValues?.transport ?? 'http')
   const [command, setCommand] = useState(initialValues?.command ?? '')
   const [port, setPort] = useState(initialValues?.port ? String(initialValues.port) : '')
   const [entrypoint, setEntrypoint] = useState(initialValues?.runtime?.entrypoint ?? '')
@@ -58,10 +63,10 @@ export default function DeployForm({
   const [deploying, setDeploying] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const addEnv = () => setEnvPairs((pairs) => [...pairs, { key: '', value: '' }])
+  const addEnv = () => setEnvPairs((pairs) => [...pairs, { key: '', value: '', secret: false }])
   const removeEnv = (index: number) =>
     setEnvPairs((pairs) => pairs.filter((_, pairIndex) => pairIndex !== index))
-  const updateEnv = (index: number, field: keyof EnvPair, value: string) =>
+  const updateEnv = (index: number, field: keyof EnvPair, value: string | boolean) =>
     setEnvPairs((pairs) =>
       pairs.map((pair, pairIndex) => (pairIndex === index ? { ...pair, [field]: value } : pair)),
     )
@@ -77,6 +82,10 @@ export default function DeployForm({
           .filter((pair) => pair.key.trim())
           .map((pair) => [pair.key.trim(), pair.value]),
       )
+
+      const secretKeys = envPairs
+        .filter((pair) => pair.key.trim() && pair.secret)
+        .map((pair) => pair.key.trim())
 
       const runtime = {
         entrypoint: entrypoint.trim() || undefined,
@@ -98,8 +107,9 @@ export default function DeployForm({
         image: image.trim(),
         transport,
         command: command.trim() || undefined,
-        port: transport === 'http' && port ? Number(port) : undefined,
+        port: transport !== 'stdio' && port ? Number(port) : undefined,
         env,
+        secretKeys: secretKeys.length > 0 ? secretKeys : undefined,
         runtime,
       })
     } catch (err) {
@@ -148,10 +158,11 @@ export default function DeployForm({
             <Field label="Transport">
               <select
                 value={transport}
-                onChange={(event) => setTransport(event.target.value as 'http' | 'stdio')}
+                onChange={(event) => setTransport(event.target.value as 'http' | 'stdio' | 'streamable-http')}
                 className="input"
               >
                 <option value="http">http/sse (long-running)</option>
+                <option value="streamable-http">streamable-http (MCP 2025-03-26)</option>
                 <option value="stdio">stdio (session on demand)</option>
               </select>
             </Field>
@@ -174,6 +185,19 @@ export default function DeployForm({
                   value={port}
                   onChange={(event) => setPort(event.target.value)}
                   placeholder="3001"
+                  className="input"
+                />
+              </Field>
+            )}
+            {transport === 'streamable-http' && (
+              <Field label="Host Port">
+                <input
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={port}
+                  onChange={(event) => setPort(event.target.value)}
+                  placeholder="8931"
                   className="input"
                 />
               </Field>
@@ -204,8 +228,17 @@ export default function DeployForm({
                     value={pair.value}
                     onChange={(event) => updateEnv(index, 'value', event.target.value)}
                     placeholder="value"
+                    type={pair.secret ? 'password' : 'text'}
                     className="input flex-1 font-mono text-xs"
                   />
+                  <button
+                    type="button"
+                    onClick={() => updateEnv(index, 'secret', !pair.secret)}
+                    title={pair.secret ? 'Mark as public' : 'Mark as secret'}
+                    className={`rounded px-2 text-xs transition-colors ${pair.secret ? 'bg-yellow-500/20 text-yellow-400' : 'text-gray-500 hover:text-gray-300'}`}
+                  >
+                    {pair.secret ? '🔒' : '🔓'}
+                  </button>
                   {envPairs.length > 1 && (
                     <button
                       type="button"
