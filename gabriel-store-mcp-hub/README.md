@@ -84,6 +84,67 @@ Exemplo:
 APP_PORT=5146 APP_DATA_DIR=./.appdata TZ=America/Sao_Paulo docker compose up -d --build
 ```
 
+## Rodando no Proxmox (Debian 13)
+
+Para instalar o MCP Hub no Proxmox usando um ambiente limpo, um fluxo simples e confiavel e:
+
+1. Criar uma VM (ou LXC) a partir de um template Debian 13.
+2. Atualizar o sistema.
+3. Instalar Docker.
+4. Subir o container do MCP Hub.
+
+### 1) Atualizar o sistema
+
+```bash
+sudo apt update && sudo apt upgrade -y
+```
+
+### 2) Instalar Docker (via repositorio oficial)
+
+```bash
+sudo apt install -y ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+echo \
+	"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+	$(. /etc/os-release && echo $VERSION_CODENAME) stable" | \
+	sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo systemctl enable --now docker
+```
+
+### 3) Subir o MCP Hub com Docker
+
+```bash
+mkdir -p ~/mcp-hub && cd ~/mcp-hub
+mkdir -p mcp_data
+
+docker run -d \
+	--name mcp-hub \
+	-e NODE_ENV=production \
+	-e DATA_DIR=/data \
+	-e STATIC_DIR=/app/public \
+	-e TZ=America/Sao_Paulo \
+	-v /var/run/docker.sock:/var/run/docker.sock \
+	-v "$(pwd)/mcp_data:/data" \
+	-p 5146:3001 \
+	--restart unless-stopped \
+	gabrielsv01/mcp-hub:1.0.3
+```
+
+Depois, acesse:
+
+- `http://IP_DA_VM_OU_LXC:5146`
+
+Observacoes importantes:
+
+- O container precisa montar `/var/run/docker.sock` para gerenciar outros containers.
+- Em LXC, habilite nesting e recursos necessarios para o Docker funcionar corretamente.
+
 ## Comandos úteis (Makefile)
 
 Na pasta `gabriel-store-mcp-hub/code`:
