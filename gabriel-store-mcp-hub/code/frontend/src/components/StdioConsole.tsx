@@ -17,9 +17,9 @@ export default function StdioConsole({ id, name, onClose }: ConsoleProps) {
   useEffect(() => {
     setLines([])
 
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    const protocol = globalThis.location.protocol === 'https:' ? 'wss' : 'ws'
     const ws = new WebSocket(
-      `${protocol}://${window.location.host}/api/stdio/session/${id}`,
+      `${protocol}://${globalThis.location.host}/api/stdio/session/${id}`,
     )
     wsRef.current = ws
 
@@ -57,18 +57,19 @@ export default function StdioConsole({ id, name, onClose }: ConsoleProps) {
 
   const sendInput = () => {
     const text = input
-    if (!text.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+    const ws = wsRef.current
+    if (!text.trim() || ws?.readyState !== WebSocket.OPEN) {
       return
     }
 
-    wsRef.current.send(JSON.stringify({ type: 'input', data: `${text}\n` }))
+    ws.send(JSON.stringify({ type: 'input', data: `${text}\n` }))
     setLines((prev) => [...prev, `> ${text}\n`])
     setInput('')
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/80 p-4">
-      <div className="mx-auto w-full max-w-4xl overflow-hidden rounded-2xl border border-gray-800 bg-gray-950">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+      <div className="mx-auto flex h-[78vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-gray-800 bg-gray-950 sm:h-[74vh]">
         <div className="flex items-center justify-between border-b border-gray-800 bg-gray-900 px-4 py-3">
           <div className="flex items-center gap-2">
             <span
@@ -85,12 +86,12 @@ export default function StdioConsole({ id, name, onClose }: ConsoleProps) {
           </button>
         </div>
 
-        <div className="h-72 overflow-y-auto p-4 font-mono text-xs leading-relaxed text-green-400">
+        <div className="flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed text-green-400">
           {lines.length === 0 ? (
             <span className="text-gray-600">Waiting for stdio output…</span>
           ) : (
-            lines.map((line, index) => (
-              <div key={index} className="whitespace-pre-wrap break-all">
+            lines.map((line) => (
+              <div key={line} className="whitespace-pre-wrap break-all">
                 {line}
               </div>
             ))

@@ -163,7 +163,7 @@ export async function runStdioHealthCheck(
 
     if (probe === 'network' && toolsListOk) {
       const probeTarget = selectNetworkProbeTool(tools)
-      if (!probeTarget) {
+      if (probeTarget === null) {
         networkProbe.attempted = false
         networkProbe.ok = null
         networkProbe.reason = 'no suitable network tool found'
@@ -248,12 +248,12 @@ export async function runStdioHealthCheck(
 
   const combinedIssues = detectNetworkIssues([...stderrLines, ...nonJsonStdoutLines])
 
-  const status: StdioHealthResult['status'] =
-    !initializeOk || !toolsListOk
-      ? 'unhealthy'
-      : combinedIssues.length > 0 || networkProbe.ok === false
-        ? 'degraded'
-        : 'healthy'
+  let status: StdioHealthResult['status'] = 'healthy'
+  if (toolsListOk === false) {
+    status = 'unhealthy'
+  } else if (initializeOk === false || combinedIssues.length > 0 || networkProbe.ok === false) {
+    status = 'degraded'
+  }
 
   return {
     id,

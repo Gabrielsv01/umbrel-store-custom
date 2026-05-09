@@ -7,6 +7,25 @@ type EnvPair = {
   secret: boolean
 }
 
+const IMAGE_SUGGESTIONS = [
+  'alpine:3.20',
+  'debian:bookworm-slim',
+  'ubuntu:24.04',
+  'node:22-bookworm-slim',
+  'node:20-bookworm-slim',
+  'python:3.13-slim',
+  'python:3.12-slim',
+  'golang:1.24-bookworm',
+  'golang:1.23-bookworm',
+  'rust:1-bookworm',
+  'openjdk:21-jdk-slim',
+  'eclipse-temurin:21-jre',
+  'php:8.4-cli',
+  'ruby:3.4-slim',
+  'denoland/deno:2.3.4',
+  'mcr.microsoft.com/playwright:latest',
+]
+
 function linesToArray(value: string): string[] {
   return value
     .split('\n')
@@ -156,9 +175,15 @@ export default function DeployForm({
                 required
                 value={image}
                 onChange={(event) => setImage(event.target.value)}
-                placeholder="mcr.microsoft.com/playwright:latest"
+                placeholder="node:22-bookworm-slim"
+                list="docker-image-suggestions"
                 className="input"
               />
+              <datalist id="docker-image-suggestions">
+                {IMAGE_SUGGESTIONS.map((suggestion) => (
+                  <option key={suggestion} value={suggestion} />
+                ))}
+              </datalist>
             </Field>
 
             <Field label="Transport">

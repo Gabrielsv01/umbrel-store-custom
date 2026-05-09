@@ -23,7 +23,7 @@ function buildClaudeConfig(mcp: McpContainer): string {
         mcpServers: {
           [mcp.name]: {
             command: 'docker',
-            args: ['exec', '-i', mcp.name, '/bin/sh', '-lc', mcp.meta?.command || ''],
+            args: ['start', '-ai', mcp.name],
           },
         },
       },
@@ -220,6 +220,14 @@ export default function MCPCard({
                 </button>
               )}
 
+              <button
+                type="button"
+                onClick={openLogs}
+                className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900"
+              >
+                Logs
+              </button>
+
               {isStdio ? (
                 <button
                   type="button"
@@ -228,15 +236,7 @@ export default function MCPCard({
                 >
                   Session
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={openLogs}
-                  className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900"
-                >
-                  Logs
-                </button>
-              )}
+              ) : null}
 
               <button
                 type="button"
