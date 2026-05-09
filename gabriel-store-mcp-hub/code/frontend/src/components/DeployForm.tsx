@@ -30,6 +30,8 @@ export default function DeployForm({
   title = 'Deploy MCP',
   submitLabel = 'Deploy',
   submittingLabel = 'Deploying...',
+  pullingImage = false,
+  pullProgress = null,
 }: DeployFormProps) {
   const initialEnvPairs: EnvPair[] =
     initialValues?.env && Object.keys(initialValues.env).length > 0
@@ -62,6 +64,10 @@ export default function DeployForm({
   const [envPairs, setEnvPairs] = useState<EnvPair[]>(initialEnvPairs)
   const [deploying, setDeploying] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const currentImage = image.trim()
+  const isCurrentImagePulling = pullingImage && pullProgress?.image === currentImage
+  const hasPercent = Number.isFinite(pullProgress?.percent)
 
   const addEnv = () => setEnvPairs((pairs) => [...pairs, { key: '', value: '', secret: false }])
   const removeEnv = (index: number) =>
@@ -379,6 +385,36 @@ export default function DeployForm({
             </div>
           </section>
 
+          {isCurrentImagePulling && pullProgress ? (
+            <div className="rounded-lg border border-blue-900/50 bg-blue-950/30 p-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-blue-200">
+                <span className="font-medium">{pullProgress.image}</span>
+                <span>
+                  {pullProgress.status || 'Pulling...'}
+                  {pullProgress.id ? ` (${pullProgress.id})` : ''}
+                </span>
+              </div>
+
+              {hasPercent ? (
+                <>
+                  <div className="mt-2 h-2 w-full overflow-hidden rounded bg-blue-950/80">
+                    <div
+                      className="h-full bg-blue-500 transition-all"
+                      style={{ width: `${pullProgress.percent ?? 0}%` }}
+                    />
+                  </div>
+                  <div className="mt-1 text-right text-[11px] text-blue-300">{pullProgress.percent}%</div>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+
+          {pullingImage && !isCurrentImagePulling && pullProgress?.image ? (
+            <p className="rounded-lg bg-yellow-900/20 px-3 py-2 text-sm text-yellow-300">
+              Another image is downloading: {pullProgress.image}. Wait for it to finish.
+            </p>
+          ) : null}
+
           {error && <p className="rounded-lg bg-red-900/20 px-3 py-2 text-sm text-red-400">{error}</p>}
 
           <div className="mt-2 flex gap-3">
@@ -391,7 +427,7 @@ export default function DeployForm({
             </button>
             <button
               type="submit"
-              disabled={deploying}
+              disabled={deploying || (pullingImage && !isCurrentImagePulling)}
               className="flex-1 rounded-lg bg-blue-600 py-2 text-sm transition-colors hover:bg-blue-500 disabled:opacity-50"
             >
               {deploying ? submittingLabel : submitLabel}

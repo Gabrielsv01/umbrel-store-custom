@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { listImages, removeImage } from '../services/api'
 import type { ImageRecord, PullPayload, PullProgress } from '../types/resources'
 import { toErrorMessage } from '../utils/error'
@@ -11,6 +11,7 @@ export function useImages() {
   const [removingImageId, setRemovingImageId] = useState<string | null>(null)
   const [pullingImage, setPullingImage] = useState(false)
   const [pullProgress, setPullProgress] = useState<PullProgress | null>(null)
+  const pullLockRef = useRef(false)
 
   const fetchImages = useCallback(async () => {
     setImagesLoading(true)
@@ -59,6 +60,17 @@ export function useImages() {
     async (imageRef: string, onSuccess?: () => void) => {
       const ref = imageRef.trim()
       if (!ref) return
+
+      if (pullLockRef.current) {
+        setImagesError(
+          pullProgress?.image
+            ? `Already pulling ${pullProgress.image}. Wait for it to finish before starting another pull.`
+            : 'Another image pull is already running. Wait for it to finish.',
+        )
+        return
+      }
+
+      pullLockRef.current = true
 
       setPullingImage(true)
       setImagesError(null)
@@ -114,9 +126,10 @@ export function useImages() {
       } finally {
         setPullingImage(false)
         setPullProgress(null)
+        pullLockRef.current = false
       }
     },
-    [fetchImages],
+    [fetchImages, pullProgress?.image],
   )
 
   return {

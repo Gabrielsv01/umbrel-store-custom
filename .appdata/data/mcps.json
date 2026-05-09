@@ -1,1 +1,16 @@
-{}
+{
+  "999dee715b23": {
+    "name": "playwright",
+    "image": "mcr.microsoft.com/playwright/mcp:latest",
+    "env": {},
+    "port": 8931,
+    "transport": "streamable-http"
+  },
+  "c494cd38a123": {
+    "name": "playwright",
+    "image": "mcr.microsoft.com/playwright/mcp:latest",
+    "env": {},
+    "port": 8931,
+    "transport": "streamable-http"
+  }
+}

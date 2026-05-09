@@ -11,6 +11,8 @@ export type DeployFormProps = {
   title?: string
   submitLabel?: string
   submittingLabel?: string
+  pullingImage?: boolean
+  pullProgress?: PullProgress | null
 }
 
 export type FieldProps = {

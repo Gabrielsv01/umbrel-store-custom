@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import MCPCard from './components/MCPCard'
 import DeployForm from './components/DeployForm'
 import LogConsole from './components/LogConsole'
@@ -6,11 +6,13 @@ import StdioConsole from './components/StdioConsole'
 import ImagesModal from './components/ImagesModal'
 import VolumesModal from './components/VolumesModal'
 import CatalogModal from './components/CatalogModal'
+import { listImages } from './services/api'
 import { useMcps } from './hooks/useMcps'
 import { useImages } from './hooks/useImages'
 import { useVolumes } from './hooks/useVolumes'
 import type { CatalogEntry } from './types/catalog'
 import type { DeployPayload, EditMcpValues } from './types/mcp'
+import type { PullPayload, PullProgress } from './types/resources'
 import { mapMcpToEditValues } from './utils/mcpForm'
 
 type LogTarget = { id: string; name: string }
@@ -21,6 +23,10 @@ export default function App() {
   const [editingMcp, setEditingMcp] = useState<EditMcpValues | null>(null)
   const [logTarget, setLogTarget] = useState<LogTarget | null>(null)
   const [stdioTarget, setStdioTarget] = useState<LogTarget | null>(null)
+  const [deployPulling, setDeployPulling] = useState(false)
+  const [deployPullProgress, setDeployPullProgress] = useState<PullProgress | null>(null)
+  const deployPullLockRef = useRef(false)
+  const deployPullImageRef = useRef<string | null>(null)
 
   const {
     mcps,
@@ -64,13 +70,87 @@ export default function App() {
     handleRemoveVolume,
   } = useVolumes()
 
+  const ensureImageForDeploy = async (imageRef: string) => {
+    const ref = imageRef.trim()
+    if (!ref) return
+
+    if (deployPullLockRef.current) {
+      const current = deployPullImageRef.current
+      throw new Error(
+        current
+          ? `Another image pull is in progress (${current}). Wait for it to finish.`
+          : 'Another image pull is in progress. Wait for it to finish.',
+      )
+    }
+
+    const localImages = await listImages().catch(() => [])
+    const existsLocally = localImages.some((img) => img.tags.includes(ref))
+    if (existsLocally) return
+
+    deployPullLockRef.current = true
+    deployPullImageRef.current = ref
+    setDeployPulling(true)
+    setDeployPullProgress({ image: ref, status: 'Starting pull...', percent: null })
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const source = new EventSource(`/api/images/pull/stream?image=${encodeURIComponent(ref)}`)
+
+        source.onmessage = (event) => {
+          try {
+            const payload = JSON.parse(event.data) as PullPayload
+
+            if (payload.type === 'progress') {
+              setDeployPullProgress({
+                image: ref,
+                status: payload.status || 'Pulling...',
+                id: payload.id || null,
+                current: Number(payload.overallCurrent) || 0,
+                total: Number(payload.overallTotal) || 0,
+                percent:
+                  typeof payload.overallPercent === 'number' ? payload.overallPercent : null,
+              })
+              return
+            }
+
+            if (payload.type === 'done') {
+              source.close()
+              resolve()
+              return
+            }
+
+            if (payload.type === 'error') {
+              source.close()
+              reject(new Error(payload.error || 'Failed to pull image'))
+            }
+          } catch {
+            source.close()
+            reject(new Error('Failed to parse pull progress'))
+          }
+        }
+
+        source.onerror = () => {
+          source.close()
+          reject(new Error('Pull connection failed'))
+        }
+      })
+    } finally {
+      setDeployPulling(false)
+      setDeployPullProgress(null)
+      deployPullLockRef.current = false
+      deployPullImageRef.current = null
+    }
+  }
+
   const onDeploy = async (formData: DeployPayload) => {
+    await ensureImageForDeploy(formData.image)
     await handleDeploy(formData)
     setShowForm(false)
   }
 
   const onUpdate = async (formData: DeployPayload) => {
     if (!editingMcp) return
+    await ensureImageForDeploy(formData.image)
     if (!editingMcp.id) {
       // Came from catalog — treat as new deploy
       await handleDeploy(formData)
@@ -183,6 +263,8 @@ export default function App() {
           onDeploy={onDeploy}
           onClose={() => setShowForm(false)}
           initialValues={undefined}
+          pullingImage={deployPulling}
+          pullProgress={deployPullProgress}
         />
       )}
 
@@ -194,6 +276,8 @@ export default function App() {
           title={editingMcp.id ? `Edit MCP: ${editingMcp.name}` : `Deploy from Catalog: ${editingMcp.name}`}
           submitLabel={editingMcp.id ? 'Save Changes' : 'Deploy'}
           submittingLabel={editingMcp.id ? 'Saving...' : 'Deploying...'}
+          pullingImage={deployPulling}
+          pullProgress={deployPullProgress}
         />
       )}
 

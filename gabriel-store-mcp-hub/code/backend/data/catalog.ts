@@ -29,8 +29,9 @@ export const catalog: CatalogEntry[] = [
     name: 'Playwright',
     description: 'Control a real browser — navigate, screenshot, interact with pages.',
     category: 'Browser Automation',
-    image: 'mcr.microsoft.com/playwright/mcp:latest',
+    image: 'mcr.microsoft.com/playwright:v1.54.0-noble',
     transport: 'streamable-http',
+    command: 'npx -y @playwright/mcp@latest --host 0.0.0.0 --port 8931',
     port: 8931,
   },
   {
