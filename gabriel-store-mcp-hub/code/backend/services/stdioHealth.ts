@@ -5,6 +5,31 @@ import type {
   StdioHealthResult,
 } from '../types/stdioHealth.js'
 
+function tryParseRecord(text: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(text) as unknown
+    if (parsed && typeof parsed === 'object') {
+      return parsed as Record<string, unknown>
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+function tryParseRecordFragment(text: string): Record<string, unknown> | null {
+  const start = text.indexOf('{')
+  if (start === -1) return null
+
+  for (let end = text.length; end > start + 1; end -= 1) {
+    const candidate = text.slice(start, end)
+    const parsed = tryParseRecord(candidate)
+    if (parsed) return parsed
+  }
+
+  return null
+}
+
 export async function runStdioHealthCheck(
   input: RunStdioHealthCheckInput,
 ): Promise<StdioHealthResult> {
@@ -32,11 +57,12 @@ export async function runStdioHealthCheck(
   const nonJsonStdoutLines: string[] = []
 
   const stdoutLineDecoder = createLineDecoder((line) => {
-    try {
-      jsonQueue.push(JSON.parse(line) as Record<string, unknown>)
-    } catch {
-      nonJsonStdoutLines.push(line)
+    const parsed = tryParseRecord(line) ?? tryParseRecordFragment(line)
+    if (parsed) {
+      jsonQueue.push(parsed)
+      return
     }
+    nonJsonStdoutLines.push(line)
   })
   const stderrLineDecoder = createLineDecoder((line) => {
     stderrLines.push(line)
@@ -86,24 +112,48 @@ export async function runStdioHealthCheck(
   }
 
   try {
-    writeRpc({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'initialize',
-      params: {
-        protocolVersion: '2024-11-05',
-        capabilities: {},
-        clientInfo: { name: 'mcp-hub-health', version: '1.0.0' },
-      },
-    })
+    const protocolCandidates = ['2025-03-26', '2024-11-05']
+    let selectedProtocol: string | null = null
 
-    const initializeResponse = await waitForMessage((msg) => Number(msg.id) === 1, 5000)
-    initializeOk = !!initializeResponse?.result && !initializeResponse?.error
+    for (let i = 0; i < protocolCandidates.length; i += 1) {
+      const protocolVersion = protocolCandidates[i]
+      const requestId = 1 + i
+
+      writeRpc({
+        jsonrpc: '2.0',
+        id: requestId,
+        method: 'initialize',
+        params: {
+          protocolVersion,
+          capabilities: {},
+          clientInfo: { name: 'mcp-hub-health', version: '1.0.0' },
+        },
+      })
+
+      const initializeResponse = await waitForMessage((msg) => Number(msg.id) === requestId, 5000)
+      const ok = !!initializeResponse?.result && !initializeResponse?.error
+      if (ok) {
+        initializeOk = true
+        selectedProtocol = protocolVersion
+        break
+      }
+    }
+
+    if (selectedProtocol) {
+      nonJsonStdoutLines.push(`[health] initialize protocol selected: ${selectedProtocol}`)
+    } else {
+      nonJsonStdoutLines.push('[health] initialize failed for all protocol candidates')
+    }
 
     writeRpc({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} })
-    writeRpc({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })
 
-    const toolsResponse = await waitForMessage((msg) => Number(msg.id) === 2, 5000)
+    let toolsResponse: Record<string, unknown> | null = null
+    for (const requestId of [10, 11]) {
+      writeRpc({ jsonrpc: '2.0', id: requestId, method: 'tools/list', params: {} })
+      toolsResponse = await waitForMessage((msg) => Number(msg.id) === requestId, 5000)
+      if (toolsResponse) break
+    }
+
     const toolsResult = (toolsResponse?.result ?? {}) as {
       tools?: unknown[]
     }

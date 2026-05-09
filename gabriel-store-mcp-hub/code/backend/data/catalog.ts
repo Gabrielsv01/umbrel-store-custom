@@ -1,4 +1,5 @@
 import type { McpTransport } from '../types/mcp.js'
+import type { McpRuntimeConfig } from '../types/runtime.js'
 
 export interface CatalogEntry {
   id: string
@@ -8,6 +9,7 @@ export interface CatalogEntry {
   image: string
   transport: McpTransport
   command?: string
+  runtime?: McpRuntimeConfig
   port?: number
   env?: Record<string, string>
   secretKeys?: string[]

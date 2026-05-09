@@ -30,5 +30,16 @@ export interface HttpHealthResult {
   latencyMs?: number
   serverInfo?: unknown
   error?: string
+  diagnostics?: {
+    triedHosts?: string[]
+    attemptedEndpoints?: Array<{
+      url: string
+      method: string
+      statusCode?: number
+      latencyMs: number
+      ok: boolean
+      error?: string
+    }>
+  }
   checkedAt: string
 }

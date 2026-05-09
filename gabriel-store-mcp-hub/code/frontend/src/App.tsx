@@ -182,7 +182,7 @@ export default function App() {
       port: entry.port,
       env: entry.env ?? {},
       secretKeys: entry.secretKeys,
-      runtime: {},
+      runtime: entry.runtime ?? {},
     })
   }
 

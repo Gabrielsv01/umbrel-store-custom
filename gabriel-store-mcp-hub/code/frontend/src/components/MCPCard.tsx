@@ -155,6 +155,21 @@ export default function MCPCard({
           `status: ${httpHealth.status}`,
           typeof httpHealth.latencyMs === 'number' ? `latency: ${httpHealth.latencyMs}ms` : null,
           httpHealth.error ? `error: ${httpHealth.error}` : null,
+          httpHealth.diagnostics?.triedHosts?.length
+            ? `hosts tried: ${httpHealth.diagnostics.triedHosts.join(', ')}`
+            : null,
+          ...(Array.isArray(httpHealth.diagnostics?.attemptedEndpoints)
+            ? httpHealth.diagnostics.attemptedEndpoints.slice(0, 8).map((attempt, index) => {
+                const status =
+                  typeof attempt.statusCode === 'number'
+                    ? `HTTP ${attempt.statusCode}`
+                    : attempt.ok
+                      ? 'ok'
+                      : 'no-response'
+                const errPart = attempt.error ? ` | err: ${attempt.error}` : ''
+                return `${index + 1}. ${attempt.method} ${attempt.url} | ${status} | ${attempt.latencyMs}ms${errPart}`
+              })
+            : []),
         ]
           .filter(Boolean)
           .join('\n')
