@@ -189,6 +189,10 @@ pnpm run dev
 
 Base URL: `http://localhost:5146/api`
 
+Referencia completa dos endpoints:
+
+- `docs/API_REFERENCE.md`
+
 ### MCPs
 
 - `GET /mcps`

@@ -6,6 +6,7 @@ import StdioConsole from './components/StdioConsole'
 import ImagesModal from './components/ImagesModal'
 import VolumesModal from './components/VolumesModal'
 import CatalogModal from './components/CatalogModal'
+import DocsModal from './components/DocsModal'
 import { listImages } from './services/api'
 import { useMcps } from './hooks/useMcps'
 import { useImages } from './hooks/useImages'
@@ -20,6 +21,7 @@ type LogTarget = { id: string; name: string }
 export default function App() {
   const [showForm, setShowForm] = useState(false)
   const [showCatalog, setShowCatalog] = useState(false)
+  const [showDocs, setShowDocs] = useState(false)
   const [editingMcp, setEditingMcp] = useState<EditMcpValues | null>(null)
   const [logTarget, setLogTarget] = useState<LogTarget | null>(null)
   const [stdioTarget, setStdioTarget] = useState<LogTarget | null>(null)
@@ -214,6 +216,12 @@ export default function App() {
               Catalog
             </button>
             <button
+              onClick={() => setShowDocs(true)}
+              className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-gray-100 transition-colors hover:bg-gray-700"
+            >
+              API Docs
+            </button>
+            <button
               onClick={() => setShowForm(true)}
               className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
             >
@@ -282,6 +290,8 @@ export default function App() {
       )}
 
       {showCatalog && <CatalogModal onClose={() => setShowCatalog(false)} onSelect={onCatalogSelect} />}
+
+      {showDocs && <DocsModal onClose={() => setShowDocs(false)} />}
 
       {logTarget && <LogConsole id={logTarget.id} name={logTarget.name} onClose={() => setLogTarget(null)} />}
 

@@ -41,6 +41,10 @@ export type CatalogModalProps = {
   onSelect: (entry: CatalogEntry) => void
 }
 
+export type DocsModalProps = {
+  onClose: () => void
+}
+
 export type ImagesModalProps = {
   images: ImageRecord[]
   loading: boolean
