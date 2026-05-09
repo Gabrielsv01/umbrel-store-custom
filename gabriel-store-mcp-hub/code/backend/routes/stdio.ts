@@ -37,11 +37,6 @@ export function registerStdioRoutes(
     } catch {
       // ignore stream close errors
     }
-
-    const latest = await session.container.inspect().catch(() => null)
-    if (latest?.State?.Running) {
-      await session.container.stop().catch(() => undefined)
-    }
   }
 
   fastify.get<{ Params: { id: string } }>(
