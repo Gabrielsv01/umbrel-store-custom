@@ -12,8 +12,13 @@ O MCP Hub foi pensado para rodar no Umbrel, mas também funciona localmente com 
 - Gestão de imagens Docker locais
 - Pull manual de imagens com progresso em tempo real
 - Pull automático de imagem quando faltar no deploy/update
+- Bloqueio de pull concorrente no deploy para evitar estado de progresso inconsistente
 - Gestão de volumes Docker com proteção contra remoção em uso
-- Suporte a servidores MCP em `stdio` com sessão interativa sob demanda
+- Catálogo de templates MCP (incluindo templates leves para testes)
+- Suporte a servidores MCP em `stdio`, `http/sse` e `streamable-http`
+- Sessão interativa sob demanda para MCPs `stdio`
+- Health check robusto com fallback de endpoint/host e diagnostics detalhado
+- Redação de variáveis sensíveis (`secretKeys`) no retorno de metadados
 
 ## Arquitetura
 
@@ -131,20 +136,29 @@ Base URL: `http://localhost:5146/api`
 - `POST /deploy`
 	- Cria e inicia novo MCP
 	- Faz pull automático da imagem se não existir localmente
-	- Suporta `transport: "http" | "stdio"` (`http` por padrão)
+	- Suporta `transport: "http" | "stdio" | "streamable-http"` (`http` por padrão)
+	- Aceita `secretKeys` para marcar variáveis sensíveis em `env`
 	- Suporta `runtime` avançado para `entrypoint`, `args`, mounts, rede, usuário e privilégios
 
 - `PUT /mcps/:id`
 	- Recria contêiner com nova configuração
 	- Também garante pull automático da imagem
-	- Suporta `transport: "http" | "stdio"`
+	- Suporta `transport: "http" | "stdio" | "streamable-http"`
+	- Aceita `secretKeys` para manter redação de variáveis sensíveis
 	- Suporta o mesmo bloco `runtime` do deploy
 
 - `POST /action/:id`
 	- Body: `{ "action": "start" | "stop" | "remove" }`
+	- `remove` faz remoção forçada para suportar contêineres em restart loop
 
 - `GET /logs/:id`
 	- Stream SSE de logs do contêiner
+
+### Catálogo
+
+- `GET /catalog`
+	- Lista templates prontos para deploy
+	- Inclui templates streamable leves para testes rápidos
 
 ### Runtime avançado por MCP
 
@@ -240,6 +254,16 @@ Observações:
 	- Além do handshake, tenta um probe de rede com ferramenta compatível (quando disponível)
 	- Útil para antecipar bloqueios antes de usar no VS Code
 
+### Health check http/sse e streamable-http
+
+- `GET /health/http/:id`
+	- Health para MCPs `http` e `streamable-http`
+	- Fallback previsível de endpoints (ex.: `/mcp`, `/sse`, `/`)
+	- Fallback de host por nome/alias/IP do contêiner
+	- Retry em timeout/rede para reduzir falso negativo
+	- Parsing tolerante para respostas fora do padrão (JSON/SSE/fragmentos)
+	- Retorna `diagnostics` com hosts e tentativas de endpoint (status/latência/erro)
+
 ### Imagens
 
 - `GET /images`
@@ -274,11 +298,12 @@ Observações:
 
 Para o Playwright MCP funcionar de forma contínua no MCP Hub, ele precisa iniciar em modo servidor HTTP/SSE com porta explícita.
 
-Configuração que funcionou no teste:
+Configuração recomendada:
 
 - Name: `mcp-playwright-test`
-- Image: `mcp/playwright`
-- Command: `--host 0.0.0.0 --port 8931 --headless`
+- Image: `mcr.microsoft.com/playwright:v1.54.0-noble`
+- Transport: `streamable-http`
+- Command: `npx -y @playwright/mcp@latest --host 0.0.0.0 --port 8931`
 - Port: `8931`
 
 Payload de deploy via API:
@@ -286,15 +311,27 @@ Payload de deploy via API:
 ```json
 {
 	"name": "mcp-playwright-test",
-	"image": "mcp/playwright",
-	"command": "--host 0.0.0.0 --port 8931 --headless",
+	"image": "mcr.microsoft.com/playwright:v1.54.0-noble",
+	"transport": "streamable-http",
+	"command": "npx -y @playwright/mcp@latest --host 0.0.0.0 --port 8931",
 	"port": 8931
 }
 ```
 
 Observação:
 
-- Se subir sem `--port`, esse container pode entrar em restart loop dependendo do modo padrão de inicialização.
+- A imagem do Playwright é pesada. Para smoke tests de streamable-http, prefira o template de catálogo `Streamable Mock (Light)`.
+
+## Exemplo prático: Streamable Mock (leve)
+
+Template de catálogo para validação rápida de streamable-http sem baixar imagem grande.
+
+- Name: `streamable-mock`
+- Image: `node:20-alpine`
+- Transport: `streamable-http`
+- Port: `8931`
+
+Esse template já vem com `runtime.entrypoint=node` e `runtime.args` para subir um servidor MCP mock mínimo em `/mcp`.
 
 ## Exemplo prático: MCP em stdio
 
@@ -328,7 +365,10 @@ curl -N http://localhost:5146/api/stdio/proxy/<id>/sse
 
 3. Use a URL recebida no evento `endpoint` para enviar requests JSON-RPC via `POST`.
 
-Na UI do MCP Hub, a seção `Health` aparece em todos os cards, mas a execução do check é disponível apenas para MCPs `stdio`.
+Na UI do MCP Hub, a seção `Health` funciona para todos os transports suportados.
+
+- `stdio`: exibe handshake e probe de rede
+- `http/streamable-http`: exibe diagnostics com hosts e endpoints tentados
 
 ## Como descobrir os parâmetros de uma imagem MCP
 
@@ -400,7 +440,17 @@ O backend já tenta pull automático. Se falhar, valide:
 
 Se estiver em uso por contêiner, a API retorna `409` e bloqueia remoção.
 
-### 4) Porta já está em uso
+### 4) Não consigo remover um MCP em restart loop
+
+A ação `remove` usa remoção forçada para lidar com contêineres instáveis.
+
+Se ainda assim falhar, valide:
+
+- conexão com o Docker daemon
+- permissões de acesso ao socket Docker
+- status do daemon Docker no host
+
+### 5) Porta já está em uso
 
 Altere `APP_PORT` antes de subir:
 

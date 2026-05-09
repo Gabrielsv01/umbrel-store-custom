@@ -306,16 +306,18 @@ fastify.post<{ Params: { id: string }; Body: ActionBody }>(
     if (!match) return reply.code(404).send({ error: 'container not found' })
 
     const container = docker.getContainer(match.Id)
+    const shortId = match.Id.slice(0, 12)
 
     if (action === 'start') {
       await container.start()
     } else if (action === 'stop') {
       await container.stop().catch(() => undefined)
     } else if (action === 'remove') {
-      if (match.State === 'running') await container.stop().catch(() => undefined)
-      await container.remove()
+      // Force-remove also handles containers stuck in restart loops.
+      await container.stop().catch(() => undefined)
+      await container.remove({ force: true })
       const data = loadData()
-      delete data[req.params.id]
+      delete data[shortId]
       saveData(data)
     } else {
       return reply.code(400).send({ error: 'unknown action' })
