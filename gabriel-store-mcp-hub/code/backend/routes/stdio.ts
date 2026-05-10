@@ -39,6 +39,102 @@ export function registerStdioRoutes(
     }
   }
 
+  fastify.post<{
+    Params: { id: string };
+    Body: { jsonrpc: string; id: string | number; method: string; params?: any };
+  }>('/api/stdio/proxy/:id', async (req, reply) => {
+    const { id } = req.params;
+    const payload = req.body;
+
+    const { container } = await resolveStdioContainer(id).catch((err) => {
+      return reply.code(404).send({ error: err.message });
+    });
+
+    const stream = await container.attach({
+      stream: true, stdin: true, stdout: true, stderr: true, hijack: true, logs: true
+    });
+
+    const getMcpResponse = () => new Promise((resolve, reject) => {
+      let responseBuffer = '';
+      let isFinished = false;
+
+      const timeout = setTimeout(() => {
+        if (!isFinished) {
+          isFinished = true;
+          cleanup();
+          reject(new Error('TIMEOUT_MCP'));
+        }
+      }, 30000); // 30 segundos para chamadas complexas
+
+      const cleanup = () => {
+        clearTimeout(timeout);
+        try { (stream as any).destroy(); } catch {}
+      };
+
+      const decode = createDockerMultiplexDecoder((payloadText, streamType) => {
+        if (streamType === 2) {
+          console.error(`[CONTAINER LOG]: ${payloadText.trim()}`);
+          return;
+        }
+        if (isFinished || streamType !== 1) return;
+
+        responseBuffer += payloadText;
+        const lines = responseBuffer.split('\n');
+        
+        // Preserva a última linha incompleta no buffer
+        responseBuffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('{')) continue;
+
+          try {
+            const parsed = JSON.parse(trimmed);
+            // Comparação flexível de ID (string ou number)
+            if (parsed && String(parsed.id) === String(payload.id)) {
+              isFinished = true;
+              cleanup();
+              resolve(parsed);
+              return;
+            }
+          } catch {
+            // Linha malformada ou incompleta
+          }
+        }
+      });
+
+      stream.on('data', decode);
+      stream.on('error', (err) => {
+        isFinished = true;
+        cleanup();
+        reject(err);
+      });
+
+      // Boot Delay Inteligente
+      container.inspect().then(async (info) => {
+        const state = info?.State as any;
+        const uptime = Date.now() - new Date(state?.StartedAt || 0).getTime();
+        const waitTime = uptime < 3000 ? 2200 : 100;
+        
+        await new Promise(r => setTimeout(r, waitTime));
+        
+        if (!isFinished) {
+          stream.write(`${JSON.stringify(payload)}\n`);
+        }
+      });
+    });
+
+    try {
+      const result = await getMcpResponse();
+      return reply.type('application/json').send(result);
+    } catch (err: any) {
+      if (err.message === 'TIMEOUT_MCP') {
+        return reply.code(504).send({ error: 'Gateway Timeout', details: 'The container did not respond in time.' });
+      }
+      return reply.code(500).send({ error: 'Internal Error', details: err.message });
+    }
+  });
+
   fastify.get<{ Params: { id: string } }>(
     '/api/stdio/session/:id',
     { websocket: true },
