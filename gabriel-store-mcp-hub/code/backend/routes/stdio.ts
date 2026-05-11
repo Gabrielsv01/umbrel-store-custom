@@ -46,14 +46,57 @@ export function registerStdioRoutes(
     const { id } = req.params;
     const payload = req.body;
 
+    // 1. Resolvemos o container e inspecionamos as ENVs
     const { container } = await resolveStdioContainer(id).catch((err) => {
       return reply.code(404).send({ error: err.message });
     });
 
+    const info = await container.inspect() as any;
+    const envs: string[] = info?.Config?.Env || [];
+    const hasEnv = (name: string) => envs.some((e: string) => e === `${name}=true`);
+
+    // 2. Mapeamento de Capacidades Opcionais
+    const capabilityMap: Record<string, string> = {
+      'resources/list': 'MCP_HAS_RESOURCES',
+      'prompts/list': 'MCP_HAS_PROMPTS',
+      'logging/setLevel': 'MCP_HAS_LOGGING'
+    };
+
+    const method = payload.method;
+    const requiredEnv = capabilityMap[method];
+
+    // Interceptação Proativa
+    if (requiredEnv && !hasEnv(requiredEnv)) {
+      const isListMethod = method.endsWith('/list');
+      const result = isListMethod ? { [method.split('/')[0]]: [] } : {};
+
+      console.log(`[HUB]: Interceptando e respondendo 200 OK para método opcional: ${method}`);
+
+      return reply.send({
+        jsonrpc: "2.0",
+        id: payload.id,
+        result: result
+      });
+    }
+
+    // 3. Conectamos ao Stream
     const stream = await container.attach({
       stream: true, stdin: true, stdout: true, stderr: true, hijack: true, logs: true
     });
 
+    // TRATAMENTO DE NOTIFICAÇÕES (Ajustado para evitar falso positivo no 204)
+    // O JSON-RPC define que apenas notificações NÃO possuem o campo 'id'
+    const hasId = Object.prototype.hasOwnProperty.call(payload, 'id');
+
+    if (!hasId) {
+      stream.write(`${JSON.stringify(payload)}\n`);
+      
+      // Notificações não esperam resposta, fechamos o stream após o envio
+      setTimeout(() => { try { (stream as any).destroy(); } catch {} }, 500);
+      return reply.code(204).send(); 
+    }
+
+    // 4. Fluxo de Resposta para Requisições com ID (Sempre retorna 200 OK ou Erro)
     const getMcpResponse = () => new Promise((resolve, reject) => {
       let responseBuffer = '';
       let isFinished = false;
@@ -64,7 +107,7 @@ export function registerStdioRoutes(
           cleanup();
           reject(new Error('TIMEOUT_MCP'));
         }
-      }, 30000); // 30 segundos para chamadas complexas
+      }, 30000);
 
       const cleanup = () => {
         clearTimeout(timeout);
@@ -80,8 +123,6 @@ export function registerStdioRoutes(
 
         responseBuffer += payloadText;
         const lines = responseBuffer.split('\n');
-        
-        // Preserva a última linha incompleta no buffer
         responseBuffer = lines.pop() || '';
 
         for (const line of lines) {
@@ -90,16 +131,13 @@ export function registerStdioRoutes(
 
           try {
             const parsed = JSON.parse(trimmed);
-            // Comparação flexível de ID (string ou number)
             if (parsed && String(parsed.id) === String(payload.id)) {
               isFinished = true;
               cleanup();
               resolve(parsed);
               return;
             }
-          } catch {
-            // Linha malformada ou incompleta
-          }
+          } catch { /* chunk incompleto */ }
         }
       });
 
@@ -111,17 +149,15 @@ export function registerStdioRoutes(
       });
 
       // Boot Delay Inteligente
-      container.inspect().then(async (info) => {
-        const state = info?.State as any;
-        const uptime = Date.now() - new Date(state?.StartedAt || 0).getTime();
-        const waitTime = uptime < 3000 ? 2200 : 100;
-        
-        await new Promise(r => setTimeout(r, waitTime));
-        
+      const state = info?.State;
+      const uptime = Date.now() - new Date(state?.StartedAt || 0).getTime();
+      const waitTime = uptime < 3000 ? 2200 : 100;
+      
+      setTimeout(() => {
         if (!isFinished) {
           stream.write(`${JSON.stringify(payload)}\n`);
         }
-      });
+      }, waitTime);
     });
 
     try {
@@ -129,6 +165,7 @@ export function registerStdioRoutes(
       return reply.type('application/json').send(result);
     } catch (err: any) {
       if (err.message === 'TIMEOUT_MCP') {
+        console.error(`[HUB]: Timeout no método ${method} (ID: ${payload.id})`);
         return reply.code(504).send({ error: 'Gateway Timeout', details: 'The container did not respond in time.' });
       }
       return reply.code(500).send({ error: 'Internal Error', details: err.message });

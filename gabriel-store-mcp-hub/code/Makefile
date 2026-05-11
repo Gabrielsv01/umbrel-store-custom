@@ -12,7 +12,7 @@ PLATFORM := linux/amd64
 
 # Local app runtime
 APP_PORT ?= 5146
-APP_DATA_DIR ?= $(APP_DIR)/.appdata
+APP_DATA_DIR ?= .appdata
 
 # Build and start containers in detached mode
 up:

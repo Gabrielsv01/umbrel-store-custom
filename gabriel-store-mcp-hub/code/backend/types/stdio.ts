@@ -7,7 +7,15 @@ export interface StdioContainer {
     logs: boolean
     hijack: boolean
   }) => Promise<NodeJS.ReadWriteStream>
-  inspect: () => Promise<{ State?: { Running?: boolean } } | null>
+  inspect: () => Promise<{ 
+    State?: { 
+      Running?: boolean;
+      StartedAt?: string;
+    };
+    Config?: {
+      Env?: string[];
+    };
+  } | null>
   stop: () => Promise<unknown>
 }
 
