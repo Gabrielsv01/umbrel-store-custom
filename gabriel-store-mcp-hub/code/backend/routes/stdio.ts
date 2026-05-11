@@ -46,7 +46,7 @@ export function registerStdioRoutes(
     const { id } = req.params;
     const payload = req.body;
 
-    // 1. Resolvemos o container e inspecionamos as ENVs
+    // 1. Localiza o container e inspeciona capacidades via ENV
     const { container } = await resolveStdioContainer(id).catch((err) => {
       return reply.code(404).send({ error: err.message });
     });
@@ -55,7 +55,7 @@ export function registerStdioRoutes(
     const envs: string[] = info?.Config?.Env || [];
     const hasEnv = (name: string) => envs.some((e: string) => e === `${name}=true`);
 
-    // 2. Mapeamento de Capacidades Opcionais
+    // Mapeamento de métodos opcionais
     const capabilityMap: Record<string, string> = {
       'resources/list': 'MCP_HAS_RESOURCES',
       'prompts/list': 'MCP_HAS_PROMPTS',
@@ -65,7 +65,7 @@ export function registerStdioRoutes(
     const method = payload.method;
     const requiredEnv = capabilityMap[method];
 
-    // Interceptação Proativa
+    // 2. Interceptação Proativa (Responde imediatamente se a ENV não existir)
     if (requiredEnv && !hasEnv(requiredEnv)) {
       const isListMethod = method.endsWith('/list');
       const result = isListMethod ? { [method.split('/')[0]]: [] } : {};
@@ -79,24 +79,21 @@ export function registerStdioRoutes(
       });
     }
 
-    // 3. Conectamos ao Stream
+    // 3. Conexão com o Stream Stdio do Container
     const stream = await container.attach({
       stream: true, stdin: true, stdout: true, stderr: true, hijack: true, logs: true
     });
 
-    // TRATAMENTO DE NOTIFICAÇÕES (Ajustado para evitar falso positivo no 204)
-    // O JSON-RPC define que apenas notificações NÃO possuem o campo 'id'
+    // Tratamento de Notificações (Sem ID)
     const hasId = Object.prototype.hasOwnProperty.call(payload, 'id');
-
     if (!hasId) {
       stream.write(`${JSON.stringify(payload)}\n`);
-      
-      // Notificações não esperam resposta, fechamos o stream após o envio
+      // Fecha o stream após curto delay (não espera resposta)
       setTimeout(() => { try { (stream as any).destroy(); } catch {} }, 500);
       return reply.code(204).send(); 
     }
 
-    // 4. Fluxo de Resposta para Requisições com ID (Sempre retorna 200 OK ou Erro)
+    // 4. Promessa para capturar a resposta correta do container
     const getMcpResponse = () => new Promise((resolve, reject) => {
       let responseBuffer = '';
       let isFinished = false;
@@ -131,24 +128,30 @@ export function registerStdioRoutes(
 
           try {
             const parsed = JSON.parse(trimmed);
-            if (parsed && String(parsed.id) === String(payload.id)) {
-              isFinished = true;
-              cleanup();
-              resolve(parsed);
-              return;
+            if (parsed && Object.prototype.hasOwnProperty.call(parsed, 'id')) {
+              if (String(parsed.id) === String(payload.id)) {
+                isFinished = true;
+                cleanup();
+                resolve(parsed);
+                return;
+              } else {
+                console.log(`[HUB]: Drenando ID antigo: ${parsed.id} (esperando ${payload.id})`);
+              }
             }
-          } catch { /* chunk incompleto */ }
+        } catch { }
         }
       });
 
       stream.on('data', decode);
       stream.on('error', (err) => {
-        isFinished = true;
-        cleanup();
-        reject(err);
+        if (!isFinished) {
+          isFinished = true;
+          cleanup();
+          reject(err);
+        }
       });
 
-      // Boot Delay Inteligente
+      // Uptime check para o delay
       const state = info?.State;
       const uptime = Date.now() - new Date(state?.StartedAt || 0).getTime();
       const waitTime = uptime < 3000 ? 2200 : 100;
@@ -160,15 +163,35 @@ export function registerStdioRoutes(
       }, waitTime);
     });
 
+    // 5. Execução e Normalização da Resposta
     try {
-      const result = await getMcpResponse();
-      return reply.type('application/json').send(result);
+      const response: any = await getMcpResponse();
+
+      // EXTRAÇÃO SEGURA: Se o container já devolveu o envelope result, extraímos
+      // para evitar duplicidade (ex: result: { result: ... }) que quebra o Hermes
+      const finalResult = (response && typeof response === 'object' && 'result' in response) 
+        ? response.result 
+        : response;
+
+      return reply.type('application/json').send({
+        jsonrpc: "2.0",
+        id: payload.id,
+        result: finalResult
+      });
+
     } catch (err: any) {
       if (err.message === 'TIMEOUT_MCP') {
-        console.error(`[HUB]: Timeout no método ${method} (ID: ${payload.id})`);
-        return reply.code(504).send({ error: 'Gateway Timeout', details: 'The container did not respond in time.' });
+        return reply.code(504).send({
+          jsonrpc: "2.0",
+          id: payload.id,
+          error: { code: -32000, message: "Gateway Timeout" }
+        });
       }
-      return reply.code(500).send({ error: 'Internal Error', details: err.message });
+      return reply.code(500).send({
+        jsonrpc: "2.0",
+        id: payload.id,
+        error: { code: -32603, message: err.message }
+      });
     }
   });
 
