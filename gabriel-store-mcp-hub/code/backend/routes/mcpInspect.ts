@@ -65,9 +65,25 @@ export function registerMcpInspectRoutes(
       const meta = loadData()[shortId]
       const transport = meta?.transport ?? 'http'
 
+      // Check if trying to call a disabled tool
+      if (payload.method === 'tools/call') {
+        const toolName = (payload.params as any)?.name
+        const disabledTools = meta?.disabledTools ?? []
+        if (toolName && disabledTools.includes(toolName)) {
+          return reply.code(403).send({
+            jsonrpc: '2.0',
+            id: payload.id,
+            error: {
+              code: -32603,
+              message: `Tool "${toolName}" is disabled`,
+            },
+          })
+        }
+      }
+
       // Handle stdio transport
       if (transport === 'stdio') {
-        return handleStdioInspect(reply, payload, id, resolveStdioContainer, createDockerMultiplexDecoder)
+        return handleStdioInspect(reply, payload, id, resolveStdioContainer, createDockerMultiplexDecoder, meta)
       }
 
       // Handle http and streamable-http transports
@@ -89,6 +105,7 @@ async function handleStdioInspect(
   id: string,
   resolveStdioContainer: (id: string) => Promise<any>,
   createDockerMultiplexDecoder: any,
+  meta?: any,
 ) {
   try {
     const { container } = await resolveStdioContainer(id).catch((err) => {
@@ -230,10 +247,19 @@ async function handleStdioInspect(
       const response = await getMcpResponse()
 
       // Unwrap result if already wrapped
-      const finalResult =
+      let finalResult =
         response && typeof response === 'object' && 'result' in response
           ? (response as unknown as Record<string, unknown>).result
           : response
+
+      // Filter disabled tools from tools/list response
+      if (payload.method === 'tools/list' && finalResult && typeof finalResult === 'object') {
+        const resultObj = finalResult as any
+        if (Array.isArray(resultObj.tools)) {
+          const disabledTools = meta?.disabledTools ?? []
+          resultObj.tools = resultObj.tools.filter((t: any) => !disabledTools.includes(t.name))
+        }
+      }
 
       return reply.type('application/json').send({
         jsonrpc: '2.0',
@@ -324,9 +350,17 @@ async function handleHttpInspect(
           const text = await response.text()
 
           // Try parsing as JSON, SSE, or JSON fragment
-          const parsed = tryParseJson(text) ?? tryParseSseData(text) ?? tryParseJsonFragment(text)
+          let parsed = tryParseJson(text) ?? tryParseSseData(text) ?? tryParseJsonFragment(text)
 
           if (parsed) {
+            // Filter disabled tools from tools/list response
+            if (payload.method === 'tools/list' && typeof parsed === 'object' && parsed !== null) {
+              const parsedObj = parsed as any
+              if (parsedObj.result && Array.isArray(parsedObj.result.tools)) {
+                const disabledTools = meta?.disabledTools ?? []
+                parsedObj.result.tools = parsedObj.result.tools.filter((t: any) => !disabledTools.includes(t.name))
+              }
+            }
             return reply.send(parsed as unknown)
           }
 

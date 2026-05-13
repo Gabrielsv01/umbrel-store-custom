@@ -10,6 +10,10 @@
     "image": "node:22-bookworm",
     "command": "npx -y @upstash/context7-mcp@latest",
     "env": {},
-    "transport": "stdio"
+    "transport": "stdio",
+    "disabledTools": [
+      "resolve-library-id",
+      "query-docs"
+    ]
   }
 }
