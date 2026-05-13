@@ -235,11 +235,8 @@ async function handleStdioTools(
       }, waitTime)
     })
 
-    // Filter out disabled tools
-    const enabledTools = tools.filter((t) => !disabledTools.includes(t.name))
-
     const response: GetToolsResponse = {
-      tools: enabledTools,
+      tools,
       disabledTools,
     }
     return reply.send(response)
@@ -308,11 +305,8 @@ async function handleHttpTools(
           }
         }
 
-        // Filter out disabled tools
-        const enabledTools = tools.filter((t) => !disabledTools.includes(t.name))
-
         const result: GetToolsResponse = {
-          tools: enabledTools,
+          tools,
           disabledTools,
         }
         return reply.send(result)
