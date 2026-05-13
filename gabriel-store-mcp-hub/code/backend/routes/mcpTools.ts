@@ -165,7 +165,7 @@ async function handleStdioTools(
       const cleanup = () => {
         clearTimeout(timeout)
         try {
-          stream.destroy()
+          ;(stream as unknown as any).destroy()
         } catch {
           // ignore
         }
@@ -237,7 +237,7 @@ async function handleHttpTools(
   disabledTools: string[],
 ) {
   try {
-    const hosts = getContainerHosts(container, meta.name)
+    const hosts = await getContainerHosts(container, meta.name)
     const port = meta.port || 3000
     const endpoint = meta.transport === 'streamable-http' ? '/mcp' : '/sse'
 
