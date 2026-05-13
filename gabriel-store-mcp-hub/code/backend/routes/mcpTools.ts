@@ -27,13 +27,14 @@ export interface RegisterMcpToolsDeps {
   loadData: () => McpRecord
   saveData: (data: McpRecord) => void
   mcpLabel: string
+  createDockerMultiplexDecoder: (callback: (text: string, streamType: number) => void) => (chunk: Buffer) => void
 }
 
 export function registerMcpToolsRoutes(
   fastify: FastifyInstance,
   deps: RegisterMcpToolsDeps,
 ): void {
-  const { docker, loadData, saveData, mcpLabel } = deps
+  const { docker, loadData, saveData, mcpLabel, createDockerMultiplexDecoder } = deps
 
   fastify.get<{
     Params: { id: string }
@@ -67,6 +68,7 @@ export function registerMcpToolsRoutes(
           id,
           docker,
           disabledTools,
+          createDockerMultiplexDecoder,
         )
       }
 
@@ -127,9 +129,9 @@ async function handleStdioTools(
   id: string,
   docker: Docker,
   disabledTools: string[],
+  createDockerMultiplexDecoder: (callback: (text: string, streamType: number) => void) => (chunk: Buffer) => void,
 ) {
   try {
-    // For stdio, we need to attach to the container and send tools/list
     const container = docker.getContainer(id)
     const info = await container.inspect().catch(() => null)
 
@@ -150,6 +152,13 @@ async function handleStdioTools(
       logs: true,
     })
 
+    const payload = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/list',
+      params: {},
+    }
+
     const tools = await new Promise<McpTool[]>((resolve, reject) => {
       let responseBuffer = ''
       let isFinished = false
@@ -158,9 +167,9 @@ async function handleStdioTools(
         if (!isFinished) {
           isFinished = true
           cleanup()
-          reject(new Error('tools/list timeout'))
+          reject(new Error('TIMEOUT_MCP'))
         }
-      }, 10000)
+      }, 30000)
 
       const cleanup = () => {
         clearTimeout(timeout)
@@ -171,19 +180,14 @@ async function handleStdioTools(
         }
       }
 
-      const payload = {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/list',
-        params: {},
-      }
+      const decode = createDockerMultiplexDecoder((payloadText: string, streamType: number) => {
+        if (streamType === 2) {
+          // stderr
+          return
+        }
+        if (isFinished || streamType !== 1) return
 
-      stream.write(`${JSON.stringify(payload)}\n`)
-
-      stream.on('data', (chunk: Buffer) => {
-        const text = chunk.toString('utf-8')
-        responseBuffer += text
-
+        responseBuffer += payloadText
         const lines = responseBuffer.split('\n')
         responseBuffer = lines.pop() || ''
 
@@ -202,6 +206,7 @@ async function handleStdioTools(
               const response = parsed as any
               const toolsList = (response.result as ToolsListResponse)?.tools ?? []
               resolve(toolsList)
+              return
             }
           } catch {
             // ignore parse errors
@@ -209,6 +214,7 @@ async function handleStdioTools(
         }
       })
 
+      stream.on('data', decode)
       stream.on('error', (err: Error) => {
         if (!isFinished) {
           isFinished = true
@@ -216,6 +222,17 @@ async function handleStdioTools(
           reject(err)
         }
       })
+
+      // Uptime check for startup delay
+      const state = info?.State
+      const uptime = Date.now() - new Date(state?.StartedAt || 0).getTime()
+      const waitTime = uptime < 3000 ? 2200 : 100
+
+      setTimeout(() => {
+        if (!isFinished) {
+          stream.write(`${JSON.stringify(payload)}\n`)
+        }
+      }, waitTime)
     })
 
     const response: GetToolsResponse = {

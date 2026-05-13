@@ -191,7 +191,7 @@ registerMcpInspectRoutes(fastify, {
   detectNetworkIssues,
   selectNetworkProbeTool,
 })
-registerMcpToolsRoutes(fastify, { docker, loadData, saveData, mcpLabel: MCP_LABEL })
+registerMcpToolsRoutes(fastify, { docker, loadData, saveData, mcpLabel: MCP_LABEL, createDockerMultiplexDecoder })
 registerCatalogRoutes(fastify)
 
 // ─── POST /api/deploy ─────────────────────────────────────────────────────────
