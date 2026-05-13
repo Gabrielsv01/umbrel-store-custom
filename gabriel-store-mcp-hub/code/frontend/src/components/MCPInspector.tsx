@@ -12,7 +12,6 @@ const TABS: Array<{ id: McpInspectorTab; label: string }> = [
   { id: 'prompts', label: 'Prompts' },
   { id: 'ping', label: 'Ping' },
   { id: 'roots', label: 'Roots' },
-  { id: 'sampling', label: 'Sampling' },
 ]
 
 export default function MCPInspector({ onBack }: Readonly<MCPInspectorProps>) {
@@ -113,9 +112,6 @@ export default function MCPInspector({ onBack }: Readonly<MCPInspectorProps>) {
               )}
               {state.activeTab === 'roots' && (
                 <RootsPanel callRoots={callRoots} loading={state.callLoading} result={state.callResult} />
-              )}
-              {state.activeTab === 'sampling' && (
-                <SamplingPanel />
               )}
             </div>
 
@@ -409,14 +405,6 @@ function RootsPanel({
           </pre>
         </div>
       )}
-    </div>
-  )
-}
-
-function SamplingPanel() {
-  return (
-    <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
-      <p className="text-gray-400">Sampling panel coming soon...</p>
     </div>
   )
 }

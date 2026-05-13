@@ -15,10 +15,13 @@ O MCP Hub foi pensado para rodar no Umbrel, mas também funciona localmente com 
 - Bloqueio de pull concorrente no deploy para evitar estado de progresso inconsistente
 - Gestão de volumes Docker com proteção contra remoção em uso
 - Catálogo de templates MCP (incluindo templates leves para testes)
+- **MCP Builder**: Criar namespaces customizados combinando múltiplos MCPs
+- **Inspector**: Explorar Tools, Resources, Prompts, Roots, e fazer Health Check dos MCPs
 - Suporte a servidores MCP em `stdio`, `http/sse` e `streamable-http`
 - Sessão interativa sob demanda para MCPs `stdio`
 - Health check robusto com fallback de endpoint/host e diagnostics detalhado
 - Redação de variáveis sensíveis (`secretKeys`) no retorno de metadados
+- Sincronização automática de metadados para containers sem dados salvos
 
 ## Arquitetura
 
@@ -185,6 +188,77 @@ pnpm install
 pnpm run dev
 ```
 
+## MCP Builder
+
+A aplicação inclui um **MCP Builder** para criar namespaces customizados que combinam múltiplos MCPs em um único servidor.
+
+### Como usar:
+
+1. **Vá para a aba Builder** no menu principal
+2. **Crie um novo namespace** com:
+   - Nome descritivo
+   - Descrição (opcional)
+   - Transport: `http`, `stdio` ou `streamable-http`
+   - Porta (se HTTP/streamable-http)
+
+3. **Habilite MCPs** - selecione quais MCPs você quer combinar
+4. **Gerencie Tools** - veja todas as ferramentas disponíveis e desabilite as que não quer usar
+5. **Deploy** - crie o namespace customizado como um novo servidor MCP
+
+O namespace customizado fica disponível no Hub e pode ser usado como qualquer outro MCP.
+
+### Variáveis de ambiente para habilitar features
+
+Para que o Inspector mostre **Resources** e **Prompts**, o MCP precisa ter variáveis de ambiente:
+
+```
+MCP_HAS_RESOURCES=true   # Habilita a aba Resources no Inspector
+MCP_HAS_PROMPTS=true     # Habilita a aba Prompts no Inspector
+```
+
+Se o MCP não tiver essas variáveis, o Inspector mostrará essas abas como vazias (comportamento esperado).
+
+## Inspector
+
+O **Inspector** permite explorar e testar MCPs em tempo real com:
+
+- **Tools**: Lista e testa ferramentas disponíveis
+- **Resources**: Visualiza recursos virtuais do MCP
+- **Prompts**: Vê templates de prompts pré-configurados
+- **Ping**: Verifica saúde e latência do servidor
+- **Roots**: Lista as raízes de acesso do MCP
+
+### Como usar:
+
+1. Vá para a aba **Inspector** no menu
+2. Selecione um MCP no dropdown
+3. Navegue pelas abas para explorar as capacidades
+4. Teste ferramentas preenchendo parâmetros e clicando "Run Tool"
+
+## Demo MCP
+
+Um MCP de demonstração está disponível em `gabriel-store-demo-mcp/` que implementa todas as funcionalidades do protocolo MCP para fins de teste e exploração.
+
+**Para deployar o Demo MCP:**
+
+```bash
+cd gabriel-store-demo-mcp
+docker build -f docker/Dockerfile -t demo-mcp:latest .
+```
+
+Depois use o **Deploy Form** com:
+- Nome: `demo-mcp`
+- Imagem: `demo-mcp:latest`
+- Transport: `stdio`
+- Env: `MCP_HAS_RESOURCES=true MCP_HAS_PROMPTS=true`
+
+O Demo MCP inclui:
+- 3 Tools: `hello_world`, `calculate`, `get_info`
+- 3 Resources: hello, documentation, config
+- 3 Prompts: greeting, code_review, brainstorm
+- Roots: data, config, cache
+- Health check via Ping
+
 ## API
 
 Base URL: `http://localhost:5146/api`
@@ -218,6 +292,39 @@ Referencia completa dos endpoints:
 
 - `GET /logs/:id`
 	- Stream SSE de logs do contêiner
+
+### Namespaces Customizados
+
+- `POST /api/namespaces/deploy`
+	- Cria um namespace customizado combinando múltiplos MCPs
+	- Body:
+		```json
+		{
+			"namespace": {
+				"id": "ns_1234567890",
+				"name": "Meu Namespace",
+				"description": "Descrição opcional",
+				"transport": "stdio" | "http" | "streamable-http",
+				"port": 8000,
+				"enabledMcps": ["mcp1_id", "mcp2_id"],
+				"disabledTools": ["tool_name1", "tool_name2"]
+			},
+			"enabledMcps": [
+				{ "id": "mcp1_id", "name": "MCP 1", "image": "image1:latest" },
+				{ "id": "mcp2_id", "name": "MCP 2", "image": "image2:latest" }
+			]
+		}
+		```
+
+### MCP Tools
+
+- `GET /mcps/:id/tools`
+	- Lista ferramentas disponíveis em um MCP
+	- Retorna array de tools com descrição e inputSchema
+
+- `PATCH /mcps/:id/tools`
+	- Desabilita ferramentas específicas
+	- Body: `{ "disabledTools": ["tool_name1", "tool_name2"] }`
 
 ### Catálogo
 
@@ -522,6 +629,25 @@ Altere `APP_PORT` antes de subir:
 ```bash
 APP_PORT=5252 docker compose up -d --build
 ```
+
+### 6) Resources/Prompts não aparecem no Inspector
+
+Se um MCP não mostra Resources ou Prompts no Inspector, é porque não tem as variáveis de ambiente habilitadas.
+
+Adicione ao deploy:
+
+```
+MCP_HAS_RESOURCES=true
+MCP_HAS_PROMPTS=true
+```
+
+Redeploy o MCP e tente novamente.
+
+### 7) Metadados ausentes para containers antigos
+
+Se containers antigos não têm metadados salvos (ex: criados antes desta atualização), a sincronização automática vai preenchê-los na próxima requisição a `GET /api/mcps`.
+
+Isso ocorre uma única vez por container.
 
 ## Roadmap sugerido
 

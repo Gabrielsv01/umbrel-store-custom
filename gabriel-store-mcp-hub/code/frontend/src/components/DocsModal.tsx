@@ -4,7 +4,7 @@ type Endpoint = {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   path: string;
   description: string;
-  example?: string;
+  exampleTemplate?: string;
 };
 
 type EndpointSection = {
@@ -19,6 +19,25 @@ const METHOD_STYLES: Record<Endpoint['method'], string> = {
   DELETE: 'bg-red-500/15 text-red-300',
 };
 
+// Detectar a base URL atual
+function getBaseUrl(): string {
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+  const port = window.location.port;
+
+  // Se estiver em localhost:3000 (desenvolvimento frontend), usar localhost:5146 (backend)
+  if (hostname === 'localhost' && port === '3000') {
+    return 'http://localhost:5146';
+  }
+
+  // Caso contrário, usar o host atual
+  if (port) {
+    return `${protocol}//${hostname}:${port}`;
+  }
+
+  return `${protocol}//${hostname}`;
+}
+
 const ENDPOINT_SECTIONS: EndpointSection[] = [
   {
     title: 'MCPs',
@@ -27,34 +46,34 @@ const ENDPOINT_SECTIONS: EndpointSection[] = [
         method: 'GET',
         path: '/api/mcps',
         description: 'Lista todos os MCPs gerenciados pelo Hub.',
-        example: 'curl -sS http://localhost:5146/api/mcps',
+        exampleTemplate: 'curl -sS http://localhost:5146/api/mcps',
       },
       {
         method: 'POST',
         path: '/api/deploy',
         description: 'Cria um novo MCP (com pull automatico se necessario).',
-        example:
+        exampleTemplate:
           'curl -sS -X POST http://localhost:5146/api/deploy -H \'Content-Type: application/json\' -d \'{"name":"context7","image":"node:22-bookworm-slim","transport":"stdio","command":"npx -y @upstash/context7-mcp@latest"}\'',
       },
       {
         method: 'PUT',
         path: '/api/mcps/:id',
         description: 'Atualiza um MCP recriando o container.',
-        example:
+        exampleTemplate:
           'curl -sS -X PUT http://localhost:5146/api/mcps/SEU_ID -H \'Content-Type: application/json\' -d \'{"image":"nova-imagem"}\'',
       },
       {
         method: 'POST',
         path: '/api/action/:id',
         description: 'Executa acao start, stop ou remove.',
-        example:
+        exampleTemplate:
           'curl -sS -X POST http://localhost:5146/api/action/SEU_ID -H \'Content-Type: application/json\' -d \'{"action":"start"}\'',
       },
       {
         method: 'GET',
         path: '/api/logs/:id',
         description: 'Stream SSE de logs do container.',
-        example: 'curl -N http://localhost:5146/api/logs/SEU_ID',
+        exampleTemplate: 'curl -N http://localhost:5146/api/logs/SEU_ID',
       },
     ],
   },
@@ -65,7 +84,7 @@ const ENDPOINT_SECTIONS: EndpointSection[] = [
         method: 'GET',
         path: '/api/catalog',
         description: 'Lista templates prontos para deploy.',
-        example: 'curl -sS http://localhost:5146/api/catalog',
+        exampleTemplate: 'curl -sS http://localhost:5146/api/catalog',
       },
     ],
   },
@@ -76,32 +95,32 @@ const ENDPOINT_SECTIONS: EndpointSection[] = [
         method: 'GET',
         path: '/api/stdio/session/:id (WebSocket)',
         description: 'Sessao interativa para MCP stdio.',
-        example: 'wscat -c ws://localhost:5146/api/stdio/session/SEU_ID',
+        exampleTemplate: 'wscat -c ws://localhost:5146/api/stdio/session/SEU_ID',
       },
       {
         method: 'GET',
         path: '/api/stdio/proxy/:id/sse',
         description: 'Proxy SSE para clientes externos.',
-        example: 'curl -N http://localhost:5146/api/stdio/proxy/SEU_ID/sse',
+        exampleTemplate: 'curl -N http://localhost:5146/api/stdio/proxy/SEU_ID/sse',
       },
       {
         method: 'POST',
         path: '/api/stdio/proxy/:id/message?sessionId=<uuid>',
         description: 'Envia mensagens JSON-RPC para o proxy stdio.',
-        example:
+        exampleTemplate:
           'curl -sS -X POST \'http://localhost:5146/api/stdio/proxy/SEU_ID/message?sessionId=SEU_UUID\' -H \'Content-Type: application/json\' -d \'{"jsonrpc":"2.0","method":"echo","params":{}}\'',
       },
       {
         method: 'GET',
         path: '/api/stdio/health/:id',
         description: 'Health check de MCP stdio.',
-        example: 'curl -sS http://localhost:5146/api/stdio/health/SEU_ID',
+        exampleTemplate: 'curl -sS http://localhost:5146/api/stdio/health/SEU_ID',
       },
       {
         method: 'GET',
         path: '/api/stdio/health/:id?probe=network',
         description: 'Health check stdio com probe de rede.',
-        example:
+        exampleTemplate:
           'curl -sS "http://localhost:5146/api/stdio/health/SEU_ID?probe=network"',
       },
     ],
@@ -113,7 +132,7 @@ const ENDPOINT_SECTIONS: EndpointSection[] = [
         method: 'GET',
         path: '/api/health/http/:id',
         description: 'Health check para transports http e streamable-http.',
-        example: 'curl -sS http://localhost:5146/api/health/http/SEU_ID',
+        exampleTemplate: 'curl -sS http://localhost:5146/api/health/http/SEU_ID',
       },
     ],
   },
@@ -124,39 +143,39 @@ const ENDPOINT_SECTIONS: EndpointSection[] = [
         method: 'GET',
         path: '/api/images',
         description: 'Lista imagens locais.',
-        example: 'curl -sS http://localhost:5146/api/images',
+        exampleTemplate: 'curl -sS http://localhost:5146/api/images',
       },
       {
         method: 'POST',
         path: '/api/images/pull',
         description: 'Pull simples de imagem.',
-        example:
+        exampleTemplate:
           'curl -sS -X POST http://localhost:5146/api/images/pull -H \'Content-Type: application/json\' -d \'{"image":"nginx:latest"}\'',
       },
       {
         method: 'GET',
         path: '/api/images/pull/stream?image=<ref>',
         description: 'SSE de progresso de pull.',
-        example:
+        exampleTemplate:
           'curl -N "http://localhost:5146/api/images/pull/stream?image=nginx:latest"',
       },
       {
         method: 'DELETE',
         path: '/api/images/:id',
         description: 'Remove imagem (bloqueia se estiver em uso).',
-        example: 'curl -sS -X DELETE http://localhost:5146/api/images/SEU_ID',
+        exampleTemplate: 'curl -sS -X DELETE http://localhost:5146/api/images/SEU_ID',
       },
       {
         method: 'GET',
         path: '/api/volumes',
         description: 'Lista volumes.',
-        example: 'curl -sS http://localhost:5146/api/volumes',
+        exampleTemplate: 'curl -sS http://localhost:5146/api/volumes',
       },
       {
         method: 'DELETE',
         path: '/api/volumes/:name',
         description: 'Remove volume (bloqueia se estiver em uso).',
-        example:
+        exampleTemplate:
           'curl -sS -X DELETE http://localhost:5146/api/volumes/SEU_NOME',
       },
     ],
@@ -164,6 +183,16 @@ const ENDPOINT_SECTIONS: EndpointSection[] = [
 ];
 
 export default function DocsModal({ onClose }: DocsModalProps) {
+  const baseUrl = getBaseUrl();
+
+  const renderExample = (exampleTemplate?: string): string => {
+    if (!exampleTemplate) return '';
+    const wsUrl = baseUrl.replaceAll('http://', 'ws://').replaceAll('https://', 'wss://');
+    return exampleTemplate
+      .replaceAll('http://localhost:5146', baseUrl)
+      .replaceAll('ws://localhost:5146', wsUrl);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
@@ -184,7 +213,7 @@ export default function DocsModal({ onClose }: DocsModalProps) {
 
         <div className="overflow-y-auto p-6">
           <div className="mb-4 rounded-lg border border-blue-900/40 bg-blue-950/20 px-4 py-3 text-xs text-blue-200">
-            Base URL: <span className="font-mono">http://localhost:5146</span>
+            Base URL: <span className="font-mono">{baseUrl}</span>
           </div>
 
           <div className="space-y-6">
@@ -216,9 +245,9 @@ export default function DocsModal({ onClose }: DocsModalProps) {
                       <p className="mt-1 text-xs text-gray-400">
                         {endpoint.description}
                       </p>
-                      {endpoint.example ? (
+                      {endpoint.exampleTemplate ? (
                         <pre className="mt-2 overflow-x-auto rounded bg-black/40 p-2 font-mono text-[11px] text-gray-300">
-                          {endpoint.example}
+                          {renderExample(endpoint.exampleTemplate)}
                         </pre>
                       ) : null}
                     </div>
