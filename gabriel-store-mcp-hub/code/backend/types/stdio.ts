@@ -1,3 +1,6 @@
+import type Docker from 'dockerode'
+import type { McpRecord } from './mcp.js'
+
 export interface StdioContainer {
   attach: (options: {
     stream: boolean
@@ -55,7 +58,7 @@ export interface RegisterStdioRoutesDeps {
     name: string
     arguments: Record<string, unknown>
   } | null
-  loadData: () => import('./mcp.js').McpRecord
-  docker: import('dockerode').default
+  loadData: () => McpRecord
+  docker: Docker
   mcpLabel: string
 }
