@@ -1,45 +1,53 @@
-import type { JsonRecord } from '../types/common'
-import type { HttpHealthResult, StdioHealthState } from '../types/health'
-import type { DeployPayload, McpContainer } from '../types/mcp'
-import type { ImageRecord, VolumeRecord } from '../types/resources'
-import type { CatalogEntry } from '../types/catalog'
+import type { JsonRecord } from '../types/common';
+import type { HttpHealthResult, StdioHealthState } from '../types/health';
+import type { DeployPayload, McpContainer } from '../types/mcp';
+import type { ImageRecord, VolumeRecord } from '../types/resources';
+import type { CatalogEntry } from '../types/catalog';
 
-type RequestOptions = RequestInit | undefined
+type RequestOptions = RequestInit | undefined;
 
 async function toJsonOrEmpty(response: Response): Promise<unknown | null> {
-  const text = await response.text()
-  if (!text) return null
+  const text = await response.text();
+  if (!text) return null;
 
   try {
-    return JSON.parse(text) as unknown
+    return JSON.parse(text) as unknown;
   } catch {
-    return null
+    return null;
   }
 }
 
 function getErrorMessage(payload: unknown, fallbackMessage: string): string {
   if (payload && typeof payload === 'object' && 'error' in payload) {
-    const errorValue = (payload as JsonRecord).error
-    if (typeof errorValue === 'string') return errorValue
+    const errorValue = (payload as JsonRecord).error;
+    if (typeof errorValue === 'string') return errorValue;
   }
 
-  return fallbackMessage
+  return fallbackMessage;
 }
 
-async function requestJson(url: string, options: RequestOptions, fallbackMessage: string) {
-  const response = await fetch(url, options)
-  const payload = await toJsonOrEmpty(response)
+async function requestJson(
+  url: string,
+  options: RequestOptions,
+  fallbackMessage: string
+) {
+  const response = await fetch(url, options);
+  const payload = await toJsonOrEmpty(response);
 
   if (!response.ok) {
-    throw new Error(getErrorMessage(payload, fallbackMessage))
+    throw new Error(getErrorMessage(payload, fallbackMessage));
   }
 
-  return payload
+  return payload;
 }
 
 export async function listMcps(): Promise<McpContainer[]> {
-  const payload = await requestJson('/api/mcps', undefined, 'Failed to fetch MCPs')
-  return Array.isArray(payload) ? (payload as McpContainer[]) : []
+  const payload = await requestJson(
+    '/api/mcps',
+    undefined,
+    'Failed to fetch MCPs'
+  );
+  return Array.isArray(payload) ? (payload as McpContainer[]) : [];
 }
 
 export async function deployMcp(formData: DeployPayload): Promise<unknown> {
@@ -50,11 +58,14 @@ export async function deployMcp(formData: DeployPayload): Promise<unknown> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(formData),
     },
-    'Deploy failed',
-  )
+    'Deploy failed'
+  );
 }
 
-export async function updateMcp(id: string, formData: DeployPayload): Promise<unknown> {
+export async function updateMcp(
+  id: string,
+  formData: DeployPayload
+): Promise<unknown> {
   return requestJson(
     `/api/mcps/${id}`,
     {
@@ -62,11 +73,14 @@ export async function updateMcp(id: string, formData: DeployPayload): Promise<un
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(formData),
     },
-    'Update failed',
-  )
+    'Update failed'
+  );
 }
 
-export async function runMcpAction(id: string, action: string): Promise<unknown> {
+export async function runMcpAction(
+  id: string,
+  action: string
+): Promise<unknown> {
   return requestJson(
     `/api/action/${id}`,
     {
@@ -74,41 +88,65 @@ export async function runMcpAction(id: string, action: string): Promise<unknown>
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action }),
     },
-    'Action failed',
-  )
+    'Action failed'
+  );
 }
 
 export async function getStdioHealth(id: string): Promise<StdioHealthState> {
   return requestJson(
     `/api/stdio/health/${id}?probe=network`,
     undefined,
-    'Health check failed',
-  ) as Promise<StdioHealthState>
+    'Health check failed'
+  ) as Promise<StdioHealthState>;
 }
 
 export async function listImages(): Promise<ImageRecord[]> {
-  const payload = await requestJson('/api/images', undefined, 'Failed to fetch images')
-  return Array.isArray(payload) ? (payload as ImageRecord[]) : []
+  const payload = await requestJson(
+    '/api/images',
+    undefined,
+    'Failed to fetch images'
+  );
+  return Array.isArray(payload) ? (payload as ImageRecord[]) : [];
 }
 
 export async function removeImage(shortId: string): Promise<unknown> {
-  return requestJson(`/api/images/${shortId}`, { method: 'DELETE' }, 'Failed to remove image')
+  return requestJson(
+    `/api/images/${shortId}`,
+    { method: 'DELETE' },
+    'Failed to remove image'
+  );
 }
 
 export async function listVolumes(): Promise<VolumeRecord[]> {
-  const payload = await requestJson('/api/volumes', undefined, 'Failed to fetch volumes')
-  return Array.isArray(payload) ? (payload as VolumeRecord[]) : []
+  const payload = await requestJson(
+    '/api/volumes',
+    undefined,
+    'Failed to fetch volumes'
+  );
+  return Array.isArray(payload) ? (payload as VolumeRecord[]) : [];
 }
 
 export async function removeVolume(name: string): Promise<unknown> {
-  return requestJson(`/api/volumes/${encodeURIComponent(name)}`, { method: 'DELETE' }, 'Failed to remove volume')
+  return requestJson(
+    `/api/volumes/${encodeURIComponent(name)}`,
+    { method: 'DELETE' },
+    'Failed to remove volume'
+  );
 }
 
 export async function getHttpHealth(id: string): Promise<HttpHealthResult> {
-  return requestJson(`/api/health/http/${id}`, undefined, 'Health check failed') as Promise<HttpHealthResult>
+  return requestJson(
+    `/api/health/http/${id}`,
+    undefined,
+    'Health check failed'
+  ) as Promise<HttpHealthResult>;
 }
 
 export async function fetchCatalog(): Promise<CatalogEntry[]> {
-  const payload = await requestJson('/api/catalog', undefined, 'Failed to fetch catalog')
-  return Array.isArray(payload) ? (payload as CatalogEntry[]) : []
+  const payload = await requestJson(
+    '/api/catalog',
+    undefined,
+    'Failed to fetch catalog'
+  );
+  return Array.isArray(payload) ? (payload as CatalogEntry[]) : [];
 }

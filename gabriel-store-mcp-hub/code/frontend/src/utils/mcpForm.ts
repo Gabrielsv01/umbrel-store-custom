@@ -1,4 +1,4 @@
-import type { EditMcpValues, McpContainer } from '../types/mcp'
+import type { EditMcpValues, McpContainer } from '../types/mcp';
 
 export function mapMcpToEditValues(mcp: McpContainer): EditMcpValues {
   return {
@@ -16,5 +16,5 @@ export function mapMcpToEditValues(mcp: McpContainer): EditMcpValues {
     env: mcp.meta?.env || {},
     secretKeys: mcp.meta?.secretKeys,
     runtime: mcp.meta?.runtime || {},
-  }
+  };
 }

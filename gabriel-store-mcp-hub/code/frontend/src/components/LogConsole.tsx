@@ -1,34 +1,34 @@
-import { useState, useEffect, useRef } from 'react'
-import type { ConsoleProps } from '../types/components'
+import { useState, useEffect, useRef } from 'react';
+import type { ConsoleProps } from '../types/components';
 
 export default function LogConsole({ id, name, onClose }: ConsoleProps) {
-  const [lines, setLines] = useState<string[]>([])
-  const [connected, setConnected] = useState(true)
-  const bottomRef = useRef<HTMLDivElement | null>(null)
+  const [lines, setLines] = useState<string[]>([]);
+  const [connected, setConnected] = useState(true);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    setLines([])
-    setConnected(true)
+    setLines([]);
+    setConnected(true);
 
-    const es = new EventSource(`/api/logs/${id}`)
+    const es = new EventSource(`/api/logs/${id}`);
 
     es.onmessage = (e) => {
-      const text = String(JSON.parse(e.data))
-      setLines((prev) => [...prev, text])
-    }
+      const text = String(JSON.parse(e.data));
+      setLines((prev) => [...prev, text]);
+    };
 
     es.onerror = () => {
-      setConnected(false)
-      setLines((prev) => [...prev, '\n[Connection closed]\n'])
-      es.close()
-    }
+      setConnected(false);
+      setLines((prev) => [...prev, '\n[Connection closed]\n']);
+      es.close();
+    };
 
-    return () => es.close()
-  }, [id])
+    return () => es.close();
+  }, [id]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [lines])
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [lines]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
@@ -67,5 +67,5 @@ export default function LogConsole({ id, name, onClose }: ConsoleProps) {
         </div>
       </div>
     </div>
-  )
+  );
 }

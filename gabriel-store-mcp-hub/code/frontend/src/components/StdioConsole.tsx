@@ -1,71 +1,71 @@
-import { useEffect, useRef, useState } from 'react'
-import type { ConsoleProps } from '../types/components'
+import { useEffect, useRef, useState } from 'react';
+import type { ConsoleProps } from '../types/components';
 
 type SessionPayload = {
-  type?: string
-  data?: string
-  error?: string
-}
+  type?: string;
+  data?: string;
+  error?: string;
+};
 
 export default function StdioConsole({ id, name, onClose }: ConsoleProps) {
-  const [connected, setConnected] = useState(false)
-  const [lines, setLines] = useState<string[]>([])
-  const [input, setInput] = useState('')
-  const wsRef = useRef<WebSocket | null>(null)
-  const bottomRef = useRef<HTMLDivElement | null>(null)
+  const [connected, setConnected] = useState(false);
+  const [lines, setLines] = useState<string[]>([]);
+  const [input, setInput] = useState('');
+  const wsRef = useRef<WebSocket | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    setLines([])
+    setLines([]);
 
-    const protocol = globalThis.location.protocol === 'https:' ? 'wss' : 'ws'
+    const protocol = globalThis.location.protocol === 'https:' ? 'wss' : 'ws';
     const ws = new WebSocket(
-      `${protocol}://${globalThis.location.host}/api/stdio/session/${id}`,
-    )
-    wsRef.current = ws
+      `${protocol}://${globalThis.location.host}/api/stdio/session/${id}`
+    );
+    wsRef.current = ws;
 
-    ws.onopen = () => setConnected(true)
+    ws.onopen = () => setConnected(true);
     ws.onclose = () => {
-      setConnected(false)
-      setLines((prev) => [...prev, '\n[session closed]\n'])
-    }
+      setConnected(false);
+      setLines((prev) => [...prev, '\n[session closed]\n']);
+    };
 
     ws.onmessage = (event) => {
       try {
-        const payload = JSON.parse(String(event.data)) as SessionPayload
+        const payload = JSON.parse(String(event.data)) as SessionPayload;
         if (payload.type === 'output') {
-          setLines((prev) => [...prev, payload.data ?? ''])
-          return
+          setLines((prev) => [...prev, payload.data ?? '']);
+          return;
         }
         if (payload.type === 'error') {
-          setLines((prev) => [...prev, `\n[error] ${payload.error}\n`])
-          return
+          setLines((prev) => [...prev, `\n[error] ${payload.error}\n`]);
+          return;
         }
       } catch {
-        setLines((prev) => [...prev, String(event.data)])
+        setLines((prev) => [...prev, String(event.data)]);
       }
-    }
+    };
 
     return () => {
-      ws.close()
-      wsRef.current = null
-    }
-  }, [id])
+      ws.close();
+      wsRef.current = null;
+    };
+  }, [id]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [lines])
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [lines]);
 
   const sendInput = () => {
-    const text = input
-    const ws = wsRef.current
+    const text = input;
+    const ws = wsRef.current;
     if (!text.trim() || ws?.readyState !== WebSocket.OPEN) {
-      return
+      return;
     }
 
-    ws.send(JSON.stringify({ type: 'input', data: `${text}\n` }))
-    setLines((prev) => [...prev, `> ${text}\n`])
-    setInput('')
-  }
+    ws.send(JSON.stringify({ type: 'input', data: `${text}\n` }));
+    setLines((prev) => [...prev, `> ${text}\n`]);
+    setInput('');
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
@@ -75,7 +75,9 @@ export default function StdioConsole({ id, name, onClose }: ConsoleProps) {
             <span
               className={`h-2 w-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`}
             />
-            <span className="font-mono text-sm font-medium text-white">{name}</span>
+            <span className="font-mono text-sm font-medium text-white">
+              {name}
+            </span>
             <span className="text-xs text-gray-500">— stdio session</span>
           </div>
           <button
@@ -105,8 +107,8 @@ export default function StdioConsole({ id, name, onClose }: ConsoleProps) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                e.preventDefault()
-                sendInput()
+                e.preventDefault();
+                sendInput();
               }
             }}
             placeholder="Type input and press Enter"
@@ -122,5 +124,5 @@ export default function StdioConsole({ id, name, onClose }: ConsoleProps) {
         </div>
       </div>
     </div>
-  )
+  );
 }
