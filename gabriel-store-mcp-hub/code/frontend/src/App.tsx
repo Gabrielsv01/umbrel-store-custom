@@ -9,6 +9,7 @@ import CatalogModal from './components/CatalogModal';
 import DocsModal from './components/DocsModal';
 import MCPInspector from './components/MCPInspector';
 import ToolsManager from './components/ToolsManager';
+import MCPBuilder from './components/MCPBuilder';
 import { listImages } from './services/api';
 import { useMcps } from './hooks/useMcps';
 import { useImages } from './hooks/useImages';
@@ -22,7 +23,7 @@ import Menu from './components/Menu';
 type LogTarget = { id: string; name: string };
 
 export default function App() {
-  const [view, setView] = useState<'hub' | 'inspector'>('hub');
+  const [view, setView] = useState<'hub' | 'inspector' | 'builder'>('hub');
   const [showForm, setShowForm] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
@@ -224,6 +225,8 @@ export default function App() {
               setShowDocs={setShowDocs}
               setShowForm={setShowForm}
               setView={setView}
+              onOpenImages={openImages}
+              onOpenVolumes={openVolumes}
             />
           </div>
         </div>
@@ -232,6 +235,14 @@ export default function App() {
       <main>
         {view === 'inspector' ? (
           <MCPInspector onBack={() => setView('hub')} />
+        ) : view === 'builder' ? (
+          <MCPBuilder
+            mcps={mcps}
+            onBack={() => setView('hub')}
+            onMcpDeployed={() => {
+              // Trigger refresh of MCPs
+            }}
+          />
         ) : (
           <div className="mx-auto max-w-6xl px-6 py-8">
             {loading ? (
@@ -249,26 +260,93 @@ export default function App() {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {mcps.map((mcp) => (
-                  <MCPCard
-                    key={mcp.id}
-                    mcp={mcp}
-                    actionLoading={actionLoading[mcp.id]}
-                    onAction={handleAction}
-                    onViewLogs={() => setLogTarget({ id: mcp.id, name: mcp.name })}
-                    onOpenSession={() =>
-                      setStdioTarget({ id: mcp.id, name: mcp.name })
-                    }
-                    onCheckHealth={onCheckHealth}
-                    onOpenTools={() => setToolsTarget(mcp)}
-                    health={stdioHealth[mcp.id]}
-                    healthLoading={!!stdioHealthLoading[mcp.id]}
-                    httpHealth={httpHealth[mcp.id]}
-                    httpHealthLoading={!!httpHealthLoading[mcp.id]}
-                    onEdit={() => setEditingMcp(mapMcpToEditValues(mcp))}
-                  />
-                ))}
+              <div className="space-y-8">
+                {(() => {
+                  const customMcpIds = new Set(
+                    JSON.parse(localStorage.getItem('custom_mcp_ids') || '[]')
+                  );
+                  const customMcps = mcps.filter((m) => customMcpIds.has(m.id));
+                  const regularMcps = mcps.filter((m) => !customMcpIds.has(m.id));
+
+                  return (
+                    <>
+                      {customMcps.length > 0 && (
+                        <div>
+                          <div className="mb-4 flex items-center gap-2">
+                            <h2 className="text-lg font-semibold text-white">
+                              🔧 Custom MCPs
+                            </h2>
+                            <span className="text-xs text-gray-400">
+                              Created from Builder
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            {customMcps.map((mcp) => (
+                              <MCPCard
+                                key={mcp.id}
+                                mcp={mcp}
+                                actionLoading={actionLoading[mcp.id]}
+                                onAction={handleAction}
+                                onViewLogs={() =>
+                                  setLogTarget({ id: mcp.id, name: mcp.name })
+                                }
+                                onOpenSession={() =>
+                                  setStdioTarget({ id: mcp.id, name: mcp.name })
+                                }
+                                onCheckHealth={onCheckHealth}
+                                onOpenTools={() => setToolsTarget(mcp)}
+                                health={stdioHealth[mcp.id]}
+                                healthLoading={!!stdioHealthLoading[mcp.id]}
+                                httpHealth={httpHealth[mcp.id]}
+                                httpHealthLoading={!!httpHealthLoading[mcp.id]}
+                                onEdit={() =>
+                                  setEditingMcp(mapMcpToEditValues(mcp))
+                                }
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {regularMcps.length > 0 && (
+                        <div>
+                          <div className="mb-4">
+                            <h2 className="text-lg font-semibold text-white">
+                              📦 MCP Servers
+                            </h2>
+                          </div>
+                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            {regularMcps.map((mcp) => (
+                              <MCPCard
+                                key={mcp.id}
+                                mcp={mcp}
+                                actionLoading={actionLoading[mcp.id]}
+                                onAction={handleAction}
+                                onViewLogs={() =>
+                                  setLogTarget({ id: mcp.id, name: mcp.name })
+                                }
+                                onOpenSession={() =>
+                                  setStdioTarget({ id: mcp.id, name: mcp.name })
+                                }
+                                onCheckHealth={onCheckHealth}
+                                onOpenTools={() => setToolsTarget(mcp)}
+                                health={stdioHealth[mcp.id]}
+                                healthLoading={!!stdioHealthLoading[mcp.id]}
+                                httpHealth={httpHealth[mcp.id]}
+                                httpHealthLoading={
+                                  !!httpHealthLoading[mcp.id]
+                                }
+                                onEdit={() =>
+                                  setEditingMcp(mapMcpToEditValues(mcp))
+                                }
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </div>

@@ -4,7 +4,7 @@
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp mcp-wrapper-server.js dist/",
     "start": "node dist/server.js",
     "dev": "tsx watch server.ts"
   },

@@ -12,6 +12,9 @@ export interface McpMeta {
   transport?: McpTransport
   runtime?: McpRuntimeConfig
   disabledTools?: string[]
+  isCustomNamespace?: boolean
+  namespaceId?: string
+  enabledMcps?: string[]
 }
 
 export interface McpRecord {

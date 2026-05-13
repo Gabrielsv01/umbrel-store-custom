@@ -4,6 +4,7 @@ import type { DeployPayload, McpContainer } from '../types/mcp';
 import type { ImageRecord, VolumeRecord } from '../types/resources';
 import type { CatalogEntry } from '../types/catalog';
 import type { JsonRpcPayload, JsonRpcResponse, McpTool } from '../types/inspector';
+import type { McpNamespace } from '../types/builder';
 
 type RequestOptions = RequestInit | undefined;
 
@@ -193,4 +194,23 @@ export async function updateDisabledTools(
     },
     'Failed to update disabled tools'
   );
+}
+
+export interface DeployNamespacePayload {
+  namespace: McpNamespace;
+  enabledMcps: McpContainer[];
+}
+
+export async function deployNamespaceAsMcp(
+  payload: DeployNamespacePayload
+): Promise<McpContainer> {
+  return requestJson(
+    '/api/namespaces/deploy',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+    'Failed to deploy namespace as MCP'
+  ) as Promise<McpContainer>;
 }

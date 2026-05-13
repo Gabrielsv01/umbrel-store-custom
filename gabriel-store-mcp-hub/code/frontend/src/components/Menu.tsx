@@ -1,32 +1,34 @@
 import { useState } from 'react';
-import { useImages } from '../hooks/useImages';
-import { useVolumes } from '../hooks/useVolumes';
+
+interface MenuProps {
+  setShowCatalog: React.Dispatch<React.SetStateAction<boolean>>;
+  setShowDocs: React.Dispatch<React.SetStateAction<boolean>>;
+  setShowForm: React.Dispatch<React.SetStateAction<boolean>>;
+  setView: React.Dispatch<React.SetStateAction<'hub' | 'inspector' | 'builder'>>;
+  onOpenImages: () => Promise<void>;
+  onOpenVolumes: () => Promise<void>;
+}
 
 export default function Menu({
   setShowCatalog,
   setShowDocs,
   setShowForm,
   setView,
-}: Readonly<{
-  setShowCatalog: React.Dispatch<React.SetStateAction<boolean>>;
-  setShowDocs: React.Dispatch<React.SetStateAction<boolean>>;
-  setShowForm: React.Dispatch<React.SetStateAction<boolean>>;
-  setView: React.Dispatch<React.SetStateAction<'hub' | 'inspector'>>;
-}>) {
+  onOpenImages,
+  onOpenVolumes,
+}: Readonly<MenuProps>) {
   const [showMenu, setShowMenu] = useState(false);
-  const { openImages } = useImages();
-  const { openVolumes } = useVolumes();
 
   const handleMenuClose = () => setShowMenu(false);
-  const handleMenuClick = (callback: () => void) => {
-    callback();
-    handleMenuClose();
+  const handleMenuClick = (callback: (() => void) | (() => Promise<void>)) => {
+    Promise.resolve(callback()).finally(handleMenuClose);
   };
 
   const menuItems = [
     { label: 'MCP Inspector', onClick: () => setView('inspector') },
-    { label: 'Volumes', onClick: openVolumes },
-    { label: 'Images', onClick: openImages },
+    { label: 'MCP Builder', onClick: () => setView('builder') },
+    { label: 'Volumes', onClick: onOpenVolumes },
+    { label: 'Images', onClick: onOpenImages },
     { label: 'Catalog', onClick: () => setShowCatalog(true) },
     { label: 'API Docs', onClick: () => setShowDocs(true) },
   ];

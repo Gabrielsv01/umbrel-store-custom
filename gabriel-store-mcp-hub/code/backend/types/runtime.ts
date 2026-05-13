@@ -16,10 +16,11 @@ export interface McpRuntimeConfig {
 export interface BuildContainerOptionsInput {
   name: string
   image: string
-  command?: string
+  command?: string | string[]
   env?: Record<string, string>
   port?: number | string
   transport?: 'http' | 'stdio' | 'streamable-http'
   runtime?: McpRuntimeConfig
   mcpLabel: string
+  volumes?: Record<string, string>
 }

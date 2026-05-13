@@ -93,7 +93,14 @@ export function buildContainerOptions(input: BuildContainerOptionsInput): Docker
     .map(([key, value]) => `${key.trim()}=${value}`)
 
   const runtime = normalizeRuntimeConfig(input.runtime)
-  const cmd = runtime?.args && runtime.args.length > 0 ? runtime.args : splitCommand(input.command)
+  let cmd: string[] | undefined
+  if (runtime?.args && runtime.args.length > 0) {
+    cmd = runtime.args
+  } else if (Array.isArray(input.command)) {
+    cmd = input.command
+  } else {
+    cmd = splitCommand(input.command)
+  }
   const entrypoint = splitCommand(runtime?.entrypoint)
   const portStr = input.port ? String(input.port) : undefined
   const exposePort = input.transport !== 'stdio' && !!portStr
@@ -103,7 +110,10 @@ export function buildContainerOptions(input: BuildContainerOptionsInput): Docker
   const portBindings: Docker.PortMap = exposePort
     ? { [`${portStr}/tcp`]: [{ HostPort: portStr }] }
     : {}
-  const binds = [...(runtime?.volumes ?? []), ...(runtime?.bindMounts ?? [])]
+  const volumeMounts = Object.entries(input.volumes ?? {})
+    .map(([containerPath, hostPath]) => `${hostPath}:${containerPath}:ro`)
+
+  const binds = [...(runtime?.volumes ?? []), ...(runtime?.bindMounts ?? []), ...volumeMounts]
 
   return {
     name: input.name.trim(),

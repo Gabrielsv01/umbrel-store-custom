@@ -13,6 +13,7 @@ import { registerHttpHealthRoutes } from './routes/httpHealth.js'
 import { registerMcpInspectRoutes } from './routes/mcpInspect.js'
 import { registerMcpToolsRoutes } from './routes/mcpTools.js'
 import { registerCatalogRoutes } from './routes/catalog.js'
+import { registerNamespaceRoutes } from './routes/namespaces.js'
 import {
   buildContainerOptions,
   normalizeRuntimeConfig,
@@ -196,6 +197,13 @@ registerMcpInspectRoutes(fastify, {
 })
 registerMcpToolsRoutes(fastify, { docker, loadData, saveData, mcpLabel: MCP_LABEL, createDockerMultiplexDecoder })
 registerCatalogRoutes(fastify)
+registerNamespaceRoutes(fastify, {
+  docker,
+  loadData,
+  saveData,
+  mcpLabel: MCP_LABEL,
+  buildContainerOptions,
+})
 
 // ─── POST /api/deploy ─────────────────────────────────────────────────────────
 
