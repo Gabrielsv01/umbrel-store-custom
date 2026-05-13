@@ -10,6 +10,7 @@ import { registerImageRoutes } from './routes/images.js'
 import { registerStdioRoutes } from './routes/stdio.js'
 import { registerVolumeRoutes } from './routes/volumes.js'
 import { registerHttpHealthRoutes } from './routes/httpHealth.js'
+import { registerMcpInspectRoutes } from './routes/mcpInspect.js'
 import { registerCatalogRoutes } from './routes/catalog.js'
 import {
   buildContainerOptions,
@@ -179,6 +180,16 @@ registerStdioRoutes(fastify, {
   selectNetworkProbeTool,
 })
 registerHttpHealthRoutes(fastify, { docker, loadData, mcpLabel: MCP_LABEL })
+registerMcpInspectRoutes(fastify, {
+  docker,
+  loadData,
+  mcpLabel: MCP_LABEL,
+  resolveStdioContainer,
+  createDockerMultiplexDecoder,
+  createLineDecoder,
+  detectNetworkIssues,
+  selectNetworkProbeTool,
+})
 registerCatalogRoutes(fastify)
 
 // ─── POST /api/deploy ─────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import ImagesModal from './components/ImagesModal';
 import VolumesModal from './components/VolumesModal';
 import CatalogModal from './components/CatalogModal';
 import DocsModal from './components/DocsModal';
+import MCPInspector from './components/MCPInspector';
 import { listImages } from './services/api';
 import { useMcps } from './hooks/useMcps';
 import { useImages } from './hooks/useImages';
@@ -20,6 +21,7 @@ import Menu from './components/Menu';
 type LogTarget = { id: string; name: string };
 
 export default function App() {
+  const [view, setView] = useState<'hub' | 'inspector'>('hub');
   const [showForm, setShowForm] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
@@ -213,46 +215,53 @@ export default function App() {
               setShowCatalog={setShowCatalog}
               setShowDocs={setShowDocs}
               setShowForm={setShowForm}
+              setView={setView}
             />
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        {loading ? (
-          <div className="flex items-center justify-center py-20 text-gray-500">
-            Loading containers...
-          </div>
-        ) : mcps.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-4 py-20 text-gray-500">
-            <p className="text-lg">No MCP containers deployed yet.</p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="text-sm text-blue-400 underline hover:text-blue-300"
-            >
-              Deploy your first MCP -&gt;
-            </button>
-          </div>
+      <main>
+        {view === 'inspector' ? (
+          <MCPInspector onBack={() => setView('hub')} />
         ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {mcps.map((mcp) => (
-              <MCPCard
-                key={mcp.id}
-                mcp={mcp}
-                actionLoading={actionLoading[mcp.id]}
-                onAction={handleAction}
-                onViewLogs={() => setLogTarget({ id: mcp.id, name: mcp.name })}
-                onOpenSession={() =>
-                  setStdioTarget({ id: mcp.id, name: mcp.name })
-                }
-                onCheckHealth={onCheckHealth}
-                health={stdioHealth[mcp.id]}
-                healthLoading={!!stdioHealthLoading[mcp.id]}
-                httpHealth={httpHealth[mcp.id]}
-                httpHealthLoading={!!httpHealthLoading[mcp.id]}
-                onEdit={() => setEditingMcp(mapMcpToEditValues(mcp))}
-              />
-            ))}
+          <div className="mx-auto max-w-6xl px-6 py-8">
+            {loading ? (
+              <div className="flex items-center justify-center py-20 text-gray-500">
+                Loading containers...
+              </div>
+            ) : mcps.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-4 py-20 text-gray-500">
+                <p className="text-lg">No MCP containers deployed yet.</p>
+                <button
+                  onClick={() => setShowForm(true)}
+                  className="text-sm text-blue-400 underline hover:text-blue-300"
+                >
+                  Deploy your first MCP -&gt;
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {mcps.map((mcp) => (
+                  <MCPCard
+                    key={mcp.id}
+                    mcp={mcp}
+                    actionLoading={actionLoading[mcp.id]}
+                    onAction={handleAction}
+                    onViewLogs={() => setLogTarget({ id: mcp.id, name: mcp.name })}
+                    onOpenSession={() =>
+                      setStdioTarget({ id: mcp.id, name: mcp.name })
+                    }
+                    onCheckHealth={onCheckHealth}
+                    health={stdioHealth[mcp.id]}
+                    healthLoading={!!stdioHealthLoading[mcp.id]}
+                    httpHealth={httpHealth[mcp.id]}
+                    httpHealthLoading={!!httpHealthLoading[mcp.id]}
+                    onEdit={() => setEditingMcp(mapMcpToEditValues(mcp))}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </main>

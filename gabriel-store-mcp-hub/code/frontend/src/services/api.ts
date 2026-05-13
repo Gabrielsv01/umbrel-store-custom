@@ -3,6 +3,7 @@ import type { HttpHealthResult, StdioHealthState } from '../types/health';
 import type { DeployPayload, McpContainer } from '../types/mcp';
 import type { ImageRecord, VolumeRecord } from '../types/resources';
 import type { CatalogEntry } from '../types/catalog';
+import type { JsonRpcPayload, JsonRpcResponse } from '../types/inspector';
 
 type RequestOptions = RequestInit | undefined;
 
@@ -149,4 +150,19 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
     'Failed to fetch catalog'
   );
   return Array.isArray(payload) ? (payload as CatalogEntry[]) : [];
+}
+
+export async function callMcpInspect(
+  id: string,
+  payload: JsonRpcPayload
+): Promise<JsonRpcResponse> {
+  return requestJson(
+    `/api/mcp/inspect/${id}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+    'MCP inspect call failed'
+  ) as Promise<JsonRpcResponse>;
 }

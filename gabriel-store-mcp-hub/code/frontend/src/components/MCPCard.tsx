@@ -58,7 +58,6 @@ export default function MCPCard({
   httpHealthLoading,
 }: MCPCardProps) {
   const [copied, setCopied] = useState(false);
-  const [copiedId, setCopiedId] = useState(false);
   const [showHealthTip, setShowHealthTip] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const isRunning = mcp.status === 'running';
@@ -96,12 +95,6 @@ export default function MCPCard({
 
   // Keep backward compat: healthTone used in existing badge
   const healthTone = isStdio ? stdioHealthTone : httpHealthTone;
-
-  const copyId = () => {
-    navigator.clipboard.writeText(mcp.id);
-    setCopiedId(true);
-    setTimeout(() => setCopiedId(false), 1500);
-  };
 
   const runAction = (action: McpAction) => {
     setShowMenu(false);
@@ -309,13 +302,6 @@ export default function MCPCard({
         <span className="min-w-0 truncate rounded bg-gray-800 px-2 py-0.5 font-mono text-gray-300">
           {mcp.id}
         </span>
-        <button
-          onClick={copyId}
-          className="rounded bg-gray-800 px-2 py-0.5 text-[11px] text-gray-300 transition-colors hover:bg-gray-700"
-          title="Copy MCP ID"
-        >
-          {copiedId ? 'Copied' : 'Copy ID'}
-        </button>
       </div>
 
       <div className="relative flex flex-wrap items-center gap-2 text-xs text-gray-400">

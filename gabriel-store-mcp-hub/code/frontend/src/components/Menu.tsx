@@ -6,10 +6,12 @@ export default function Menu({
   setShowCatalog,
   setShowDocs,
   setShowForm,
+  setView,
 }: Readonly<{
   setShowCatalog: React.Dispatch<React.SetStateAction<boolean>>;
   setShowDocs: React.Dispatch<React.SetStateAction<boolean>>;
   setShowForm: React.Dispatch<React.SetStateAction<boolean>>;
+  setView: React.Dispatch<React.SetStateAction<'hub' | 'inspector'>>;
 }>) {
   const [showMenu, setShowMenu] = useState(false);
   const { openImages } = useImages();
@@ -22,6 +24,7 @@ export default function Menu({
   };
 
   const menuItems = [
+    { label: 'MCP Inspector', onClick: () => setView('inspector') },
     { label: 'Volumes', onClick: openVolumes },
     { label: 'Images', onClick: openImages },
     { label: 'Catalog', onClick: () => setShowCatalog(true) },
