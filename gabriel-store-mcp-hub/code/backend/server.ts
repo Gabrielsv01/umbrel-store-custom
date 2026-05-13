@@ -157,6 +157,24 @@ fastify.get('/api/mcps', async () => {
     filters: JSON.stringify({ label: [`${MCP_LABEL}=true`] }),
   })
   const stored = loadData()
+  let dataChanged = false
+
+  // Sync: add missing metadata for containers that don't have it
+  for (const c of list) {
+    const shortId = c.Id.slice(0, 12)
+    if (!stored[shortId]) {
+      stored[shortId] = {
+        name: c.Names[0]?.replace('/', '') ?? shortId,
+        image: c.Image,
+      }
+      dataChanged = true
+    }
+  }
+
+  if (dataChanged) {
+    saveData(stored)
+  }
+
   return list.map((c) => {
     const meta = stored[c.Id.slice(0, 12)] ?? {}
     return {

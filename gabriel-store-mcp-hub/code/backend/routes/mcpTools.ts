@@ -53,9 +53,22 @@ export function registerMcpToolsRoutes(
 
       const shortId = match.Id.slice(0, 12)
       const data = loadData()
-      const meta = data[shortId]
+      let meta = data[shortId]
+
+      // If metadata doesn't exist, create default metadata from container inspection
       if (!meta) {
-        return reply.code(404).send({ error: 'metadata not found' })
+        const containerInfo = await docker.getContainer(match.Id).inspect().catch(() => null)
+        if (!containerInfo) {
+          return reply.code(404).send({ error: 'unable to inspect container' })
+        }
+
+        // Default to HTTP transport with port 3000
+        meta = {
+          name: containerInfo.Name?.replace(/^\//, '') || 'unknown',
+          image: containerInfo.Config?.Image || 'unknown',
+          transport: 'http',
+          port: 3000,
+        }
       }
 
       const transport = meta.transport ?? 'http'
