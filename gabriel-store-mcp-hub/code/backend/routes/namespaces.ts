@@ -73,15 +73,21 @@ export function registerNamespaceRoutes(
           PORT: String(namespace.port),
         }
 
-        // Get the MCP wrapper server script content
-        // The file is copied to dist/ during build (see package.json build script)
+        // Get the appropriate MCP wrapper server script based on transport
+        // The files are copied to dist/ during build (see package.json build script)
         // __dirname is dist/routes/, so we need to go up one level
-        const wrapperScript = path.join(__dirname, '../mcp-wrapper-server.js')
+        const wrapperFileName = {
+          http: 'mcp-wrapper-server-http.js',
+          stdio: 'mcp-wrapper-server-stdio.js',
+          'streamable-http': 'mcp-wrapper-server-streamable-http.js',
+        }[namespace.transport] || 'mcp-wrapper-server-http.js'
+
+        const wrapperScript = path.join(__dirname, `../${wrapperFileName}`)
 
         if (!fs.existsSync(wrapperScript)) {
           throw new Error(
             `MCP wrapper script not found at: ${wrapperScript}\n` +
-            `Make sure to run: pnpm run build (which copies the file to dist/)`
+            `Make sure to run: pnpm run build (which copies the files to dist/)`
           )
         }
 
@@ -99,7 +105,7 @@ export function registerNamespaceRoutes(
             ...mcpConfig,
             NODE_ENV: 'production',
           },
-          port: namespace.port,
+          port: namespace.transport === 'stdio' ? undefined : namespace.port,
           transport: namespace.transport,
           mcpLabel,
         })
@@ -126,7 +132,7 @@ export function registerNamespaceRoutes(
 
         return reply.code(200).send({
           id: shortId,
-          name: containerName,
+          name: data[shortId].name,
           image: 'node:20-alpine',
           status: 'running',
           meta: data[shortId],

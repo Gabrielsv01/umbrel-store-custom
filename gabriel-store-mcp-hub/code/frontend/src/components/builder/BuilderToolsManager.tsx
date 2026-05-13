@@ -1,73 +1,78 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import type { McpNamespace, ManagedTool } from '../../types/builder';
 import type { McpContainer } from '../../types/mcp';
+import { getMcpTools } from '../../services/api';
 
 interface BuilderToolsManagerProps {
-  namespace: McpNamespace;
-  availableMcps: McpContainer[];
-  onToggleTool: (toolId: string, disabled: boolean) => void;
+  readonly namespace: McpNamespace;
+  readonly availableMcps: McpContainer[];
+  readonly onToggleTool: (toolId: string, disabled: boolean) => void;
 }
 
 export default function BuilderToolsManager({
   namespace,
   availableMcps,
   onToggleTool,
-}: BuilderToolsManagerProps) {
+}: Readonly<BuilderToolsManagerProps>) {
   const [filterMcp, setFilterMcp] = useState<string>('');
+  const [managedTools, setManagedTools] = useState<ManagedTool[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const managedTools = useMemo(() => {
-    const tools: ManagedTool[] = [];
+  useEffect(() => {
+    const loadTools = async () => {
+      setLoading(true);
+      const tools: ManagedTool[] = [];
 
-    namespace.enabledMcps.forEach((mcpId) => {
-      const mcp = availableMcps.find((m) => m.id === mcpId);
-      if (!mcp) return;
+      try {
+        for (const mcpId of namespace.enabledMcps) {
+          const mcp = availableMcps.find((m) => m.id === mcpId);
+          if (!mcp) continue;
 
-      // Mock tools for demo - in real app, these would come from MCP inspection
-      const mockTools: ManagedTool[] = [
-        {
-          id: `${mcpId}_tool_1`,
-          name: 'get_info',
-          description: 'Get information from the server',
-          source: {
-            mcpId: mcp.id,
-            mcpName: mcp.name,
-          },
-          disabled: namespace.disabledTools.includes(`${mcpId}_tool_1`),
-        },
-        {
-          id: `${mcpId}_tool_2`,
-          name: 'execute_command',
-          description: 'Execute a command on the server',
-          source: {
-            mcpId: mcp.id,
-            mcpName: mcp.name,
-          },
-          disabled: namespace.disabledTools.includes(`${mcpId}_tool_2`),
-        },
-        {
-          id: `${mcpId}_tool_3`,
-          name: 'list_resources',
-          description: 'List available resources',
-          source: {
-            mcpId: mcp.id,
-            mcpName: mcp.name,
-          },
-          disabled: namespace.disabledTools.includes(`${mcpId}_tool_3`),
-        },
-      ];
+          try {
+            const { tools: realTools } = await getMcpTools(mcpId);
+            const managedToolsForMcp: ManagedTool[] = realTools.map((tool) => ({
+              id: tool.name,
+              name: tool.name,
+              description: tool.description || '',
+              source: {
+                mcpId: mcp.id,
+                mcpName: mcp.name,
+              },
+              disabled: namespace.disabledTools.includes(tool.name),
+            }));
+            tools.push(...managedToolsForMcp);
+          } catch (error) {
+            console.warn(`Failed to load tools for MCP ${mcp.name}:`, error);
+          }
+        }
+      } finally {
+        setManagedTools(tools);
+        setLoading(false);
+      }
+    };
 
-      tools.push(...mockTools);
-    });
+    if (namespace.enabledMcps.length > 0) {
+      loadTools();
+    } else {
+      setManagedTools([]);
+    }
+  }, [namespace.enabledMcps]);
 
-    return tools;
-  }, [namespace.enabledMcps, namespace.disabledTools, availableMcps]);
+  useEffect(() => {
+    setManagedTools((prevTools) =>
+      prevTools.map((tool) => ({
+        ...tool,
+        disabled: namespace.disabledTools.includes(tool.id),
+      }))
+    );
+  }, [namespace.disabledTools]);
 
   const enabledMcpNames = availableMcps
     .filter((m) => namespace.enabledMcps.includes(m.id))
     .map((m) => m.name);
 
   const filteredTools = filterMcp
-    ? managedTools.filter((t) => t.source.mcpId === filterMcp)
+    ? managedTools.filter((t) => t.source.mcpName === filterMcp)
     : managedTools;
 
   const toggleTool = (toolId: string) => {
@@ -84,18 +89,27 @@ export default function BuilderToolsManager({
         Manage tools from enabled MCP servers
       </p>
 
-      {managedTools.length === 0 ? (
+      {loading && (
+        <div className="mt-6 text-center text-sm text-gray-500">
+          Loading tools...
+        </div>
+      )}
+
+      {!loading && managedTools.length === 0 && (
         <div className="mt-6 text-center text-sm text-gray-500">
           No tools available. Enable at least one MCP server first.
         </div>
-      ) : (
+      )}
+
+      {!loading && managedTools.length > 0 && (
         <div className="mt-6 space-y-4">
           <div className="flex gap-2">
             <div className="w-full">
-              <label className="block text-xs font-medium text-gray-400 uppercase">
+              <label htmlFor="mcp-filter" className="block text-xs font-medium text-gray-400 uppercase">
                 Filter by MCP
               </label>
               <select
+                id="mcp-filter"
                 value={filterMcp}
                 onChange={(e) => setFilterMcp(e.target.value)}
                 className="mt-2 w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 focus:border-blue-500 focus:outline-none"

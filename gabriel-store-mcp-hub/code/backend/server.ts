@@ -161,7 +161,7 @@ fastify.get('/api/mcps', async () => {
     const meta = stored[c.Id.slice(0, 12)] ?? {}
     return {
       id: c.Id.slice(0, 12),
-      name: c.Names[0]?.replace('/', '') ?? c.Id.slice(0, 12),
+      name: meta.name ?? c.Names[0]?.replace('/', '') ?? c.Id.slice(0, 12),
       image: c.Image,
       status: c.State,
       ports: (Array.isArray(c.Ports) ? c.Ports : [])

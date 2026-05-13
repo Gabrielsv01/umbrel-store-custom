@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Simple MCP Server that aggregates tools from multiple MCP servers
- * This runs inside custom namespace containers
+ * MCP Streamable HTTP Server - handles MCP protocol via HTTP with streaming support
+ * Runs inside custom namespace containers
  */
 
 const http = require('http');
@@ -24,16 +24,16 @@ const disabledToolsSet = new Set(
   DISABLED_TOOLS.split(',').filter(Boolean)
 );
 
-console.log(`[MCP Wrapper] Starting server on port ${PORT}`);
-console.log(`[MCP Wrapper] Namespace ID: ${NAMESPACE_ID}`);
-console.log(`[MCP Wrapper] Enabled MCPs: ${enabledMcpsList.map((m) => m.name).join(', ')}`);
-console.log(`[MCP Wrapper] Disabled tools: ${Array.from(disabledToolsSet).join(', ')}`);
+console.log(`[MCP Streamable HTTP] Starting server on port ${PORT}`);
+console.log(`[MCP Streamable HTTP] Namespace ID: ${NAMESPACE_ID}`);
+console.log(`[MCP Streamable HTTP] Enabled MCPs: ${enabledMcpsList.map((m) => m.name).join(', ')}`);
+console.log(`[MCP Streamable HTTP] Disabled tools: ${Array.from(disabledToolsSet).join(', ')}`);
 
 const server = http.createServer(async (req, res) => {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Transfer-Encoding');
   res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'OPTIONS') {
@@ -61,11 +61,27 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const payload = JSON.parse(body);
-        const response = await handleMcpRequest(payload);
-        res.writeHead(200);
-        res.end(JSON.stringify(response));
+
+        // Check if client wants streaming response
+        const wantsStream = req.headers['accept-encoding']?.includes('stream');
+
+        if (wantsStream && payload.method === 'tools/call') {
+          // For streaming responses, use chunked transfer encoding
+          res.setHeader('Transfer-Encoding', 'chunked');
+          res.writeHead(200);
+
+          // Simulate streaming response - in real implementation would stream tool output
+          const response = await handleMcpRequest(payload);
+          res.write(JSON.stringify(response) + '\n');
+          res.end();
+        } else {
+          // Regular non-streaming response
+          const response = await handleMcpRequest(payload);
+          res.writeHead(200);
+          res.end(JSON.stringify(response));
+        }
       } catch (error) {
-        console.error('[MCP Wrapper] Error:', error.message);
+        console.error('[MCP Streamable HTTP] Error:', error.message);
         res.writeHead(500);
         res.end(
           JSON.stringify({
@@ -99,7 +115,7 @@ async function handleMcpRequest(payload) {
             tools: {},
           },
           serverInfo: {
-            name: `MCP Namespace Wrapper [${NAMESPACE_ID}]`,
+            name: `MCP Streamable HTTP Namespace [${NAMESPACE_ID}]`,
             version: '1.0.0',
           },
         },
@@ -201,22 +217,22 @@ function getMockTools() {
 }
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`[MCP Wrapper] Server listening on port ${PORT}`);
+  console.log(`[MCP Streamable HTTP] Server listening on port ${PORT}`);
 });
 
 // Handle graceful shutdown
 process.on('SIGTERM', () => {
-  console.log('[MCP Wrapper] Received SIGTERM, shutting down gracefully');
+  console.log('[MCP Streamable HTTP] Received SIGTERM, shutting down gracefully');
   server.close(() => {
-    console.log('[MCP Wrapper] Server closed');
+    console.log('[MCP Streamable HTTP] Server closed');
     process.exit(0);
   });
 });
 
 process.on('SIGINT', () => {
-  console.log('[MCP Wrapper] Received SIGINT, shutting down gracefully');
+  console.log('[MCP Streamable HTTP] Received SIGINT, shutting down gracefully');
   server.close(() => {
-    console.log('[MCP Wrapper] Server closed');
+    console.log('[MCP Streamable HTTP] Server closed');
     process.exit(0);
   });
 });

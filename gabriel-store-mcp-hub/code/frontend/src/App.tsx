@@ -209,14 +209,36 @@ export default function App() {
     );
   }
 
+  const getHeaderTitle = () => {
+    switch (view) {
+      case 'inspector':
+        return '🔍 MCP Inspector';
+      case 'builder':
+        return '🔧 MCP Builder';
+      default:
+        return '⚙️ MCP Hub';
+    }
+  };
+
+  const getHeaderDescription = () => {
+    switch (view) {
+      case 'inspector':
+        return 'Inspect and interact with MCP servers';
+      case 'builder':
+        return 'Combine MCP tools into custom namespaces';
+      default:
+        return 'The Factory - MCP Container Manager';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <header className="border-b border-gray-800 px-6 py-4">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-white">⚙️ MCP Hub</h1>
+            <h1 className="text-xl font-bold text-white">{getHeaderTitle()}</h1>
             <p className="mt-0.5 text-xs text-gray-400">
-              The Factory - MCP Container Manager
+              {getHeaderDescription()}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -234,11 +256,10 @@ export default function App() {
 
       <main>
         {view === 'inspector' ? (
-          <MCPInspector onBack={() => setView('hub')} />
+          <MCPInspector />
         ) : view === 'builder' ? (
           <MCPBuilder
             mcps={mcps}
-            onBack={() => setView('hub')}
             onMcpDeployed={() => {
               // Trigger refresh of MCPs
             }}

@@ -8,12 +8,11 @@ import BuilderToolsManager from './builder/BuilderToolsManager';
 import { deployNamespaceAsMcp } from '../services/api';
 
 interface MCPBuilderProps {
-  mcps: McpContainer[];
-  onBack: () => void;
-  onMcpDeployed?: () => void;
+  readonly mcps: McpContainer[];
+  readonly onMcpDeployed?: () => void;
 }
 
-export default function MCPBuilder({ mcps, onBack, onMcpDeployed }: Readonly<MCPBuilderProps>) {
+export default function MCPBuilder({ mcps, onMcpDeployed }: Readonly<MCPBuilderProps>) {
   const [namespaces, setNamespaces] = useState<McpNamespace[]>([]);
   const [selectedNamespace, setSelectedNamespace] = useState<McpNamespace | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -165,38 +164,8 @@ export default function MCPBuilder({ mcps, onBack, onMcpDeployed }: Readonly<MCP
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
-      <header className="border-b border-gray-800 px-6 py-4">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-white">🔧 MCP Builder</h1>
-            <p className="mt-0.5 text-xs text-gray-400">
-              Combine MCP tools into custom namespaces
-            </p>
-          </div>
-          <button
-            onClick={onBack}
-            className="rounded bg-gray-800 px-3 py-2 text-sm hover:bg-gray-700"
-          >
-            Back to Hub
-          </button>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-7xl px-6 py-8">
-        {!selectedNamespace ? (
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-            <NamespaceList
-              namespaces={namespaces}
-              selectedId={selectedNamespace?.id}
-              onSelect={setSelectedNamespace}
-              onDelete={handleDeleteNamespace}
-              onCreateNew={() => setIsCreating(true)}
-              isCreating={isCreating}
-              onCreateNamespace={handleCreateNamespace}
-            />
-          </div>
-        ) : (
+    <div className="mx-auto max-w-7xl px-6 py-8">
+        {selectedNamespace ? (
           <div className="space-y-8">
             <BuilderInfo namespace={selectedNamespace} statistics={statistics} />
 
@@ -241,8 +210,18 @@ export default function MCPBuilder({ mcps, onBack, onMcpDeployed }: Readonly<MCP
               </button>
             </div>
           </div>
+        ) : (
+          <NamespaceList
+            namespaces={namespaces}
+            selectedId={selectedNamespace?.id}
+            onSelect={setSelectedNamespace}
+            onDelete={handleDeleteNamespace}
+            onUpdate={handleUpdateNamespace}
+            onCreateNew={() => setIsCreating(true)}
+            isCreating={isCreating}
+            onCreateNamespace={handleCreateNamespace}
+          />
         )}
-      </main>
     </div>
   );
 }

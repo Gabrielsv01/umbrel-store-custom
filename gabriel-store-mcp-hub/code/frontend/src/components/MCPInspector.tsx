@@ -3,7 +3,7 @@ import { useMcpInspector } from '../hooks/useMcpInspector'
 import type { McpInspectorTab, McpTool } from '../types/inspector'
 
 interface MCPInspectorProps {
-  onBack: () => void
+  readonly onBack?: () => void;
 }
 
 const TABS: Array<{ id: McpInspectorTab; label: string }> = [
@@ -34,22 +34,7 @@ export default function MCPInspector({ onBack }: Readonly<MCPInspectorProps>) {
     : null
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
-      {/* Header */}
-      <header className="border-b border-gray-800 px-6 py-4">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={onBack}
-              className="rounded px-2 py-1 text-gray-400 hover:bg-gray-800 hover:text-gray-300"
-            >
-              ← Back
-            </button>
-            <h1 className="text-xl font-bold">🔍 MCP Inspector</h1>
-          </div>
-        </div>
-      </header>
-
+    <div>
       <main className="mx-auto max-w-7xl px-6 py-8">
         {/* Server selection and status */}
         <div className="mb-6 rounded-lg border border-gray-800 bg-gray-900 p-4">

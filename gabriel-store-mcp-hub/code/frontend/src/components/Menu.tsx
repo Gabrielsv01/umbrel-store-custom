@@ -25,8 +25,6 @@ export default function Menu({
   };
 
   const menuItems = [
-    { label: 'MCP Inspector', onClick: () => setView('inspector') },
-    { label: 'MCP Builder', onClick: () => setView('builder') },
     { label: 'Volumes', onClick: onOpenVolumes },
     { label: 'Images', onClick: onOpenImages },
     { label: 'Catalog', onClick: () => setShowCatalog(true) },
@@ -34,7 +32,35 @@ export default function Menu({
   ];
 
   return (
-    <div>
+    <div className="flex items-center gap-2">
+      {/* Hub Button */}
+      <button
+        onClick={() => handleMenuClick(() => setView('hub'))}
+        className="rounded-lg bg-gray-800 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-700"
+        title="Back to Hub"
+      >
+        📦 Hub
+      </button>
+
+      {/* Inspector Button */}
+      <button
+        onClick={() => handleMenuClick(() => setView('inspector'))}
+        className="rounded-lg bg-gray-800 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-700"
+        title="Open MCP Inspector"
+      >
+        🔍 Inspector
+      </button>
+
+      {/* Builder Button */}
+      <button
+        onClick={() => handleMenuClick(() => setView('builder'))}
+        className="rounded-lg bg-gray-800 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-700"
+        title="Open MCP Builder"
+      >
+        🔧 Builder
+      </button>
+
+      {/* Menu Button */}
       <button
         type="button"
         onClick={() => setShowMenu((prev) => !prev)}
@@ -55,7 +81,7 @@ export default function Menu({
           />
 
           {/* Desktop dropdown menu */}
-          <div className="absolute right-36 top-15 z-20 hidden min-w-40 flex-col overflow-hidden rounded-xl border border-gray-700 bg-gray-950 shadow-2xl md:flex">
+          <div className="absolute right-36 top-20 z-20 hidden min-w-40 flex-col overflow-hidden rounded-xl border border-gray-700 bg-gray-950 shadow-2xl md:flex">
             {menuItems.map((item) => (
               <button
                 key={item.label}
