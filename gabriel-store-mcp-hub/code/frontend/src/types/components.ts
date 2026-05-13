@@ -30,6 +30,7 @@ export type MCPCardProps = {
   onEdit: (mcp?: McpContainer) => void;
   onOpenSession: (mcp?: McpContainer) => void;
   onCheckHealth: (id: string) => void;
+  onOpenTools: (mcp: McpContainer) => void;
   health?: StdioHealthState;
   healthLoading: boolean;
   httpHealth?: HttpHealthResult;

@@ -26,6 +26,7 @@ export interface McpMeta {
   env?: JsonRecord;
   secretKeys?: string[];
   runtime?: McpRuntime;
+  disabledTools?: string[];
 }
 
 export interface McpContainer {

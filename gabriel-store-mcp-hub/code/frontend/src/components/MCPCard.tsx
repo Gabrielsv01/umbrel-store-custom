@@ -52,6 +52,7 @@ export default function MCPCard({
   onEdit,
   onOpenSession,
   onCheckHealth,
+  onOpenTools,
   health,
   healthLoading,
   httpHealth,
@@ -114,6 +115,11 @@ export default function MCPCard({
   const openEdit = () => {
     setShowMenu(false);
     onEdit(mcp);
+  };
+
+  const openTools = () => {
+    setShowMenu(false);
+    onOpenTools(mcp);
   };
 
   const runHealth = () => {
@@ -257,6 +263,14 @@ export default function MCPCard({
                 {(isStdio ? healthLoading : httpHealthLoading)
                   ? 'Checking health...'
                   : 'Health'}
+              </button>
+
+              <button
+                type="button"
+                onClick={openTools}
+                className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900"
+              >
+                Tools
               </button>
 
               <button

@@ -11,6 +11,7 @@ export interface McpMeta {
   port?: number | string
   transport?: McpTransport
   runtime?: McpRuntimeConfig
+  disabledTools?: string[]
 }
 
 export interface McpRecord {

@@ -1,1 +1,15 @@
-{}
+{
+  "40ff4c147e44": {
+    "name": "memory-mcp",
+    "image": "mcp/memory:latest",
+    "env": {},
+    "transport": "stdio"
+  },
+  "4ee6872efef0": {
+    "name": "context7",
+    "image": "node:22-bookworm",
+    "command": "npx -y @upstash/context7-mcp@latest",
+    "env": {},
+    "transport": "stdio"
+  }
+}

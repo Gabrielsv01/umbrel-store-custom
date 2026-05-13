@@ -3,7 +3,7 @@ import type { HttpHealthResult, StdioHealthState } from '../types/health';
 import type { DeployPayload, McpContainer } from '../types/mcp';
 import type { ImageRecord, VolumeRecord } from '../types/resources';
 import type { CatalogEntry } from '../types/catalog';
-import type { JsonRpcPayload, JsonRpcResponse } from '../types/inspector';
+import type { JsonRpcPayload, JsonRpcResponse, McpTool } from '../types/inspector';
 
 type RequestOptions = RequestInit | undefined;
 
@@ -165,4 +165,32 @@ export async function callMcpInspect(
     },
     'MCP inspect call failed'
   ) as Promise<JsonRpcResponse>;
+}
+
+interface GetToolsResponse {
+  tools: McpTool[];
+  disabledTools: string[];
+}
+
+export async function getMcpTools(id: string): Promise<GetToolsResponse> {
+  return requestJson(
+    `/api/mcps/${encodeURIComponent(id)}/tools`,
+    undefined,
+    'Failed to list tools'
+  ) as Promise<GetToolsResponse>;
+}
+
+export async function updateDisabledTools(
+  id: string,
+  disabledTools: string[]
+): Promise<unknown> {
+  return requestJson(
+    `/api/mcps/${encodeURIComponent(id)}/tools`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ disabledTools }),
+    },
+    'Failed to update disabled tools'
+  );
 }

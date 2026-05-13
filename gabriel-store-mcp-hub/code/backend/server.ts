@@ -11,6 +11,7 @@ import { registerStdioRoutes } from './routes/stdio.js'
 import { registerVolumeRoutes } from './routes/volumes.js'
 import { registerHttpHealthRoutes } from './routes/httpHealth.js'
 import { registerMcpInspectRoutes } from './routes/mcpInspect.js'
+import { registerMcpToolsRoutes } from './routes/mcpTools.js'
 import { registerCatalogRoutes } from './routes/catalog.js'
 import {
   buildContainerOptions,
@@ -190,6 +191,7 @@ registerMcpInspectRoutes(fastify, {
   detectNetworkIssues,
   selectNetworkProbeTool,
 })
+registerMcpToolsRoutes(fastify, { docker, loadData, saveData, mcpLabel: MCP_LABEL })
 registerCatalogRoutes(fastify)
 
 // ─── POST /api/deploy ─────────────────────────────────────────────────────────
@@ -286,6 +288,7 @@ fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
 
     const newShortId = container.id.slice(0, 12)
     const data = loadData()
+    const oldMeta = data[oldShortId]
     delete data[oldShortId]
     data[newShortId] = {
       name: name.trim(),
@@ -296,6 +299,7 @@ fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
       port,
       transport,
       runtime: normalizedRuntime,
+      disabledTools: oldMeta?.disabledTools,
     }
     saveData(data)
 

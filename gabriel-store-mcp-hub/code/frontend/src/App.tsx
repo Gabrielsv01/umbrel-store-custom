@@ -8,12 +8,13 @@ import VolumesModal from './components/VolumesModal';
 import CatalogModal from './components/CatalogModal';
 import DocsModal from './components/DocsModal';
 import MCPInspector from './components/MCPInspector';
+import ToolsManager from './components/ToolsManager';
 import { listImages } from './services/api';
 import { useMcps } from './hooks/useMcps';
 import { useImages } from './hooks/useImages';
 import { useVolumes } from './hooks/useVolumes';
 import type { CatalogEntry } from './types/catalog';
-import type { DeployPayload, EditMcpValues } from './types/mcp';
+import type { DeployPayload, EditMcpValues, McpContainer } from './types/mcp';
 import type { PullPayload, PullProgress } from './types/resources';
 import { mapMcpToEditValues } from './utils/mcpForm';
 import Menu from './components/Menu';
@@ -28,6 +29,7 @@ export default function App() {
   const [editingMcp, setEditingMcp] = useState<EditMcpValues | null>(null);
   const [logTarget, setLogTarget] = useState<LogTarget | null>(null);
   const [stdioTarget, setStdioTarget] = useState<LogTarget | null>(null);
+  const [toolsTarget, setToolsTarget] = useState<McpContainer | null>(null);
   const [deployPulling, setDeployPulling] = useState(false);
   const [deployPullProgress, setDeployPullProgress] =
     useState<PullProgress | null>(null);
@@ -200,6 +202,12 @@ export default function App() {
     });
   };
 
+  if (toolsTarget) {
+    return (
+      <ToolsManager mcp={toolsTarget} onBack={() => setToolsTarget(null)} />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <header className="border-b border-gray-800 px-6 py-4">
@@ -253,6 +261,7 @@ export default function App() {
                       setStdioTarget({ id: mcp.id, name: mcp.name })
                     }
                     onCheckHealth={onCheckHealth}
+                    onOpenTools={() => setToolsTarget(mcp)}
                     health={stdioHealth[mcp.id]}
                     healthLoading={!!stdioHealthLoading[mcp.id]}
                     httpHealth={httpHealth[mcp.id]}
