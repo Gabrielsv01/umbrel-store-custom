@@ -179,6 +179,9 @@ registerStdioRoutes(fastify, {
   createLineDecoder,
   detectNetworkIssues,
   selectNetworkProbeTool,
+  loadData,
+  docker,
+  mcpLabel: MCP_LABEL,
 })
 registerHttpHealthRoutes(fastify, { docker, loadData, mcpLabel: MCP_LABEL })
 registerMcpInspectRoutes(fastify, {

@@ -21,6 +21,9 @@ export function registerStdioRoutes(
     createLineDecoder,
     detectNetworkIssues,
     selectNetworkProbeTool,
+    loadData,
+    docker,
+    mcpLabel,
   } = deps
 
   const stdioProxySessions = new Map<string, StdioProxySession>()
@@ -47,13 +50,32 @@ export function registerStdioRoutes(
     const payload = req.body;
 
     // 1. Localiza o container e inspeciona capacidades via ENV
-    const { container } = await resolveStdioContainer(id).catch((err) => {
+    const resolved = await resolveStdioContainer(id).catch((err) => {
       return reply.code(404).send({ error: err.message });
     });
+    const { container, shortId } = resolved;
 
     const info = await container.inspect() as any;
     const envs: string[] = info?.Config?.Env || [];
     const hasEnv = (name: string) => envs.some((e: string) => e === `${name}=true`);
+
+    // Check disabled tools
+    const meta = loadData()[shortId];
+    const disabledTools = meta?.disabledTools ?? [];
+
+    if (payload.method === 'tools/call') {
+      const toolName = (payload.params as any)?.name;
+      if (toolName && disabledTools.includes(toolName)) {
+        return reply.code(403).send({
+          jsonrpc: '2.0',
+          id: payload.id,
+          error: {
+            code: -32603,
+            message: `Tool "${toolName}" is disabled`,
+          },
+        });
+      }
+    }
 
     // Mapeamento de métodos opcionais
     const capabilityMap: Record<string, string> = {
@@ -169,9 +191,17 @@ export function registerStdioRoutes(
 
       // EXTRAÇÃO SEGURA: Se o container já devolveu o envelope result, extraímos
       // para evitar duplicidade (ex: result: { result: ... }) que quebra o Hermes
-      const finalResult = (response && typeof response === 'object' && 'result' in response) 
-        ? response.result 
+      let finalResult = (response && typeof response === 'object' && 'result' in response)
+        ? response.result
         : response;
+
+      // Filter disabled tools from tools/list response
+      if (payload.method === 'tools/list' && finalResult && typeof finalResult === 'object') {
+        const resultObj = finalResult as any;
+        if (Array.isArray(resultObj.tools)) {
+          resultObj.tools = resultObj.tools.filter((t: any) => !disabledTools.includes(t.name));
+        }
+      }
 
       return reply.type('application/json').send({
         jsonrpc: "2.0",

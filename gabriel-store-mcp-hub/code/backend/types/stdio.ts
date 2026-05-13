@@ -55,4 +55,7 @@ export interface RegisterStdioRoutesDeps {
     name: string
     arguments: Record<string, unknown>
   } | null
+  loadData: () => import('./mcp.js').McpRecord
+  docker: import('dockerode').default
+  mcpLabel: string
 }
