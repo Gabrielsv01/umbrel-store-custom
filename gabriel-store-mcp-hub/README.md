@@ -243,30 +243,6 @@ O **Inspector** permite explorar e testar MCPs em tempo real com:
 3. Navegue pelas abas para explorar as capacidades
 4. Teste ferramentas preenchendo parâmetros e clicando "Run Tool"
 
-## Demo MCP
-
-Um MCP de demonstração está disponível em `gabriel-store-demo-mcp/` que implementa todas as funcionalidades do protocolo MCP para fins de teste e exploração.
-
-**Para deployar o Demo MCP:**
-
-```bash
-cd gabriel-store-demo-mcp
-docker build -f docker/Dockerfile -t demo-mcp:latest .
-```
-
-Depois use o **Deploy Form** com:
-- Nome: `demo-mcp`
-- Imagem: `demo-mcp:latest`
-- Transport: `stdio`
-- Env: `MCP_HAS_RESOURCES=true MCP_HAS_PROMPTS=true`
-
-O Demo MCP inclui:
-- 3 Tools: `hello_world`, `calculate`, `get_info`
-- 3 Resources: hello, documentation, config
-- 3 Prompts: greeting, code_review, brainstorm
-- Roots: data, config, cache
-- Health check via Ping
-
 ## API
 
 Base URL: `http://localhost:5146/api`
