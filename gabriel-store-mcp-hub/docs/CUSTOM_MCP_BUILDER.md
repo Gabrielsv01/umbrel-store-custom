@@ -172,7 +172,7 @@ curl -X POST http://localhost:8000/mcp \
 ### Arquitetura da Rede
 
 ```
-┌─ Docker Network: gabriel-store-mcp-hub_default ─┐
+┌─ Docker Network: mcp-hub-network ─┐
 │                                                   │
 │  ┌─ Container: mcp-hub (port 3001) ──────────┐  │
 │  │  Backend Fastify                           │  │

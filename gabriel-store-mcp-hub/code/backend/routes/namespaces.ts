@@ -145,9 +145,9 @@ export function registerNamespaceRoutes(
 
         // Connect to mcp-hub network so wrapper can reach backend at mcp-hub:3001
         try {
-          const mcp_hub_network = docker.getNetwork('gabriel-store-mcp-hub_default')
+          const mcp_hub_network = docker.getNetwork('mcp-hub-network')
           await mcp_hub_network.connect({ Container: newContainer.id })
-          console.error(`[namespaces.deploy] Connected container ${newContainer.id.slice(0, 12)} to gabriel-store-mcp-hub_default network`)
+          console.error(`[namespaces.deploy] Connected container ${newContainer.id.slice(0, 12)} to mcp-hub-network network`)
         } catch (err) {
           console.error(`[namespaces.deploy] Failed to connect container to network:`, err instanceof Error ? err.message : String(err))
         }

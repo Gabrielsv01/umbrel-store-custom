@@ -15,3 +15,9 @@ services:
     ports:
       - "${APP_PORT:-5146}:3001"
     restart: unless-stopped
+    networks:
+      - default
+
+networks:
+  default:
+    name: mcp-hub-network
