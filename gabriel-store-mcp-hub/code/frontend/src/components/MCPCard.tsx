@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { MCPCardProps, McpAction } from '../types/components';
 import type { McpContainer } from '../types/mcp';
 
@@ -61,7 +61,59 @@ export default function MCPCard({
   const [copied, setCopied] = useState(false);
   const [showHealthTip, setShowHealthTip] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const [isMenuPositioned, setIsMenuPositioned] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const isRunning = mcp.status === 'running';
+
+  useEffect(() => {
+    if (!showMenu) {
+      setIsMenuPositioned(false);
+      return;
+    }
+
+    if (!buttonRef.current) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+
+    setTimeout(() => {
+      if (!buttonRef.current || !menuRef.current) return;
+
+      const buttonRect = buttonRef.current.getBoundingClientRect();
+      const menuRect = menuRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+
+      let top = buttonRect.bottom + 8;
+      let left = buttonRect.right - 160;
+
+      // Adjust if menu goes below viewport
+      if (top + menuRect.height > viewportHeight) {
+        top = buttonRect.top - menuRect.height - 8;
+      }
+
+      // Adjust if menu goes beyond right edge
+      if (left + menuRect.width > viewportWidth) {
+        left = viewportWidth - menuRect.width - 8;
+      }
+
+      // Ensure minimum left position
+      if (left < 8) {
+        left = 8;
+      }
+
+      setMenuPosition({ top, left });
+      setIsMenuPositioned(true);
+    }, 0);
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMenu]);
 
   const copyConfig = () => {
     navigator.clipboard.writeText(buildClaudeConfig(mcp));
@@ -195,7 +247,7 @@ export default function MCPCard({
             {mcp.image}
           </p>
         </div>
-        <div className="relative flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <span
             className={`flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs ${STATUS_BADGE[mcp.status] ?? 'bg-gray-700 text-gray-400'}`}
           >
@@ -205,6 +257,7 @@ export default function MCPCard({
             {mcp.status}
           </span>
           <button
+            ref={buttonRef}
             type="button"
             onClick={() => setShowMenu((prev) => !prev)}
             className="rounded-lg bg-gray-800 px-2 py-1 text-sm text-gray-300 transition-colors hover:bg-gray-700"
@@ -214,7 +267,16 @@ export default function MCPCard({
           </button>
 
           {showMenu && (
-            <div className="absolute right-0 top-10 z-10 flex min-w-40 flex-col overflow-hidden rounded-xl border border-gray-700 bg-gray-950 shadow-2xl">
+            <div
+              ref={menuRef}
+              style={{
+                top: `${menuPosition.top}px`,
+                left: `${menuPosition.left}px`,
+                opacity: isMenuPositioned ? 1 : 0,
+                pointerEvents: isMenuPositioned ? 'auto' : 'none',
+              }}
+              className="fixed z-50 flex min-w-40 flex-col overflow-y-auto rounded-xl border border-gray-700 bg-gray-950 shadow-2xl max-h-96 transition-opacity"
+            >
               {isRunning ? (
                 <button
                   type="button"

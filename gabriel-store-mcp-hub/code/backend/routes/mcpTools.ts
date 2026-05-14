@@ -63,7 +63,7 @@ async function fetchStdioMcpTools(
       stdout: true,
       stderr: true,
       hijack: true,
-      logs: true,
+      logs: false,
     })
 
     const payload = {
@@ -80,7 +80,7 @@ async function fetchStdioMcpTools(
         isFinished = true
         try { (stream as any).destroy() } catch {}
         resolve([])
-      }, 5000)
+      }, 10000)
 
       const decode = createDockerMultiplexDecoder((payloadText: string, streamType: number) => {
         if (streamType === 2 || isFinished || streamType !== 1) return
