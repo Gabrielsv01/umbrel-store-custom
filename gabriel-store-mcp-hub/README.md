@@ -38,6 +38,10 @@ Fluxo em produção:
 
 ## Exemplo:
 ```bash
+docker network create mcp-hub-network
+```
+
+```bash
 docker run -d \
   --name mcp-hub \
   -e NODE_ENV=production \
