@@ -36,6 +36,22 @@ Fluxo em produção:
 2. O frontend buildado é servido em `/app/public`.
 3. A API fica sob `/api/*`.
 
+## Exemplo:
+```bash
+docker run -d \
+  --name mcp-hub \
+  -e NODE_ENV=production \
+  -e DATA_DIR=/data \
+  -e STATIC_DIR=/app/public \
+  -e TZ=America/Sao_Paulo \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v $(pwd)/mcp_data:/data \
+  -p 5146:3001 \
+  --restart unless-stopped \
+  --network mcp-hub-network \
+  gabrielsv01/mcp-hub:1.0.11
+```
+
 ## Estrutura do projeto
 
 ```text
