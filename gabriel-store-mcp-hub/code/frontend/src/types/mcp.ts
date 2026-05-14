@@ -27,6 +27,8 @@ export interface McpMeta {
   secretKeys?: string[];
   runtime?: McpRuntime;
   disabledTools?: string[];
+  isCustomNamespace?: boolean;
+  namespaceId?: string;
 }
 
 export interface McpContainer {

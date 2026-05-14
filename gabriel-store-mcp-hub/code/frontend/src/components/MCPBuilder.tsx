@@ -5,7 +5,7 @@ import NamespaceList from './builder/NamespaceList';
 import BuilderInfo from './builder/BuilderInfo';
 import McpSelector from './builder/McpSelector';
 import BuilderToolsManager from './builder/BuilderToolsManager';
-import { deployNamespaceAsMcp } from '../services/api';
+import { deployNamespaceAsMcp, updateNamespaceAsMcp, deleteNamespaceAsMcp } from '../services/api';
 
 interface MCPBuilderProps {
   readonly mcps: McpContainer[];
@@ -92,7 +92,24 @@ export default function MCPBuilder({ mcps, onMcpDeployed }: Readonly<MCPBuilderP
     updateStatistics(namespace);
   };
 
-  const handleDeleteNamespace = (id: string) => {
+  const handleDeleteNamespace = async (id: string) => {
+    const customMcpIds = new Set(
+      JSON.parse(localStorage.getItem('custom_mcp_ids') || '[]')
+    );
+
+    if (customMcpIds.has(id)) {
+      try {
+        await deleteNamespaceAsMcp(id);
+        customMcpIds.delete(id);
+        localStorage.setItem('custom_mcp_ids', JSON.stringify(Array.from(customMcpIds)));
+      } catch (error) {
+        setDeployError(
+          error instanceof Error ? error.message : 'Failed to delete namespace container'
+        );
+        return;
+      }
+    }
+
     const updated = namespaces.filter((ns) => ns.id !== id);
     saveNamespaces(updated);
     if (selectedNamespace?.id === id) {
@@ -140,16 +157,24 @@ export default function MCPBuilder({ mcps, onMcpDeployed }: Readonly<MCPBuilderP
         selectedNamespace.enabledMcps.includes(m.id)
       );
 
-      const deployedMcp = await deployNamespaceAsMcp({
-        namespace: selectedNamespace,
-        enabledMcps: enabledMcpDetails,
-      });
-
-      // Track custom MCP IDs in localStorage
+      // Check if this is an update (namespace already deployed)
       const customMcpIds = new Set(
         JSON.parse(localStorage.getItem('custom_mcp_ids') || '[]')
       );
-      customMcpIds.add(deployedMcp.id);
+      const isUpdate = customMcpIds.has(selectedNamespace.id);
+
+      isUpdate
+        ? await updateNamespaceAsMcp(selectedNamespace.id, {
+            namespace: selectedNamespace,
+            enabledMcps: enabledMcpDetails,
+          })
+        : await deployNamespaceAsMcp({
+            namespace: selectedNamespace,
+            enabledMcps: enabledMcpDetails,
+          });
+
+      // Track custom MCP IDs in localStorage
+      customMcpIds.add(selectedNamespace.id);
       localStorage.setItem('custom_mcp_ids', JSON.stringify(Array.from(customMcpIds)));
 
       setDeploying(null);
@@ -162,6 +187,19 @@ export default function MCPBuilder({ mcps, onMcpDeployed }: Readonly<MCPBuilderP
       );
     }
   };
+
+  const isNamespaceUpdate =
+    selectedNamespace &&
+    JSON.parse(localStorage.getItem('custom_mcp_ids') || '[]').includes(
+      selectedNamespace.id
+    );
+
+  const deployButtonText = (() => {
+    if (deploying === selectedNamespace?.id) {
+      return isNamespaceUpdate ? '🔄 Updating...' : '🚀 Deploying...';
+    }
+    return isNamespaceUpdate ? '🔄 Update MCP' : '🚀 Deploy as MCP';
+  })();
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
@@ -204,9 +242,7 @@ export default function MCPBuilder({ mcps, onMcpDeployed }: Readonly<MCPBuilderP
                 }
                 className="rounded bg-green-600 px-4 py-2 font-medium hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed"
               >
-                {deploying === selectedNamespace?.id
-                  ? '🚀 Deploying...'
-                  : '🚀 Deploy as MCP'}
+                {deployButtonText}
               </button>
             </div>
           </div>

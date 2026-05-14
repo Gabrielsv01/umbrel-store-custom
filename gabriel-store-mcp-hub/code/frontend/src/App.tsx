@@ -283,11 +283,11 @@ export default function App() {
             ) : (
               <div className="space-y-8">
                 {(() => {
-                  const customMcpIds = new Set(
+                  const customNamespaceIds = new Set(
                     JSON.parse(localStorage.getItem('custom_mcp_ids') || '[]')
                   );
-                  const customMcps = mcps.filter((m) => customMcpIds.has(m.id));
-                  const regularMcps = mcps.filter((m) => !customMcpIds.has(m.id));
+                  const customMcps = mcps.filter((m) => customNamespaceIds.has(m.meta?.namespaceId));
+                  const regularMcps = mcps.filter((m) => !customNamespaceIds.has(m.meta?.namespaceId));
 
                   return (
                     <>

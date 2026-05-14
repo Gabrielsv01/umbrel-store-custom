@@ -214,3 +214,28 @@ export async function deployNamespaceAsMcp(
     'Failed to deploy namespace as MCP'
   ) as Promise<McpContainer>;
 }
+
+export async function updateNamespaceAsMcp(
+  namespaceId: string,
+  payload: DeployNamespacePayload
+): Promise<McpContainer> {
+  return requestJson(
+    `/api/namespaces/${namespaceId}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+    'Failed to update namespace as MCP'
+  ) as Promise<McpContainer>;
+}
+
+export async function deleteNamespaceAsMcp(
+  namespaceId: string
+): Promise<unknown> {
+  return requestJson(
+    `/api/namespaces/${namespaceId}`,
+    { method: 'DELETE' },
+    'Failed to delete namespace'
+  );
+}
