@@ -129,68 +129,151 @@ A página **MCP Builder** permite criar servidores MCP customizados que combinam
    - Frontend adiciona ID do MCP a `localStorage['custom_mcp_ids']`
    - Na tela inicial, MCPs com ID em `custom_mcp_ids` aparecem em seção separada
 
-## Próximas Etapas
+## Como Funciona o Wrapper MCP
 
-### Fase 2: MCP Wrapper Funcional
-**Problema Atual:** O container usa apenas a imagem padrão `node:20-alpine` sem lógica real.
+### Ferramentas Reais (Implementado ✅)
 
-**Solução Necessária:**
-1. Criar imagem Docker `mcp-hub-wrapper` com servidor Node.js que:
-   - Lê variáveis de ambiente com MCPs habilitados
-   - Faz proxy/agregação de ferramentas
-   - Respeita desabilitações de tools
-   - Expõe via HTTP/SSE como MCP
+O custom MCP agora retorna **ferramentas reais** dos MCPs habilitados, não fictícias:
 
-2. Opções:
-   - **A:** Criar imagem custom que roda servidor MCP que proxy para os outros
-   - **B:** Usar volume com script injetado
-   - **C:** Usar init container que gera config dinâmica
+1. **Descoberta de Ferramentas**
+   - Backend em `GET /api/namespaces/:namespaceId/tools` fetcha ferramentas de cada MCP habilitado
+   - Para cada MCP, faz requisição direta ao container para listar tools
 
-### Fase 3: Real Tool Discovery
-Substituir mock tools por descoberta real:
-- Usar health check endpoints
-- Chamar `/tools` em cada MCP habilitado
-- Agregar resultados
-- Respeitar `disabledTools`
+2. **Filtro de Ferramentas Desabilitadas**
+   - Remove tools que estão na lista `disabledTools`
+   - Exemplo: Se você desabilita "open_nodes", ela não aparece na resposta
 
-### Fase 4: Advanced Features
-- [ ] Export/Import namespaces
-- [ ] Versionamento de configuração
-- [ ] Conflito de tool names entre MCPs
-- [ ] Rate limiting entre MCPs
-- [ ] Logging centralizado
-- [ ] Métricas por tool
+3. **Wrapper HTTP**
+   - Container roda servidor HTTP em Node.js
+   - Endpoint `/mcp` implementa protocolo MCP via JSON-RPC
+   - Fetcha ferramentas reais do backend em `mcp-hub:3001/api/namespaces/:namespaceId/tools`
+
+### Protocolo MCP Suportado
+
+O wrapper implementa os métodos MCP:
+
+```json
+{
+  "method": "initialize",
+  "method": "tools/list",
+  "method": "tools/call",
+  "method": "resources/list",
+  "method": "prompts/list"
+}
+```
+
+**Exemplo: Listar ferramentas**
+```bash
+curl -X POST http://localhost:8000/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+```
+
+### Arquitetura da Rede
+
+```
+┌─ Docker Network: gabriel-store-mcp-hub_default ─┐
+│                                                   │
+│  ┌─ Container: mcp-hub (port 3001) ──────────┐  │
+│  │  Backend Fastify                           │  │
+│  │  - POST /api/namespaces/deploy             │  │
+│  │  - GET /api/namespaces/:id/tools           │  │
+│  │  └─ Fetcha tools dos MCPs habilitados      │  │
+│  └──────────────────────────────────────────────┘  │
+│                        ↑                            │
+│                     network                        │
+│                   mcp-hub:3001                      │
+│                        ↓                            │
+│  ┌─ Container: mcp-custom-ns-* (port 8000) ──┐   │
+│  │  Wrapper HTTP MCP                          │   │
+│  │  - POST /mcp (implements MCP protocol)     │   │
+│  │  - Fetcha tools reais do backend           │   │
+│  │  └─ Retorna ferramentas filtradas          │   │
+│  └──────────────────────────────────────────────┘   │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+
+Host (localhost):
+- Backend exposed: localhost:5146
+- Wrapper exposed: localhost:8000 (ou porta customizada)
+```
+
+## Status de Implementação
+
+✅ **Completo:**
+- Deploy de namespaces customizadas
+- Wrapper HTTP funcional
+- Descoberta real de ferramentas
+- Filtro de ferramentas desabilitadas
+- Suporte a múltiplos transports (HTTP, stdio, streamable-http)
+- Conexão automática à rede mcp-hub
+- Metadados persistidos
+
+## Exemplo de Uso Completo
+
+1. **Criar namespace pelo MCP Builder**
+   - Selecionar MCPs (ex: memory)
+   - Desabilitar ferramentas específicas (opcional)
+   - Clicar "Deploy as MCP"
+
+2. **Acessar ferramentas**
+   ```bash
+   # Listar ferramentas (apenas as habilitadas)
+   curl -X POST http://localhost:8000/mcp \
+     -H "Content-Type: application/json" \
+     -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+   
+   # Resultado: Ferramentas REAIS do MCP, exceto as desabilitadas
+   ```
+
+3. **Integrar com Claude/Agents**
+   - Use `http://localhost:8000` como servidor MCP
+   - Agents conseguem ver e chamar ferramentas reais
 
 ## Desenvolvimento Local
 
-### Test Deploy Funcional
-
-Para testar que o deploy funciona (sem wrapper funcional):
+### Testando o MCP Builder Completo
 
 1. Ir para MCP Builder
-2. Criar namespace "Test"
+2. Criar namespace com nome e descrição
 3. Habilitar pelo menos 1 MCP
-4. Clicar "Deploy as MCP"
-5. Voltar para Hub
-6. Verificar se novo MCP aparece em "🔧 Custom MCPs"
-7. Pode parar/iniciar/remover como qualquer outro MCP
+4. Ver ferramentas reais aparecendo no Tool Manager
+5. Desabilitar algumas ferramentas (opcional)
+6. Clicar "Deploy as MCP"
+7. Voltar para Hub e verificar novo MCP em "🔧 Custom MCPs"
+8. Pode parar/iniciar/remover como qualquer outro MCP
+9. Testar com curl para verificar que ferramentas reais são retornadas
 
 ### Debug
 
 **Frontend:**
-```bash
-# Na tela initial, verificar localStorage:
+```javascript
+// Na tela inicial, verificar localStorage:
 localStorage.getItem('custom_mcp_ids')
 localStorage.getItem('mcp_namespaces')
 ```
 
 **Backend:**
 ```bash
-# Logs do container
+# Logs do container wrapper
 docker logs mcp-custom-{namespace-id}
 
-# Verificar metadata salva
-cat /data/mcps.json | grep isCustomNamespace
+# Verificar metadados salvos
+cat .appdata/data/mcps.json | jq '.[] | select(.isCustomNamespace)'
+
+# Verificar que container está na rede certa
+docker inspect mcp-custom-{namespace-id} | jq '.NetworkSettings.Networks'
+```
+
+**API:**
+```bash
+# Listar ferramentas do namespace via backend
+curl http://localhost:5146/api/namespaces/{namespace-id}/tools | jq '.tools[].name'
+
+# Listar ferramentas via wrapper (HTTP transport)
+curl -X POST http://localhost:8000/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
 ## Tipos TypeScript
@@ -217,6 +300,15 @@ interface DeployNamespacePayload {
 }
 ```
 
+## Roadmap Futuro
+
+- [ ] Export/Import de namespaces
+- [ ] Versionamento e histórico de configurações
+- [ ] Detecção e resolução de conflitos de nomes de tools entre MCPs
+- [ ] Rate limiting configurável entre MCPs
+- [ ] Logging centralizado de chamadas de tools
+- [ ] Métricas de uso por ferramenta
+
 ## Segurança & Considerações
 
 1. **Validação de Input**
@@ -227,12 +319,12 @@ interface DeployNamespacePayload {
 2. **Isolamento**
    - Cada namespace é um container separado
    - Tem seu próprio contexto de execução
-   - Pode ter limites de recurso aplicados
+   - Pode ter limites de recurso aplicados via Docker
 
 3. **Persistência**
    - Namespace config em localStorage (frontend)
    - Container metadata em mcps.json (backend)
-   - Sincronização é manual (refreshar Hub após deploy)
+   - Sincronização automática durante deploy
 
 ## Troubleshooting
 

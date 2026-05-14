@@ -71,6 +71,7 @@ export function registerNamespaceRoutes(
           DISABLED_TOOLS: namespace.disabledTools.join(','),
           NAMESPACE_ID: namespace.id,
           PORT: String(namespace.port),
+          BACKEND_HOST: 'mcp-hub:3001',
         }
 
         // Get the appropriate MCP wrapper server script based on transport
@@ -111,13 +112,51 @@ export function registerNamespaceRoutes(
         })
 
         const container = await docker.createContainer(containerOptions)
-        await container.start()
-
         const shortId = container.id.slice(0, 12)
+
+        // Update environment with container ID and restart
+        // Note: BACKEND_HOST should be mcp-hub:3001 (container internal port)
+        // so wrapper can reach backend when both are on the same Docker network
+        const updatedEnv = {
+          ENABLED_MCPS: mcpConfig.ENABLED_MCPS,
+          DISABLED_TOOLS: mcpConfig.DISABLED_TOOLS,
+          NAMESPACE_ID: mcpConfig.NAMESPACE_ID,
+          PORT: mcpConfig.PORT,
+          BACKEND_HOST: 'mcp-hub:3001',
+          NODE_ENV: 'production',
+          CONTAINER_ID: shortId,
+        }
+
+        const updatedOptions = buildContainerOptions({
+          name: containerName,
+          image: 'node:20-alpine',
+          command: ['sh', '-c', `mkdir -p /app && echo "${scriptBase64}" | base64 -d > /app/mcp-wrapper-server.js && node /app/mcp-wrapper-server.js`],
+          env: updatedEnv,
+          port: namespace.transport === 'stdio' ? undefined : namespace.port,
+          transport: namespace.transport,
+          mcpLabel,
+        })
+
+        await container.stop().catch(() => undefined)
+        await container.remove()
+
+        const newContainer = await docker.createContainer(updatedOptions)
+        await newContainer.start()
+
+        // Connect to mcp-hub network so wrapper can reach backend at mcp-hub:3001
+        try {
+          const mcp_hub_network = docker.getNetwork('gabriel-store-mcp-hub_default')
+          await mcp_hub_network.connect({ Container: newContainer.id })
+          console.error(`[namespaces.deploy] Connected container ${newContainer.id.slice(0, 12)} to gabriel-store-mcp-hub_default network`)
+        } catch (err) {
+          console.error(`[namespaces.deploy] Failed to connect container to network:`, err instanceof Error ? err.message : String(err))
+        }
+
+        const finalShortId = newContainer.id.slice(0, 12)
         const data = loadData()
 
         // Save namespace metadata
-        data[shortId] = {
+        data[finalShortId] = {
           name: `${namespace.name} (custom)`,
           image: 'node:20-alpine',
           command: 'node /app/mcp-wrapper-server.js',
@@ -127,15 +166,16 @@ export function registerNamespaceRoutes(
           isCustomNamespace: true,
           namespaceId: namespace.id,
           enabledMcps: enabledMcps.map((m) => m.id),
+          disabledTools: namespace.disabledTools && namespace.disabledTools.length > 0 ? namespace.disabledTools : undefined,
         }
         saveData(data)
 
         return reply.code(200).send({
-          id: shortId,
-          name: data[shortId].name,
+          id: finalShortId,
+          name: data[finalShortId].name,
           image: 'node:20-alpine',
           status: 'running',
-          meta: data[shortId],
+          meta: data[finalShortId],
         })
       } catch (error) {
         const message =

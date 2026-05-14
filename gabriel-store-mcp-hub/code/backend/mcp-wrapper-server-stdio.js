@@ -5,10 +5,12 @@
  */
 
 const readline = require('readline');
+const http = require('node:http');
 
 const ENABLED_MCPS = process.env.ENABLED_MCPS || '';
 const DISABLED_TOOLS = process.env.DISABLED_TOOLS || '';
 const NAMESPACE_ID = process.env.NAMESPACE_ID || 'unknown';
+const BACKEND_HOST = process.env.BACKEND_HOST || 'localhost:51099';
 
 // Parse configuration
 const enabledMcpsList = ENABLED_MCPS
@@ -69,6 +71,43 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
+async function fetchRealToolsFromBackend() {
+  return new Promise((resolve) => {
+    const url = `http://${BACKEND_HOST}/api/namespaces/${NAMESPACE_ID}/tools`;
+    console.error(`[MCP STDIO] Fetching tools from ${url}`);
+
+    const req = http.get(
+      url,
+      { timeout: 5000 },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(data);
+            const tools = parsed.tools || [];
+            console.error(`[MCP STDIO] Received ${tools.length} tools from backend`);
+            resolve(tools);
+          } catch (err) {
+            console.error(`[MCP STDIO] Failed to parse backend response:`, err.message);
+            resolve([]);
+          }
+        });
+      }
+    );
+
+    req.on('error', (err) => {
+      console.error(`[MCP STDIO] Backend request failed:`, err.message);
+      resolve([]);
+    });
+    req.on('timeout', () => {
+      console.error('[MCP STDIO] Backend request timed out');
+      req.destroy();
+      resolve([]);
+    });
+  });
+}
+
 async function handleMcpRequest(payload) {
   const { jsonrpc = '2.0', id, method, params } = payload;
   requestId = id;
@@ -91,14 +130,17 @@ async function handleMcpRequest(payload) {
         },
       };
 
-    case 'tools/list':
+    case 'tools/list': {
+      const realTools = await fetchRealToolsFromBackend();
+      const tools = realTools.length > 0 ? realTools : getMockTools();
       return {
         jsonrpc,
         id,
         result: {
-          tools: getMockTools(),
+          tools,
         },
       };
+    }
 
     case 'tools/call':
       const toolName = params?.name;
@@ -162,11 +204,11 @@ function getMockTools() {
   for (const mcp of enabledMcpsList) {
     // Create 3 mock tools per MCP
     for (let i = 1; i <= 3; i++) {
-      const toolId = `${mcp.id}_tool_${i}`;
+      const toolName = `tool_${i}`;
 
-      if (!disabledToolsSet.has(toolId)) {
+      if (!disabledToolsSet.has(toolName)) {
         tools.push({
-          name: toolId,
+          name: toolName,
           description: `Tool ${i} from ${mcp.name}`,
           inputSchema: {
             type: 'object',

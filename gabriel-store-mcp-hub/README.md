@@ -190,7 +190,7 @@ pnpm run dev
 
 ## MCP Builder
 
-A aplicação inclui um **MCP Builder** para criar namespaces customizados que combinam múltiplos MCPs em um único servidor.
+A aplicação inclui um **MCP Builder** para criar namespaces customizados que combinam múltiplos MCPs em um único servidor com descoberta automática de ferramentas reais.
 
 ### Como usar:
 
@@ -202,10 +202,18 @@ A aplicação inclui um **MCP Builder** para criar namespaces customizados que c
    - Porta (se HTTP/streamable-http)
 
 3. **Habilite MCPs** - selecione quais MCPs você quer combinar
-4. **Gerencie Tools** - veja todas as ferramentas disponíveis e desabilite as que não quer usar
+4. **Gerencie Tools** - veja todas as ferramentas reais dos MCPs habilitados e desabilite as que não quer usar
 5. **Deploy** - crie o namespace customizado como um novo servidor MCP
 
-O namespace customizado fica disponível no Hub e pode ser usado como qualquer outro MCP.
+### Funcionalidades:
+
+- **Descoberta Real de Ferramentas**: O Builder busca automaticamente as ferramentas de cada MCP habilitado
+- **Filtro de Ferramentas**: Desabilite ferramentas específicas que não quer expor no namespace customizado
+- **Múltiplos Transports**: Suporte a `stdio`, `http` e `streamable-http`
+- **Isolamento de Container**: Cada namespace é um container Docker separado
+- **Integração Automática**: O wrapper se conecta automaticamente à rede Docker para comunicar com o backend
+
+O namespace customizado fica disponível na seção "🔧 Custom MCPs" e pode ser usado como qualquer outro MCP.
 
 ### Variáveis de ambiente para habilitar features
 
@@ -297,6 +305,8 @@ Referencia completa dos endpoints:
 
 - `POST /api/namespaces/deploy`
 	- Cria um namespace customizado combinando múltiplos MCPs
+	- O container wrapper é criado automaticamente conectado à rede do MCP Hub
+	- Retorna ID do novo container e metadados
 	- Body:
 		```json
 		{
@@ -315,6 +325,13 @@ Referencia completa dos endpoints:
 			]
 		}
 		```
+
+- `GET /api/namespaces/:namespaceId/tools`
+	- Lista todas as ferramentas do namespace customizado
+	- Busca ferramentas reais dos MCPs habilitados
+	- Filtra ferramentas desabilitadas
+	- Retorna array de tools com esquema e descrição
+	- Exemplo: `GET /api/namespaces/ns_1234567890/tools`
 
 ### MCP Tools
 

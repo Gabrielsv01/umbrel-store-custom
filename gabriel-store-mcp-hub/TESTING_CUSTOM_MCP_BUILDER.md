@@ -151,14 +151,15 @@ curl http://localhost:5146/api/mcps | jq '.[] | select(.meta.isCustomNamespace)'
 
 **Resultado:** Todos devem aparecer e serem gerenciáveis independentemente
 
-### ✅ Caso 3: Edição de Namespace
+### ✅ Caso 3: Ferramentas Reais são Descobertas
 
 1. Criar namespace
-2. Clicar em ✏️ (editar)
-3. Mudar nome/descrição
-4. Verificar que mudou
+2. Habilitar pelo menos 1 MCP
+3. Verificar que a seção "Tool Manager" mostra ferramentas reais do MCP
+4. Desabilitar algumas ferramentas
+5. Deploy
 
-**Resultado:** Edição funciona
+**Resultado:** O MCP customizado lista apenas as ferramentas habilitadas quando consultado
 
 ### ✅ Caso 4: Deletar Namespace
 
@@ -213,11 +214,65 @@ localStorage.removeItem('mcp_namespaces')
 2. localStorage tem o ID? `localStorage.getItem('custom_mcp_ids')`
 3. Recarregue a página (Ctrl+F5)
 
-### Problema: "Tool Manager" mostra apenas mock tools
+### Problema: "Tool Manager" não mostra ferramentas
 
-**Esperado:** Na fase atual, as ferramentas são mockadas (3 por MCP: get_info, execute_command, list_resources)
+**Verificar:**
+1. Há MCPs habilitados? Deve haver pelo menos 1 selecionado
+2. Os MCPs estão rodando? `docker ps | grep -v mcp-custom` deve mostrar os MCPs
+3. Os MCPs têm ferramentas? Acesse o Inspector para verificar
 
-**Próximo passo:** Integrar descoberta real de ferramentas via health check
+**Esperado:** Tool Manager mostra ferramentas reais de cada MCP habilitado. Se um MCP não tem ferramentas definidas, nada é mostrado.
+
+## Testando com Curl
+
+### Verificar Ferramentas via Backend API
+
+```bash
+# Após criar um namespace com ID: ns_xxxxx
+
+# 1. Listar ferramentas do backend
+curl -s http://localhost:5146/api/namespaces/ns_xxxxx/tools | jq '.tools[].name'
+
+# Resultado esperado: Nomes reais de ferramentas dos MCPs habilitados, sem as desabilitadas
+```
+
+### Verificar Ferramentas via Wrapper HTTP
+
+```bash
+# Após criar um namespace HTTP com ID: ns_xxxxx e porta: 8000
+
+# 1. Listar ferramentas via wrapper
+curl -X POST http://localhost:8000/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/list",
+    "params": {}
+  }' | jq '.result.tools[].name'
+
+# Resultado esperado: Nomes reais de ferramentas dos MCPs habilitados
+```
+
+### Verificar que Ferramentas Desabilitadas não aparecem
+
+```bash
+# Se você desabilitou "tool_x" na criação:
+
+curl -s http://localhost:5146/api/namespaces/ns_xxxxx/tools | jq '.tools[] | select(.name == "tool_x")'
+
+# Resultado esperado: vazio (não retorna nada)
+```
+
+### Verificar Metadados do Container
+
+```bash
+# Ver metadados salvos do container customizado
+docker inspect mcp-custom-ns_xxxxx | jq '.Config.Env' | grep DISABLED_TOOLS
+
+# Ver logs do wrapper
+docker logs mcp-custom-ns_xxxxx
+```
 
 ## Limpeza Pós-Teste
 
@@ -240,16 +295,20 @@ localStorage.removeItem('custom_mcp_ids')
 - [ ] Ao clicar namespace, abre editor
 - [ ] Informações básicas, estatísticas são exibidas
 - [ ] MCPs podem ser habilitados/desabilitados
-- [ ] Ferramentas aparecem ao selecionar MCPs
+- [ ] Ferramentas reais aparecem ao selecionar MCPs
+- [ ] Ferramentas podem ser desabilitadas no Tool Manager
 - [ ] Deploy button está presente
 - [ ] Deploy sem MCPs mostra erro
 - [ ] Deploy com MCPs cria container
 - [ ] Container Docker é criado com nome correto
 - [ ] MCP aparece em "Custom MCPs" na tela inicial
+- [ ] MCP customizado retorna ferramentas reais (exceto desabilitadas)
+- [ ] MCP customizado pode ser consultado via API e curl
 - [ ] MCP customizado pode ser controlado (start/stop/remove)
 - [ ] Namespace pode ser editado (nome/descrição)
 - [ ] Namespace pode ser deletado
 - [ ] localStorage persiste dados entre recargas
+- [ ] Wrapper se conecta à rede do MCP Hub automaticamente
 
 ## Métricas
 
@@ -265,24 +324,32 @@ Build size: +2.5KB (gzipped)
 ## Notas
 
 - MCPs customizados são containers reais do Docker
-- Podem ser gerenciados como qualquer outro MCP
+- Podem ser gerenciados como qualquer outro MCP (start/stop/remove)
 - Dados persistem em localStorage (frontend) e mcps.json (backend)
-- Container wrapper usa image padrão (node:20-alpine)
-- Wrapper real será implementado na Fase 2
+- Container wrapper usa image padrão (node:20-alpine) com servidor HTTP/STDIO/streamable-HTTP
+- Ferramentas são descobertas automaticamente dos MCPs habilitados
+- Ferramentas desabilitadas são filtradas no backend e no wrapper
+- O wrapper se conecta automaticamente à rede Docker do MCP Hub durante a criação
 
-## Próximos Passos
+## Funcionalidades Implementadas ✅
 
-1. **Wrapper MCP Funcional**
-   - Criar imagem que agrega ferramentas reais
-   - Fazer proxy para MCPs habilitados
-   - Respeitar disabledTools
+- **Wrapper MCP Funcional**: Servidores wrapper para `http`, `stdio` e `streamable-http`
+- **Tool Discovery Real**: Descoberta automática de ferramentas dos MCPs habilitados
+- **Filtro de Ferramentas**: Desabilitar ferramentas específicas no namespace customizado
+- **Rede Automática**: Containers wrapper se conectam automaticamente à rede do MCP Hub
+- **Múltiplos Transports**: Suporte a stdio, HTTP e streamable-HTTP
 
-2. **Tool Discovery Real**
-   - Chamar health check de cada MCP
-   - Obter ferramentas reais
-   - Montar catálogo combinado
+## Próximas Etapas
+
+1. **Export/Import de Namespaces**
+   - Exportar configuração de namespace para arquivo
+   - Importar namespace de arquivo
+
+2. **Versionamento de Configuração**
+   - Histórico de mudanças em namespaces
+   - Rollback de configurações anteriores
 
 3. **Avançado**
-   - Export/Import de namespaces
-   - Versionamento
-   - Métricas e logging
+   - Métricas por ferramenta (quantas vezes foi chamada)
+   - Logging centralizado de chamadas
+   - Rate limiting entre MCPs
