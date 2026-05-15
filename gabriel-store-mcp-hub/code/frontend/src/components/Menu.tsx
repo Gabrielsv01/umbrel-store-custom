@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface MenuProps {
   setShowCatalog: React.Dispatch<React.SetStateAction<boolean>>;
@@ -18,6 +18,55 @@ export default function Menu({
   onOpenVolumes,
 }: Readonly<MenuProps>) {
   const [showMenu, setShowMenu] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const [isMenuPositioned, setIsMenuPositioned] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!showMenu) {
+      setIsMenuPositioned(false);
+      return;
+    }
+
+    if (!buttonRef.current) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+
+    setTimeout(() => {
+      if (!buttonRef.current || !menuRef.current) return;
+
+      const buttonRect = buttonRef.current.getBoundingClientRect();
+      const menuRect = menuRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+
+      let top = buttonRect.bottom + 8;
+      let left = buttonRect.right - menuRect.width;
+
+      if (top + menuRect.height > viewportHeight) {
+        top = buttonRect.top - menuRect.height - 8;
+      }
+
+      if (left + menuRect.width > viewportWidth) {
+        left = viewportWidth - menuRect.width - 8;
+      }
+
+      if (left < 0) {
+        left = 8;
+      }
+
+      setMenuPosition({ top, left });
+      setIsMenuPositioned(true);
+    }, 0);
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMenu]);
 
   const handleMenuClose = () => setShowMenu(false);
   const handleMenuClick = (callback: (() => void) | (() => Promise<void>)) => {
@@ -62,6 +111,7 @@ export default function Menu({
 
       {/* Menu Button */}
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setShowMenu((prev) => !prev)}
         className="rounded-lg bg-gray-800 px-2 py-1 text-lg text-gray-300 transition-colors hover:bg-gray-700"
@@ -81,7 +131,14 @@ export default function Menu({
           />
 
           {/* Desktop dropdown menu */}
-          <div className="absolute right-36 top-20 z-20 hidden min-w-40 flex-col overflow-hidden rounded-xl border border-gray-700 bg-gray-950 shadow-2xl md:flex">
+          <div
+            ref={menuRef}
+            className={`fixed z-20 min-w-40 flex-col overflow-hidden rounded-xl border border-gray-700 bg-gray-950 shadow-2xl ${isMenuPositioned ? 'flex' : 'hidden'} md:flex`}
+            style={{
+              top: `${menuPosition.top}px`,
+              left: `${menuPosition.left}px`,
+            }}
+          >
             {menuItems.map((item) => (
               <button
                 key={item.label}
