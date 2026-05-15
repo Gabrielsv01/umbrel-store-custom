@@ -263,9 +263,10 @@ export function registerNamespaceRoutes(
         const containerId = findOldContainerByNamespaceId(data, namespaceId)
 
         if (!containerId) {
-          return reply.code(404).send({ error: 'Namespace container not found' })
+          return reply.code(404).send({ error: 'Namespace not found' })
         }
 
+        // Try to stop and remove container if it exists
         try {
           const container = docker.getContainer(containerId)
           console.error(`[namespaces.delete] Stopping container ${containerId}`)
@@ -273,13 +274,10 @@ export function registerNamespaceRoutes(
           console.error(`[namespaces.delete] Removing container ${containerId}`)
           await container.remove()
         } catch (err) {
-          console.error(`[namespaces.delete] Error removing container:`, err instanceof Error ? err.message : String(err))
-          return reply.code(500).send({
-            error: err instanceof Error ? err.message : 'Failed to remove container'
-          })
+          console.error(`[namespaces.delete] Container already removed or unreachable:`, err instanceof Error ? err.message : String(err))
         }
 
-        // Remove metadata
+        // Always remove metadata regardless of container state
         if (data[containerId]) {
           delete data[containerId]
           saveData(data)
