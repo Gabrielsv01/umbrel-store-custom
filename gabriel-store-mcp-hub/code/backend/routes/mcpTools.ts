@@ -314,6 +314,7 @@ export function registerMcpToolsRoutes(
           docker,
           disabledTools,
           createDockerMultiplexDecoder,
+          mcpLabel,
           { meta, data, loadData },
         )
       }
@@ -396,6 +397,7 @@ export function registerMcpToolsRoutes(
           docker,
           disabledTools,
           createDockerMultiplexDecoder,
+          mcpLabel,
           { meta, data, loadData },
         )
       }
@@ -459,6 +461,7 @@ async function handleStdioTools(
   docker: Docker,
   disabledTools: string[],
   createDockerMultiplexDecoder: (callback: (text: string, streamType: number) => void) => (chunk: Buffer) => void,
+  mcpLabel: string,
   ctx?: { meta?: any; data?: any; loadData?: () => any },
 ) {
   try {
@@ -480,83 +483,119 @@ async function handleStdioTools(
     // For custom namespaces with enabled MCPs, fetch real tools from those MCPs
     if (ctx?.meta?.isCustomNamespace && ctx?.meta?.enabledMcps && ctx?.loadData) {
       const allData = ctx.loadData()
+      const allContainers = await docker.listContainers({
+        all: true,
+        filters: JSON.stringify({ label: [`${mcpLabel}=true`] }),
+      })
+
       for (const mcpId of ctx.meta.enabledMcps) {
         const mcpMeta = allData[mcpId]
         if (!mcpMeta) continue
 
         try {
-          // Fetch tools from each enabled MCP
-          const mcpContainer = docker.getContainer(mcpId)
-          const mcpInfo = await mcpContainer.inspect().catch(() => null)
+          const mcpContainer = allContainers.find((c) => c.Id.startsWith(mcpId))
+          if (!mcpContainer) continue
 
-          if (mcpInfo && mcpInfo.State.Status === 'running') {
-            const mcpStream = await mcpContainer.attach({
-              stream: true,
-              stdin: true,
-              stdout: true,
-              stderr: true,
-              hijack: true,
-              logs: true,
-            })
+          const container = docker.getContainer(mcpContainer.Id)
+          const mcpInfo = await container.inspect().catch(() => null)
 
-            const mcpPayload = {
-              jsonrpc: '2.0',
-              id: 1,
-              method: 'tools/list',
-              params: {},
-            }
+          if (mcpInfo?.State?.Status !== 'running') continue
 
-            const mcpTools = await new Promise<McpTool[]>((resolve) => {
-              let responseBuffer = ''
-              let isFinished = false
-              const timeout = setTimeout(() => {
-                if (!isFinished) {
-                  isFinished = true
-                  try { (mcpStream as any).destroy() } catch {}
-                  resolve([])
-                }
-              }, 10000)
+          const mcpStream = await container.attach({
+            stream: true,
+            stdin: true,
+            stdout: true,
+            stderr: true,
+            hijack: true,
+            logs: true,
+          })
 
-              const decode = createDockerMultiplexDecoder((payloadText: string, streamType: number) => {
-                if (streamType === 2 || isFinished || streamType !== 1) return
-                responseBuffer += payloadText
-                const lines = responseBuffer.split('\n')
-                responseBuffer = lines.pop() || ''
+          const jsonQueue: Array<Record<string, unknown>> = []
+          const stdoutLineDecoder = createLineDecoder((line) => {
+            const parsed = tryParseRecord(line) ?? tryParseRecordFragment(line)
+            if (parsed) jsonQueue.push(parsed)
+          })
 
-                for (const line of lines) {
-                  const trimmed = line.trim()
-                  if (!trimmed.startsWith('{')) continue
-                  try {
-                    const parsed = JSON.parse(trimmed) as any
-                    if (parsed.id === 1) {
-                      isFinished = true
-                      clearTimeout(timeout)
-                      try { (mcpStream as any).destroy() } catch {}
-                      resolve((parsed.result as ToolsListResponse)?.tools ?? [])
-                      return
-                    }
-                  } catch {}
-                }
-              })
+          const decode = createDockerMultiplexDecoder((payload, streamType) => {
+            if (streamType === 1) stdoutLineDecoder(payload)
+          })
 
-              mcpStream.on('data', decode)
-              mcpStream.on('error', () => {
-                if (!isFinished) {
-                  isFinished = true
-                  clearTimeout(timeout)
-                  resolve([])
-                }
-              })
+          mcpStream.on('data', (chunk: Buffer) => decode(chunk))
 
-              setTimeout(() => {
-                if (!isFinished) {
-                  mcpStream.write(`${JSON.stringify(mcpPayload)}\n`)
-                }
-              }, 100)
-            })
-
-            tools.push(...mcpTools)
+          const writeRpc = (payload: Record<string, unknown>) => {
+            mcpStream.write(`${JSON.stringify(payload)}\n`)
           }
+
+          const waitForMessage = async (
+            predicate: (msg: Record<string, unknown>) => boolean,
+            timeoutMs: number,
+          ): Promise<Record<string, unknown> | null> => {
+            const deadline = Date.now() + timeoutMs
+            while (Date.now() < deadline) {
+              const idx = jsonQueue.findIndex(predicate)
+              if (idx >= 0) {
+                const [match] = jsonQueue.splice(idx, 1)
+                return match ?? null
+              }
+              await new Promise((resolve) => setTimeout(resolve, 50))
+            }
+            return null
+          }
+
+          const mcpTools = await (async () => {
+            try {
+              const protocolCandidates = ['2025-03-26', '2024-11-05']
+              let selectedProtocol: string | null = null
+
+              for (let i = 0; i < protocolCandidates.length; i += 1) {
+                const protocolVersion = protocolCandidates[i]
+                const requestId = 1 + i
+
+                writeRpc({
+                  jsonrpc: '2.0',
+                  id: requestId,
+                  method: 'initialize',
+                  params: {
+                    protocolVersion,
+                    capabilities: {},
+                    clientInfo: { name: 'mcp-hub-tools', version: '1.0.0' },
+                  },
+                })
+
+                const initializeResponse = await waitForMessage((msg) => Number(msg.id) === requestId, 5000)
+                if (!!initializeResponse?.result && !initializeResponse?.error) {
+                  selectedProtocol = protocolVersion
+                  break
+                }
+              }
+
+              if (!selectedProtocol) {
+                try { (mcpStream as any).destroy() } catch {}
+                return []
+              }
+
+              writeRpc({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} })
+
+              let toolsResponse: Record<string, unknown> | null = null
+              for (const requestId of [10, 11]) {
+                writeRpc({ jsonrpc: '2.0', id: requestId, method: 'tools/list', params: {} })
+                toolsResponse = await waitForMessage((msg) => Number(msg.id) === requestId, 5000)
+                if (toolsResponse) break
+              }
+
+              try { (mcpStream as any).destroy() } catch {}
+
+              if (!toolsResponse?.result) return []
+
+              const toolsResult = toolsResponse.result as ToolsListResponse
+              return Array.isArray(toolsResult.tools) ? toolsResult.tools : []
+            } catch {
+              try { (mcpStream as any).destroy() } catch {}
+              return []
+            }
+          })()
+
+          tools.push(...mcpTools)
         } catch {
           // Continue if one MCP fails
         }
