@@ -160,8 +160,7 @@ async function handleMcpRequest(payload) {
       };
 
     case 'tools/list': {
-      const realTools = await fetchRealToolsFromBackend();
-      const tools = realTools.length > 0 ? realTools : getMockTools();
+      const tools = await fetchRealToolsFromBackend();
       return {
         jsonrpc,
         id,
@@ -225,36 +224,6 @@ async function handleMcpRequest(payload) {
         },
       };
   }
-}
-
-function getMockTools() {
-  const tools = [];
-
-  for (const mcp of enabledMcpsList) {
-    // Create 3 mock tools per MCP
-    for (let i = 1; i <= 3; i++) {
-      const toolName = `tool_${i}`;
-
-      if (!disabledToolsSet.has(toolName)) {
-        tools.push({
-          name: toolName,
-          description: `Tool ${i} from ${mcp.name}`,
-          inputSchema: {
-            type: 'object',
-            properties: {
-              input: {
-                type: 'string',
-                description: 'Input parameter',
-              },
-            },
-            required: ['input'],
-          },
-        });
-      }
-    }
-  }
-
-  return tools;
 }
 
 server.listen(PORT, '0.0.0.0', () => {

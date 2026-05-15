@@ -56,9 +56,27 @@ async function fetchMcpTools(
   meta: any,
   createDockerMultiplexDecoder: (callback: (text: string, streamType: number) => void) => (chunk: Buffer) => void,
 ): Promise<McpTool[]> {
-  const info = await container.inspect().catch(() => null)
+  let info = await container.inspect().catch(() => null)
+
+  // Try to start container if it's stopped
   if (!info || info.State.Status !== 'running') {
-    return []
+    const containerId = container.id?.slice(0, 12) || 'unknown'
+    try {
+      console.log(`[fetchMcpTools] Container ${containerId} is ${info?.State?.Status || 'not found'}, attempting to start...`)
+      await container.start().catch(() => undefined)
+      // Wait for container to be ready
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+      info = await container.inspect().catch(() => null)
+
+      if (!info || info.State.Status !== 'running') {
+        console.warn(`[fetchMcpTools] Failed to start container ${containerId}`)
+        return []
+      }
+      console.log(`[fetchMcpTools] Successfully started container ${containerId}`)
+    } catch (err) {
+      console.error(`[fetchMcpTools] Error starting container:`, err instanceof Error ? err.message : String(err))
+      return []
+    }
   }
 
   const transport = meta.transport ?? 'http'
@@ -479,6 +497,7 @@ async function handleStdioTools(
     }
 
     let tools: McpTool[] = []
+    const mcpErrors: Record<string, string> = {}
 
     // For custom namespaces with enabled MCPs, fetch real tools from those MCPs
     if (ctx?.meta?.isCustomNamespace && ctx?.meta?.enabledMcps && ctx?.loadData) {
@@ -490,16 +509,42 @@ async function handleStdioTools(
 
       for (const mcpId of ctx.meta.enabledMcps) {
         const mcpMeta = allData[mcpId]
-        if (!mcpMeta) continue
+        if (!mcpMeta) {
+          mcpErrors[mcpId] = 'metadata not found'
+          continue
+        }
 
         try {
           const mcpContainer = allContainers.find((c) => c.Id.startsWith(mcpId))
-          if (!mcpContainer) continue
+          if (!mcpContainer) {
+            mcpErrors[mcpId] = 'container not found'
+            continue
+          }
 
           const container = docker.getContainer(mcpContainer.Id)
-          const mcpInfo = await container.inspect().catch(() => null)
+          let mcpInfo = await container.inspect().catch(() => null)
 
-          if (mcpInfo?.State?.Status !== 'running') continue
+          // Try to start container if it's stopped
+          if (mcpInfo?.State?.Status !== 'running') {
+            console.log(`[handleStdioTools] MCP ${mcpId} is ${mcpInfo?.State?.Status}, attempting to start...`)
+            try {
+              await container.start()
+              // Wait for container to be ready
+              await new Promise((resolve) => setTimeout(resolve, 2000))
+              mcpInfo = await container.inspect().catch(() => null)
+
+              if (mcpInfo?.State?.Status !== 'running') {
+                mcpErrors[mcpId] = `failed to start container (status: ${mcpInfo?.State?.Status})`
+                continue
+              }
+              console.log(`[handleStdioTools] Successfully started MCP ${mcpId}`)
+            } catch (startErr) {
+              const errMsg = startErr instanceof Error ? startErr.message : String(startErr)
+              mcpErrors[mcpId] = `failed to start: ${errMsg}`
+              console.error(`[handleStdioTools] Failed to start MCP ${mcpId}:`, errMsg)
+              continue
+            }
+          }
 
           const mcpStream = await container.attach({
             stream: true,
@@ -596,9 +641,20 @@ async function handleStdioTools(
           })()
 
           tools.push(...mcpTools)
-        } catch {
-          // Continue if one MCP fails
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err)
+          mcpErrors[mcpId] = errMsg
+          console.error(`[handleStdioTools] Failed to fetch tools from MCP ${mcpId}:`, errMsg)
         }
+      }
+
+      if (Object.keys(mcpErrors).length > 0) {
+        console.warn('[handleStdioTools] Custom namespace tools fetch summary:', {
+          namespace: ctx.meta.namespaceId,
+          successCount: ctx.meta.enabledMcps.length - Object.keys(mcpErrors).length,
+          totalMcps: ctx.meta.enabledMcps.length,
+          errors: mcpErrors,
+        })
       }
     } else {
       // For regular MCPs, query the container directly
