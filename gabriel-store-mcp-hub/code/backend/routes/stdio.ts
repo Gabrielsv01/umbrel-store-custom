@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { randomUUID } from 'node:crypto'
 import { Readable } from 'node:stream'
 import { runStdioHealthCheck } from '../services/stdioHealth.js'
+import { runStdioToolsList } from '../services/stdioToolsList.js'
 import type {
   RegisterStdioRoutesDeps,
   ResolvedStdioContainer,
@@ -49,20 +50,41 @@ export function registerStdioRoutes(
     const { id } = req.params;
     const payload = req.body;
 
-    // 1. Localiza o container e inspeciona capacidades via ENV
     const resolved = await resolveStdioContainer(id).catch((err) => {
       return reply.code(404).send({ error: err.message });
     });
     const { container, shortId } = resolved;
 
     const info = await container.inspect() as any;
-    const envs: string[] = info?.Config?.Env || [];
-    const hasEnv = (name: string) => envs.some((e: string) => e === `${name}=true`);
-
-    // Check disabled tools
     const meta = loadData()[shortId];
     const disabledTools = meta?.disabledTools ?? [];
 
+    // Handle tools/list with dedicated service
+    if (payload.method === 'tools/list') {
+      try {
+        const result = await runStdioToolsList({
+          container,
+          createDockerMultiplexDecoder,
+          createLineDecoder,
+        });
+
+        const filteredTools = result.tools.filter((t: any) => !disabledTools.includes(t.name));
+
+        return reply.type('application/json').send({
+          jsonrpc: "2.0",
+          id: payload.id,
+          result: { tools: filteredTools }
+        });
+      } catch (err: any) {
+        return reply.code(500).send({
+          jsonrpc: "2.0",
+          id: payload.id,
+          error: { code: -32603, message: err.message }
+        });
+      }
+    }
+
+    // Check disabled tools for tools/call
     if (payload.method === 'tools/call') {
       const toolName = (payload.params as any)?.name;
       if (toolName && disabledTools.includes(toolName)) {
@@ -77,45 +99,18 @@ export function registerStdioRoutes(
       }
     }
 
-    // Mapeamento de métodos opcionais
-    const capabilityMap: Record<string, string> = {
-      'resources/list': 'MCP_HAS_RESOURCES',
-      'prompts/list': 'MCP_HAS_PROMPTS',
-      'logging/setLevel': 'MCP_HAS_LOGGING'
-    };
-
-    const method = payload.method;
-    const requiredEnv = capabilityMap[method];
-
-    // 2. Interceptação Proativa (Responde imediatamente se a ENV não existir)
-    if (requiredEnv && !hasEnv(requiredEnv)) {
-      const isListMethod = method.endsWith('/list');
-      const result = isListMethod ? { [method.split('/')[0]]: [] } : {};
-
-      console.log(`[HUB]: Interceptando e respondendo 200 OK para método opcional: ${method}`);
-
-      return reply.send({
-        jsonrpc: "2.0",
-        id: payload.id,
-        result: result
-      });
-    }
-
-    // 3. Conexão com o Stream Stdio do Container
+    // General proxy for other methods
     const stream = await container.attach({
       stream: true, stdin: true, stdout: true, stderr: true, hijack: true, logs: true
     });
 
-    // Tratamento de Notificações (Sem ID)
     const hasId = Object.prototype.hasOwnProperty.call(payload, 'id');
     if (!hasId) {
       stream.write(`${JSON.stringify(payload)}\n`);
-      // Fecha o stream após curto delay (não espera resposta)
       setTimeout(() => { try { (stream as any).destroy(); } catch {} }, 500);
-      return reply.code(204).send(); 
+      return reply.code(204).send();
     }
 
-    // 4. Promessa para capturar a resposta correta do container
     const getMcpResponse = () => new Promise((resolve, reject) => {
       let responseBuffer = '';
       let isFinished = false;
@@ -173,11 +168,10 @@ export function registerStdioRoutes(
         }
       });
 
-      // Uptime check para o delay
       const state = info?.State;
       const uptime = Date.now() - new Date(state?.StartedAt || 0).getTime();
       const waitTime = uptime < 3000 ? 2200 : 100;
-      
+
       setTimeout(() => {
         if (!isFinished) {
           stream.write(`${JSON.stringify(payload)}\n`);
@@ -185,23 +179,12 @@ export function registerStdioRoutes(
       }, waitTime);
     });
 
-    // 5. Execução e Normalização da Resposta
     try {
-      const response: any = await getMcpResponse();
+      const response = await getMcpResponse();
 
-      // EXTRAÇÃO SEGURA: Se o container já devolveu o envelope result, extraímos
-      // para evitar duplicidade (ex: result: { result: ... }) que quebra o Hermes
       let finalResult = (response && typeof response === 'object' && 'result' in response)
         ? response.result
         : response;
-
-      // Filter disabled tools from tools/list response
-      if (payload.method === 'tools/list' && finalResult && typeof finalResult === 'object') {
-        const resultObj = finalResult as any;
-        if (Array.isArray(resultObj.tools)) {
-          resultObj.tools = resultObj.tools.filter((t: any) => !disabledTools.includes(t.name));
-        }
-      }
 
       return reply.type('application/json').send({
         jsonrpc: "2.0",

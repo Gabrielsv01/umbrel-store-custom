@@ -58,7 +58,6 @@ export default function MCPCard({
   httpHealth,
   httpHealthLoading,
 }: MCPCardProps) {
-  const [copied, setCopied] = useState(false);
   const [showHealthTip, setShowHealthTip] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
@@ -115,36 +114,32 @@ export default function MCPCard({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showMenu]);
 
-  const copyConfig = () => {
-    navigator.clipboard.writeText(buildClaudeConfig(mcp));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    setShowMenu(false);
-  };
-
   const busy = !!actionLoading;
   const isStdio = (mcp.meta?.transport ?? 'http') === 'stdio';
   const isHttpTransport = !isStdio;
 
-  const stdioHealthTone = !isStdio
-    ? 'bg-gray-700 text-gray-400'
-    : health?.status === 'healthy'
-      ? 'bg-green-500/15 text-green-400'
-      : health?.status === 'degraded'
-        ? 'bg-yellow-500/15 text-yellow-400'
-        : health?.status === 'unhealthy'
-          ? 'bg-red-500/15 text-red-400'
-          : 'bg-gray-700 text-gray-400';
+  const getStdioHealthTone = () => {
+    if (!isStdio) return 'bg-gray-700 text-gray-400';
+    if (health?.status === 'healthy') return 'bg-green-500/15 text-green-400';
+    if (health?.status === 'degraded')
+      return 'bg-yellow-500/15 text-yellow-400';
+    if (health?.status === 'unhealthy') return 'bg-red-500/15 text-red-400';
+    return 'bg-gray-700 text-gray-400';
+  };
 
-  const httpHealthTone = !isHttpTransport
-    ? 'bg-gray-700 text-gray-400'
-    : httpHealth?.status === 'healthy'
-      ? 'bg-green-500/15 text-green-400'
-      : httpHealth?.status === 'unreachable'
-        ? 'bg-red-500/15 text-red-400'
-        : httpHealth?.status === 'error'
-          ? 'bg-yellow-500/15 text-yellow-400'
-          : 'bg-gray-700 text-gray-400';
+  const getHttpHealthTone = () => {
+    if (!isHttpTransport) return 'bg-gray-700 text-gray-400';
+    if (httpHealth?.status === 'healthy')
+      return 'bg-green-500/15 text-green-400';
+    if (httpHealth?.status === 'unreachable')
+      return 'bg-red-500/15 text-red-400';
+    if (httpHealth?.status === 'error')
+      return 'bg-yellow-500/15 text-yellow-400';
+    return 'bg-gray-700 text-gray-400';
+  };
+
+  const stdioHealthTone = getStdioHealthTone();
+  const httpHealthTone = getHttpHealthTone();
 
   // Keep backward compat: healthTone used in existing badge
   const healthTone = isStdio ? stdioHealthTone : httpHealthTone;
@@ -179,62 +174,122 @@ export default function MCPCard({
     onCheckHealth(mcp.id);
   };
 
+  const getInitializeStatus = () =>
+    health?.handshake?.initializeOk ? 'ok' : 'failed';
+
+  const getToolsListStatus = () =>
+    health?.handshake?.toolsListOk ? 'ok' : 'failed';
+
+  const getToolsCountLine = () => {
+    if (typeof health?.handshake?.toolCount === 'number') {
+      return `tools: ${health.handshake.toolCount}`;
+    }
+    return null;
+  };
+
+  const getNetworkProbeLine = () => {
+    if (health?.networkProbe?.attempted) {
+      const probeStatus = health.networkProbe.ok ? 'ok' : 'failed';
+      const toolName = health.networkProbe.toolName
+        ? ` (${health.networkProbe.toolName})`
+        : '';
+      return `network probe: ${probeStatus}${toolName}`;
+    }
+    if (health?.networkProbe?.reason) {
+      return `network probe: ${health.networkProbe.reason}`;
+    }
+    return null;
+  };
+
+  const getNetworkProbeErrorLine = () => {
+    if (health?.networkProbe?.error) {
+      return `error: ${health.networkProbe.error}`;
+    }
+    return null;
+  };
+
+  const getDiagnosticsIssuesLines = () => {
+    if (Array.isArray(health?.diagnostics?.issues)) {
+      return health.diagnostics.issues
+        .slice(0, 2)
+        .map((issue) => `issue: ${issue}`);
+    }
+    return [];
+  };
+
+  const getHttpLatencyLine = () => {
+    if (typeof httpHealth?.latencyMs === 'number') {
+      return `latency: ${httpHealth.latencyMs}ms`;
+    }
+    return null;
+  };
+
+  const getHttpErrorLine = () => {
+    if (httpHealth?.error) {
+      return `error: ${httpHealth.error}`;
+    }
+    return null;
+  };
+
+  const getHttpTriedHostsLine = () => {
+    if (httpHealth?.diagnostics?.triedHosts?.length) {
+      return `hosts tried: ${httpHealth.diagnostics.triedHosts.join(', ')}`;
+    }
+    return null;
+  };
+
+  const formatAttemptLine = (attempt: any, index: number) => {
+    const fallbackStatus = attempt.ok ? 'ok' : 'no-response';
+    const statusCode =
+      typeof attempt.statusCode === 'number'
+        ? `HTTP ${attempt.statusCode}`
+        : fallbackStatus;
+    const errorPart = attempt.error ? ` | err: ${attempt.error}` : '';
+    return `${index + 1}. ${attempt.method} ${attempt.url} | ${statusCode} | ${attempt.latencyMs}ms${errorPart}`;
+  };
+
+  const getHttpAttemptedEndpointsLines = () => {
+    if (Array.isArray(httpHealth?.diagnostics?.attemptedEndpoints)) {
+      return httpHealth.diagnostics.attemptedEndpoints
+        .slice(0, 8)
+        .map((attempt, index) => formatAttemptLine(attempt, index));
+    }
+    return [];
+  };
+
+  const getStdioHealthSummaryLines = () => {
+    if (!health) {
+      return 'Run the health check to see details.';
+    }
+    const lines = [
+      `status: ${health.status || 'unknown'}`,
+      `initialize: ${getInitializeStatus()}`,
+      `tools/list: ${getToolsListStatus()}`,
+      getToolsCountLine(),
+      getNetworkProbeLine(),
+      getNetworkProbeErrorLine(),
+      ...getDiagnosticsIssuesLines(),
+    ];
+    return lines.filter(Boolean).join('\n');
+  };
+
+  const getHttpHealthSummaryLines = () => {
+    if (!httpHealth) {
+      return 'Run the health check to see details.';
+    }
+    const lines = [
+      `status: ${httpHealth.status}`,
+      getHttpLatencyLine(),
+      getHttpErrorLine(),
+      getHttpTriedHostsLine(),
+      ...getHttpAttemptedEndpointsLines(),
+    ];
+    return lines.filter(Boolean).join('\n');
+  };
+
   const healthSummary = isStdio
-    ? health
-      ? [
-          `status: ${health.status || 'unknown'}`,
-          `initialize: ${health.handshake?.initializeOk ? 'ok' : 'failed'}`,
-          `tools/list: ${health.handshake?.toolsListOk ? 'ok' : 'failed'}`,
-          typeof health.handshake?.toolCount === 'number'
-            ? `tools: ${health.handshake.toolCount}`
-            : null,
-          health.networkProbe?.attempted
-            ? `network probe: ${health.networkProbe.ok ? 'ok' : 'failed'}${health.networkProbe.toolName ? ` (${health.networkProbe.toolName})` : ''}`
-            : health.networkProbe?.reason
-              ? `network probe: ${health.networkProbe.reason}`
-              : null,
-          health.networkProbe?.error
-            ? `error: ${health.networkProbe.error}`
-            : null,
-          ...(Array.isArray(health.diagnostics?.issues)
-            ? health.diagnostics.issues
-                .slice(0, 2)
-                .map((issue) => `issue: ${issue}`)
-            : []),
-        ]
-          .filter(Boolean)
-          .join('\n')
-      : 'Run the health check to see details.'
-    : httpHealth
-      ? [
-          `status: ${httpHealth.status}`,
-          typeof httpHealth.latencyMs === 'number'
-            ? `latency: ${httpHealth.latencyMs}ms`
-            : null,
-          httpHealth.error ? `error: ${httpHealth.error}` : null,
-          httpHealth.diagnostics?.triedHosts?.length
-            ? `hosts tried: ${httpHealth.diagnostics.triedHosts.join(', ')}`
-            : null,
-          ...(Array.isArray(httpHealth.diagnostics?.attemptedEndpoints)
-            ? httpHealth.diagnostics.attemptedEndpoints
-                .slice(0, 8)
-                .map((attempt, index) => {
-                  const status =
-                    typeof attempt.statusCode === 'number'
-                      ? `HTTP ${attempt.statusCode}`
-                      : attempt.ok
-                        ? 'ok'
-                        : 'no-response';
-                  const errPart = attempt.error
-                    ? ` | err: ${attempt.error}`
-                    : '';
-                  return `${index + 1}. ${attempt.method} ${attempt.url} | ${status} | ${attempt.latencyMs}ms${errPart}`;
-                })
-            : []),
-        ]
-          .filter(Boolean)
-          .join('\n')
-      : 'Run the health check to see details.';
+    ? getStdioHealthSummaryLines()
+    : getHttpHealthSummaryLines();
 
   return (
     <div className="relative flex flex-col gap-3 rounded-xl border border-gray-800 bg-gray-900 p-4">
@@ -315,17 +370,22 @@ export default function MCPCard({
                 </button>
               ) : null}
 
-              <button
-                type="button"
-                onClick={runHealth}
-                disabled={healthLoading || httpHealthLoading}
-                title="Run health check"
-                className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900 disabled:opacity-50"
-              >
-                {(isStdio ? healthLoading : httpHealthLoading)
-                  ? 'Checking health...'
-                  : 'Health'}
-              </button>
+              {(() => {
+                const isHealthChecking = isStdio
+                  ? healthLoading
+                  : httpHealthLoading;
+                return (
+                  <button
+                    type="button"
+                    onClick={runHealth}
+                    disabled={healthLoading || httpHealthLoading}
+                    title="Run health check"
+                    className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900 disabled:opacity-50"
+                  >
+                    {isHealthChecking ? 'Checking health...' : 'Health'}
+                  </button>
+                );
+              })()}
 
               <button
                 type="button"
@@ -341,14 +401,6 @@ export default function MCPCard({
                 className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900"
               >
                 Edit
-              </button>
-
-              <button
-                type="button"
-                onClick={copyConfig}
-                className="px-3 py-2 text-left text-xs text-blue-400 transition-colors hover:bg-gray-900"
-              >
-                {copied ? 'Config copied' : 'Copy Config'}
               </button>
 
               <button

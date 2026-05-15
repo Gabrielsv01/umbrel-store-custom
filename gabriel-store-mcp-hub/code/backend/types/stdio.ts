@@ -40,6 +40,14 @@ export interface StdioHealthQuery {
   probe?: 'network'
 }
 
+export interface RunStdioToolsListInput {
+  container: StdioContainer
+  createDockerMultiplexDecoder: (
+    onPayload: (payload: string, streamType: number) => void,
+  ) => (chunk: Buffer) => void
+  createLineDecoder: (onLine: (line: string) => void) => (chunk: string) => void
+}
+
 export interface StdioProxySession {
   sessionId: string
   container: StdioContainer

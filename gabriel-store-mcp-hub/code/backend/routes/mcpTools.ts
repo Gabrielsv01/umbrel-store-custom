@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import type Docker from 'dockerode'
 import type { McpRecord } from '../types/mcp.js'
+import { createLineDecoder } from '../utils/lineDecoder.js'
 import { fetchWithTimeout, getContainerHosts } from '../utils/httpUtils.js'
 
 interface McpTool {
@@ -28,6 +29,26 @@ export interface RegisterMcpToolsDeps {
   saveData: (data: McpRecord) => void
   mcpLabel: string
   createDockerMultiplexDecoder: (callback: (text: string, streamType: number) => void) => (chunk: Buffer) => void
+}
+
+function tryParseRecord(text: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(text)
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function tryParseRecordFragment(text: string): Record<string, unknown> | null {
+  const start = text.indexOf('{')
+  if (start === -1) return null
+  for (let end = text.length; end > start + 1; end -= 1) {
+    const candidate = text.slice(start, end)
+    const parsed = tryParseRecord(candidate)
+    if (parsed) return parsed
+  }
+  return null
 }
 
 async function fetchMcpTools(
@@ -66,6 +87,25 @@ async function fetchStdioMcpTools(
       logs: false,
     })
 
+    const jsonQueue: Array<Record<string, unknown>> = []
+
+    const stdoutLineDecoder = createLineDecoder((line) => {
+      const parsed = tryParseRecord(line) ?? tryParseRecordFragment(line)
+      if (parsed) {
+        jsonQueue.push(parsed)
+      }
+    })
+
+    const decode = createDockerMultiplexDecoder((payload, streamType) => {
+      if (streamType === 1) {
+        stdoutLineDecoder(payload)
+      }
+    })
+
+    stream.on('data', (chunk: Buffer) => {
+      decode(chunk)
+    })
+
     const payload = {
       jsonrpc: '2.0',
       id: 1,
@@ -74,50 +114,52 @@ async function fetchStdioMcpTools(
     }
 
     return await new Promise<McpTool[]>((resolve) => {
-      let responseBuffer = ''
-      let isFinished = false
-      const timeout = setTimeout(() => {
-        isFinished = true
-        try { (stream as any).destroy() } catch {}
-        resolve([])
-      }, 10000)
+      let attemptCount = 0
+      const maxAttempts = 3
 
-      const decode = createDockerMultiplexDecoder((payloadText: string, streamType: number) => {
-        if (streamType === 2 || isFinished || streamType !== 1) return
-        responseBuffer += payloadText
-        const lines = responseBuffer.split('\n')
-        responseBuffer = lines.pop() || ''
+      const tryFetch = () => {
+        attemptCount++
+        const timeout = setTimeout(() => {
+          if (attemptCount < maxAttempts) {
+            tryFetch()
+          } else {
+            try { (stream as any).destroy() } catch {}
+            resolve([])
+          }
+        }, 20000)
 
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed.startsWith('{')) continue
-          try {
-            const parsed = JSON.parse(trimmed) as any
-            if (parsed.id === 1) {
-              isFinished = true
+        setTimeout(() => {
+          stream.write(`${JSON.stringify(payload)}\n`)
+        }, 500)
+
+        const pollForResponse = async () => {
+          const deadline = Date.now() + 20000
+          while (Date.now() < deadline) {
+            const idx = jsonQueue.findIndex((msg) => (msg.id as number) === 1)
+            if (idx >= 0) {
+              const [response] = jsonQueue.splice(idx, 1)
               clearTimeout(timeout)
               try { (stream as any).destroy() } catch {}
-              resolve((parsed.result as ToolsListResponse)?.tools ?? [])
+              const tools = (response.result as ToolsListResponse)?.tools ?? []
+              resolve(tools)
               return
             }
-          } catch {}
+            await new Promise((res) => setTimeout(res, 50))
+          }
+          if (attemptCount < maxAttempts) {
+            clearTimeout(timeout)
+            tryFetch()
+          } else {
+            clearTimeout(timeout)
+            try { (stream as any).destroy() } catch {}
+            resolve([])
+          }
         }
-      })
 
-      stream.on('data', decode)
-      stream.on('error', () => {
-        if (!isFinished) {
-          isFinished = true
-          clearTimeout(timeout)
-          resolve([])
-        }
-      })
+        pollForResponse()
+      }
 
-      setTimeout(() => {
-        if (!isFinished) {
-          stream.write(`${JSON.stringify(payload)}\n`)
-        }
-      }, 100)
+      tryFetch()
     })
   } catch {
     return []
@@ -530,88 +572,100 @@ async function handleStdioTools(
         logs: true,
       })
 
-      const payload = {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/list',
-        params: {},
+      const jsonQueue: Array<Record<string, unknown>> = []
+
+      const stdoutLineDecoder = createLineDecoder((line) => {
+        const parsed = tryParseRecord(line) ?? tryParseRecordFragment(line)
+        if (parsed) {
+          jsonQueue.push(parsed)
+        }
+      })
+
+      const decode = createDockerMultiplexDecoder((payload, streamType) => {
+        if (streamType === 1) {
+          stdoutLineDecoder(payload)
+        }
+      })
+
+      stream.on('data', (chunk: Buffer) => {
+        decode(chunk)
+      })
+
+      const writeRpc = (payload: Record<string, unknown>) => {
+        stream.write(`${JSON.stringify(payload)}\n`)
       }
 
-      tools = await new Promise<McpTool[]>((resolve, reject) => {
-        let responseBuffer = ''
-        let isFinished = false
-
-        const timeout = setTimeout(() => {
-          if (!isFinished) {
-            isFinished = true
-            cleanup()
-            reject(new Error('TIMEOUT_MCP'))
+      const waitForMessage = async (
+        predicate: (msg: Record<string, unknown>) => boolean,
+        timeoutMs: number,
+      ): Promise<Record<string, unknown> | null> => {
+        const deadline = Date.now() + timeoutMs
+        while (Date.now() < deadline) {
+          const idx = jsonQueue.findIndex(predicate)
+          if (idx >= 0) {
+            const [match] = jsonQueue.splice(idx, 1)
+            return match ?? null
           }
-        }, 30000)
-
-        const cleanup = () => {
-          clearTimeout(timeout)
-          try {
-            ;(stream as unknown as any).destroy()
-          } catch {
-            // ignore
-          }
+          await new Promise((resolve) => setTimeout(resolve, 50))
         }
+        return null
+      }
 
-        const decode = createDockerMultiplexDecoder((payloadText: string, streamType: number) => {
-          if (streamType === 2) {
-            // stderr
-            return
-          }
-          if (isFinished || streamType !== 1) return
+      tools = await (async () => {
+        try {
+          const protocolCandidates = ['2025-03-26', '2024-11-05']
+          let selectedProtocol: string | null = null
 
-          responseBuffer += payloadText
-          const lines = responseBuffer.split('\n')
-          responseBuffer = lines.pop() || ''
+          for (let i = 0; i < protocolCandidates.length; i += 1) {
+            const protocolVersion = protocolCandidates[i]
+            const requestId = 1 + i
 
-          for (const line of lines) {
-            const trimmed = line.trim()
-            if (!trimmed.startsWith('{')) continue
+            writeRpc({
+              jsonrpc: '2.0',
+              id: requestId,
+              method: 'initialize',
+              params: {
+                protocolVersion,
+                capabilities: {},
+                clientInfo: { name: 'mcp-hub-tools', version: '1.0.0' },
+              },
+            })
 
-            try {
-              const parsed = JSON.parse(trimmed) as Record<string, unknown>
-              if (
-                Object.prototype.hasOwnProperty.call(parsed, 'id') &&
-                parsed.id === 1
-              ) {
-                isFinished = true
-                cleanup()
-                const response = parsed as any
-                const toolsList = (response.result as ToolsListResponse)?.tools ?? []
-                resolve(toolsList)
-                return
-              }
-            } catch {
-              // ignore parse errors
+            const initializeResponse = await waitForMessage((msg) => Number(msg.id) === requestId, 5000)
+            const ok = !!initializeResponse?.result && !initializeResponse?.error
+            if (ok) {
+              selectedProtocol = protocolVersion
+              break
             }
           }
-        })
 
-        stream.on('data', decode)
-        stream.on('error', (err: Error) => {
-          if (!isFinished) {
-            isFinished = true
-            cleanup()
-            reject(err)
+          if (!selectedProtocol) {
+            try { (stream as any).destroy() } catch {}
+            return []
           }
-        })
 
-        // Uptime check for startup delay
-        const state = info?.State
-        const uptime = Date.now() - new Date(state?.StartedAt || 0).getTime()
-        const waitTime = uptime < 3000 ? 2200 : 100
+          writeRpc({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} })
 
-        setTimeout(() => {
-          if (!isFinished) {
-            stream.write(`${JSON.stringify(payload)}\n`)
+          let toolsResponse: Record<string, unknown> | null = null
+          for (const requestId of [10, 11]) {
+            writeRpc({ jsonrpc: '2.0', id: requestId, method: 'tools/list', params: {} })
+            toolsResponse = await waitForMessage((msg) => Number(msg.id) === requestId, 5000)
+            if (toolsResponse) break
           }
-        }, waitTime)
-      })
+
+          try { (stream as any).destroy() } catch {}
+
+          if (!toolsResponse?.result) {
+            return []
+          }
+
+          const toolsResult = toolsResponse.result as ToolsListResponse
+          return Array.isArray(toolsResult.tools) ? toolsResult.tools : []
+        } catch {
+          try { (stream as any).destroy() } catch {}
+          return []
+        }
+      })()
     }
 
     // Filter out disabled tools
