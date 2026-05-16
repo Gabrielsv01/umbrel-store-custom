@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { callMcpInspect } from '../services/api'
+import { callMcpInspect, getMcpTools } from '../services/api'
 import type {
   McpInspectorTab,
   McpTool,
@@ -7,7 +7,6 @@ import type {
   McpPrompt,
   JsonRpcPayload,
   JsonRpcResponse,
-  ToolsListResponse,
   ResourcesListResponse,
   PromptsListResponse,
 } from '../types/inspector'
@@ -87,25 +86,9 @@ export function useMcpInspector() {
 
     setState((prev) => ({ ...prev, loading: true, error: null }))
     try {
-      const payload: JsonRpcPayload = {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/list',
-        params: {},
-      }
-      const response = await callMcpInspect(state.selectedId, payload)
+      const response = await getMcpTools(state.selectedId)
+      const tools = response.tools ?? []
 
-      if (response.error) {
-        setState((prev) => ({
-          ...prev,
-          loading: false,
-          error: response.error.message,
-          tools: [],
-        }))
-        return
-      }
-
-      const tools = ((response.result as ToolsListResponse)?.tools ?? []) as McpTool[]
       setState((prev) => ({
         ...prev,
         loading: false,
