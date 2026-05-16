@@ -14,6 +14,7 @@ import { registerMcpInspectRoutes } from './routes/mcpInspect.js'
 import { registerMcpToolsRoutes } from './routes/mcpTools.js'
 import { registerCatalogRoutes } from './routes/catalog.js'
 import { registerNamespaceRoutes } from './routes/namespaces.js'
+import { registerCustomToolsRoutes } from './routes/customTools.js'
 import {
   buildContainerOptions,
   normalizeRuntimeConfig,
@@ -221,6 +222,12 @@ registerNamespaceRoutes(fastify, {
   saveData,
   mcpLabel: MCP_LABEL,
   buildContainerOptions,
+})
+registerCustomToolsRoutes(fastify, {
+  docker,
+  loadData,
+  saveData,
+  mcpLabel: MCP_LABEL,
 })
 
 // ─── POST /api/deploy ─────────────────────────────────────────────────────────

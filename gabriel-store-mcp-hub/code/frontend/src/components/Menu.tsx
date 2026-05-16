@@ -4,7 +4,9 @@ interface MenuProps {
   setShowCatalog: React.Dispatch<React.SetStateAction<boolean>>;
   setShowDocs: React.Dispatch<React.SetStateAction<boolean>>;
   setShowForm: React.Dispatch<React.SetStateAction<boolean>>;
-  setView: React.Dispatch<React.SetStateAction<'hub' | 'inspector' | 'builder'>>;
+  setView: React.Dispatch<
+    React.SetStateAction<'hub' | 'inspector' | 'builder' | 'custom-tools'>
+  >;
   onOpenImages: () => Promise<void>;
   onOpenVolumes: () => Promise<void>;
 }
@@ -19,20 +21,29 @@ export default function Menu({
 }: Readonly<MenuProps>) {
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
-  const [isMenuPositioned, setIsMenuPositioned] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (!showMenu) {
-      setIsMenuPositioned(false);
-      return;
-    }
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
 
-    if (!buttonRef.current) return;
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (!showMenu) return;
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      if (
+        menuRef.current &&
+        buttonRef.current &&
+        !menuRef.current.contains(event.target as Node) &&
+        !buttonRef.current.contains(event.target as Node)
+      ) {
         setShowMenu(false);
       }
     };
@@ -61,7 +72,6 @@ export default function Menu({
       }
 
       setMenuPosition({ top, left });
-      setIsMenuPositioned(true);
     }, 0);
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -82,32 +92,42 @@ export default function Menu({
 
   return (
     <div className="flex items-center gap-2">
-      {/* Hub Button */}
-      <button
-        onClick={() => handleMenuClick(() => setView('hub'))}
-        className="rounded-lg bg-gray-800 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-700"
-        title="Back to Hub"
-      >
-        📦 Hub
-      </button>
+      {/* Navigation Buttons - Hidden on Mobile */}
+      {!isMobile && (
+        <>
+          <button
+            onClick={() => handleMenuClick(() => setView('hub'))}
+            className="rounded-lg bg-gray-800 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-700"
+            title="Back to Hub"
+          >
+            📦 Hub
+          </button>
 
-      {/* Inspector Button */}
-      <button
-        onClick={() => handleMenuClick(() => setView('inspector'))}
-        className="rounded-lg bg-gray-800 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-700"
-        title="Open MCP Inspector"
-      >
-        🔍 Inspector
-      </button>
+          <button
+            onClick={() => handleMenuClick(() => setView('inspector'))}
+            className="rounded-lg bg-gray-800 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-700"
+            title="Open MCP Inspector"
+          >
+            🔍 Inspector
+          </button>
 
-      {/* Builder Button */}
-      <button
-        onClick={() => handleMenuClick(() => setView('builder'))}
-        className="rounded-lg bg-gray-800 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-700"
-        title="Open MCP Builder"
-      >
-        🔧 Builder
-      </button>
+          <button
+            onClick={() => handleMenuClick(() => setView('builder'))}
+            className="rounded-lg bg-gray-800 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-700"
+            title="Open MCP Builder"
+          >
+            🔧 Builder
+          </button>
+
+          <button
+            onClick={() => handleMenuClick(() => setView('custom-tools'))}
+            className="rounded-lg bg-gray-800 px-3 py-1.5 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-700"
+            title="Custom Tools"
+          >
+            🛠️ Custom Tools
+          </button>
+        </>
+      )}
 
       {/* Menu Button */}
       <button
@@ -130,68 +150,62 @@ export default function Menu({
             aria-label="Close menu"
           />
 
-          {/* Desktop dropdown menu */}
+          {/* Dropdown menu */}
           <div
             ref={menuRef}
-            className={`fixed z-20 min-w-40 flex-col overflow-hidden rounded-xl border border-gray-700 bg-gray-950 shadow-2xl ${isMenuPositioned ? 'flex' : 'hidden'} md:flex`}
+            className="fixed z-20 min-w-40 flex flex-col overflow-y-auto rounded-xl border border-gray-700 bg-gray-950 shadow-2xl max-h-96 transition-opacity"
             style={{
               top: `${menuPosition.top}px`,
               left: `${menuPosition.left}px`,
             }}
           >
+            {/* Navigation items on mobile */}
+            {isMobile && (
+              <>
+                <button
+                  onClick={() => handleMenuClick(() => setView('hub'))}
+                  className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900"
+                >
+                  📦 Hub
+                </button>
+                <button
+                  onClick={() => handleMenuClick(() => setView('inspector'))}
+                  className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900"
+                >
+                  🔍 Inspector
+                </button>
+                <button
+                  onClick={() => handleMenuClick(() => setView('builder'))}
+                  className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900"
+                >
+                  🔧 Builder
+                </button>
+                <button
+                  onClick={() => handleMenuClick(() => setView('custom-tools'))}
+                  className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900"
+                >
+                  🛠️ Custom Tools
+                </button>
+              </>
+            )}
+
+            {/* Menu items */}
             {menuItems.map((item) => (
               <button
                 key={item.label}
                 onClick={() => handleMenuClick(item.onClick)}
-                className="bg-gray-800 px-4 py-2 text-sm font-medium text-gray-100 transition-colors hover:bg-gray-700"
+                className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900"
               >
                 {item.label}
               </button>
             ))}
             <button
               onClick={() => handleMenuClick(() => setShowForm(true))}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+              className="px-3 py-2 text-left text-xs text-blue-400 transition-colors hover:bg-gray-900 flex items-center gap-2"
             >
-              <span className="text-base leading-none">+</span> Deploy MCP
+              <span>+</span> Deploy MCP
             </button>
           </div>
-
-          {/* Mobile bottom sheet menu */}
-          <dialog
-            className="fixed bottom-0 left-0 right-0 z-20 flex w-full flex-col gap-3 rounded-t-2xl border-t border-gray-700 bg-gray-950 p-4 shadow-2xl md:hidden sm:max-w-sm sm:left-auto sm:right-0"
-            open
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-100">Menu</h3>
-              <button
-                type="button"
-                onClick={handleMenuClose}
-                className="rounded p-1 text-gray-400 hover:bg-gray-800 hover:text-gray-200"
-                aria-label="Close menu"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex flex-col gap-3">
-              {menuItems.map((item) => (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={() => handleMenuClick(item.onClick)}
-                  className="w-full rounded-lg bg-gray-800 px-4 py-3 text-left text-sm font-medium text-gray-100 transition-colors hover:bg-gray-700"
-                >
-                  {item.label}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => handleMenuClick(() => setShowForm(true))}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-500"
-              >
-                <span className="text-base leading-none">+</span> Deploy MCP
-              </button>
-            </div>
-          </dialog>
         </>
       )}
     </div>

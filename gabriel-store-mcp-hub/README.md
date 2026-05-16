@@ -221,19 +221,38 @@ A aplicação inclui um **MCP Builder** para criar namespaces customizados que c
    - Transport: `http`, `stdio` ou `streamable-http`
    - Porta (se HTTP/streamable-http)
 
-3. **Habilite MCPs** - selecione quais MCPs você quer combinar
+3. **Habilite MCPs** - selecione quais MCPs você quer combinar:
+   - **📦 MCP Servers**: servidores MCP hospedados
+   - **🛠️ Custom Tools MCPs**: MCPs com ferramentas customizadas que você criou
+
 4. **Gerencie Tools** - veja todas as ferramentas reais dos MCPs habilitados e desabilite as que não quer usar
 5. **Deploy** - crie o namespace customizado como um novo servidor MCP
 
 ### Funcionalidades:
 
 - **Descoberta Real de Ferramentas**: O Builder busca automaticamente as ferramentas de cada MCP habilitado
+- **Custom Tools MCPs**: Crie seus próprios MCPs com ferramentas customizadas usando o template fornecido
 - **Filtro de Ferramentas**: Desabilite ferramentas específicas que não quer expor no namespace customizado
 - **Múltiplos Transports**: Suporte a `stdio`, `http` e `streamable-http`
 - **Isolamento de Container**: Cada namespace é um container Docker separado
 - **Integração Automática**: O wrapper se conecta automaticamente à rede Docker para comunicar com o backend
+- **Auto-start**: Se um MCP habilitado está parado, a mcp-hub tenta iniciá-lo automaticamente ao buscar ferramentas
 
 O namespace customizado fica disponível na seção "🔧 Custom MCPs" e pode ser usado como qualquer outro MCP.
+
+### Criando Custom Tools MCPs
+
+Veja o guia completo em `CUSTOM_TOOLS_GUIDE.md` para:
+- Usar o template `templates/custom-mcp-template.js`
+- Criar e customizar suas próprias ferramentas
+- Build da imagem Docker
+- Deploy e uso no Builder
+
+Fluxo rápido:
+1. Customize `templates/custom-mcp-template.js` com suas ferramentas
+2. Build: `docker build -f templates/Dockerfile.custom-mcp -t seu-usuario/custom-tools:1.0 .`
+3. Deploy no MCP Hub como qualquer outro MCP
+4. Use no Builder - será automaticamente identificado como "Custom Tools MCP"
 
 ### Variáveis de ambiente para habilitar features
 

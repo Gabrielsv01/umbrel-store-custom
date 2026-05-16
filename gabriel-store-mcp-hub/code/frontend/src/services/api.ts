@@ -5,6 +5,7 @@ import type { ImageRecord, VolumeRecord } from '../types/resources';
 import type { CatalogEntry } from '../types/catalog';
 import type { JsonRpcPayload, JsonRpcResponse, McpTool } from '../types/inspector';
 import type { McpNamespace } from '../types/builder';
+import type { CustomToolDefinition, ValidateResponse, DeployResponse } from '../types/customTools';
 
 type RequestOptions = RequestInit | undefined;
 
@@ -238,4 +239,49 @@ export async function deleteNamespaceAsMcp(
     { method: 'DELETE' },
     'Failed to delete namespace'
   );
+}
+
+// ─── Custom Tools API ─────────────────────────────────────────────────────────
+
+export async function validateCustomTool(
+  definition: CustomToolDefinition
+): Promise<ValidateResponse> {
+  return requestJson(
+    '/api/custom-tools/validate',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(definition),
+    },
+    'Failed to validate custom tool'
+  ) as Promise<ValidateResponse>;
+}
+
+export async function deployCustomTool(
+  definition: CustomToolDefinition
+): Promise<DeployResponse> {
+  return requestJson(
+    '/api/custom-tools/deploy',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(definition),
+    },
+    'Failed to deploy custom tool'
+  ) as Promise<DeployResponse>;
+}
+
+export async function updateCustomTool(
+  containerId: string,
+  definition: CustomToolDefinition
+): Promise<DeployResponse> {
+  return requestJson(
+    `/api/custom-tools/${containerId}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(definition),
+    },
+    'Failed to update custom tool'
+  ) as Promise<DeployResponse>;
 }

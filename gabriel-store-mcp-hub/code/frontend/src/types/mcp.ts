@@ -29,6 +29,9 @@ export interface McpMeta {
   disabledTools?: string[];
   isCustomNamespace?: boolean;
   namespaceId?: string;
+  enabledMcps?: string[];
+  isCustomToolsMcp?: boolean;
+  customToolDefinition?: Record<string, unknown>;
 }
 
 export interface McpContainer {

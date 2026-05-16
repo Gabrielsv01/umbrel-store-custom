@@ -1,0 +1,35 @@
+export interface CustomToolParameter {
+  type: 'string' | 'number' | 'boolean' | 'object';
+  description: string;
+  required?: boolean;
+  enum?: string[];
+  default?: any;
+}
+
+export interface CustomToolMethod {
+  name: string;
+  description: string;
+  parameters: Record<string, CustomToolParameter>;
+  code: string;
+}
+
+export interface CustomToolDefinition {
+  name: string;
+  description?: string;
+  methods: CustomToolMethod[];
+  port?: number;
+}
+
+export interface ValidateResponse {
+  valid: boolean;
+  errors: string[];
+  message?: string;
+}
+
+export interface DeployResponse {
+  success: boolean;
+  containerId: string;
+  containerName: string;
+  message: string;
+  error?: string;
+}

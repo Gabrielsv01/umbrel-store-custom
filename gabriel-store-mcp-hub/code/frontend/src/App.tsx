@@ -10,6 +10,7 @@ import DocsModal from './components/DocsModal';
 import MCPInspector from './components/MCPInspector';
 import ToolsManager from './components/ToolsManager';
 import MCPBuilder from './components/MCPBuilder';
+import CustomToolsCreator from './components/CustomToolsCreator';
 import { listImages } from './services/api';
 import { useMcps } from './hooks/useMcps';
 import { useImages } from './hooks/useImages';
@@ -23,7 +24,9 @@ import Menu from './components/Menu';
 type LogTarget = { id: string; name: string };
 
 export default function App() {
-  const [view, setView] = useState<'hub' | 'inspector' | 'builder'>('hub');
+  const [view, setView] = useState<
+    'hub' | 'inspector' | 'builder' | 'custom-tools'
+  >('hub');
   const [showForm, setShowForm] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
@@ -215,6 +218,8 @@ export default function App() {
         return '🔍 MCP Inspector';
       case 'builder':
         return '🔧 MCP Builder';
+      case 'custom-tools':
+        return '🛠️ Custom Tools Creator';
       default:
         return '⚙️ MCP Hub';
     }
@@ -226,6 +231,8 @@ export default function App() {
         return 'Inspect and interact with MCP servers';
       case 'builder':
         return 'Combine MCP tools into custom namespaces';
+      case 'custom-tools':
+        return 'Create your own MCP with custom tools';
       default:
         return 'The Factory - MCP Container Manager';
     }
@@ -264,6 +271,8 @@ export default function App() {
               // Trigger refresh of MCPs
             }}
           />
+        ) : view === 'custom-tools' ? (
+          <CustomToolsCreator />
         ) : (
           <div className="mx-auto max-w-6xl px-6 py-8">
             {loading ? (
@@ -286,8 +295,12 @@ export default function App() {
                   const customNamespaceIds = new Set(
                     JSON.parse(localStorage.getItem('custom_mcp_ids') || '[]')
                   );
-                  const customMcps = mcps.filter((m) => customNamespaceIds.has(m.meta?.namespaceId));
-                  const regularMcps = mcps.filter((m) => !customNamespaceIds.has(m.meta?.namespaceId));
+                  const customMcps = mcps.filter((m) =>
+                    customNamespaceIds.has(m.meta?.namespaceId)
+                  );
+                  const regularMcps = mcps.filter(
+                    (m) => !customNamespaceIds.has(m.meta?.namespaceId)
+                  );
 
                   return (
                     <>
@@ -354,9 +367,7 @@ export default function App() {
                                 health={stdioHealth[mcp.id]}
                                 healthLoading={!!stdioHealthLoading[mcp.id]}
                                 httpHealth={httpHealth[mcp.id]}
-                                httpHealthLoading={
-                                  !!httpHealthLoading[mcp.id]
-                                }
+                                httpHealthLoading={!!httpHealthLoading[mcp.id]}
                                 onEdit={() =>
                                   setEditingMcp(mapMcpToEditValues(mcp))
                                 }
