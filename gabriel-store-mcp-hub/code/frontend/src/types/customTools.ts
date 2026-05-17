@@ -13,11 +13,19 @@ export interface CustomToolMethod {
   code: string;
 }
 
+export interface SharedVolumeAccess {
+  folder: string;
+  canRead: boolean;
+  canWrite: boolean;
+  canDelete: boolean;
+}
+
 export interface CustomToolDefinition {
   name: string;
   description?: string;
   methods: CustomToolMethod[];
   port?: number;
+  sharedVolumeAccess?: SharedVolumeAccess[];
 }
 
 export interface ValidateResponse {

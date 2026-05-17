@@ -176,6 +176,7 @@ export function registerCustomToolsRoutes(
             PortBindings: {
               [portStr]: [{ HostPort: String(port) }],
             },
+            Binds: ['shared-data:/shared-data'],
           },
           Labels: {
             [mcpLabel]: 'true',
@@ -373,6 +374,7 @@ export function registerCustomToolsRoutes(
             PortBindings: {
               [portStr]: [{ HostPort: String(port) }],
             },
+            Binds: ['shared-data:/shared-data'],
           },
           Labels: {
             [mcpLabel]: 'true',

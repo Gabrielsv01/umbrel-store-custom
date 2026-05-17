@@ -16,6 +16,8 @@ O MCP Hub foi pensado para rodar no Umbrel, mas também funciona localmente com 
 - Gestão de volumes Docker com proteção contra remoção em uso
 - Catálogo de templates MCP (incluindo templates leves para testes)
 - **MCP Builder**: Criar namespaces customizados combinando múltiplos MCPs
+- **Custom Tools Creator**: Criar MCPs customizados com JavaScript puro
+- **Shared Volumes**: Compartilhar arquivos entre MCPs via volumes Docker isolados
 - **Inspector**: Explorar Tools, Resources, Prompts, Roots, e fazer Health Check dos MCPs
 - Suporte a servidores MCP em `stdio`, `http/sse` e `streamable-http`
 - Sessão interativa sob demanda para MCPs `stdio`

@@ -55,14 +55,43 @@ async function deployNamespaceContainer(
   mcpLabel: string,
   oldContainerId?: string
 ) {
+  const data = loadData()
+
+  // Build working directories map from full MCP data
+  const workingDirs = enabledMcps
+    .map((m) => {
+      const mcpData = data[m.id] as any
+      if (mcpData?.runtime?.workingDir) {
+        return `${m.id}:${mcpData.runtime.workingDir}`
+      }
+      return null
+    })
+    .filter(Boolean)
+    .join(';')
+
+  const mcpConfigs = enabledMcps.map((m) => {
+    const mcpData = data[m.id] as any
+    return {
+      id: m.id,
+      name: m.name,
+      image: m.image,
+      transport: mcpData?.transport || 'http',
+      port: mcpData?.port || 8000,
+      command: mcpData?.command,
+      workingDir: mcpData?.runtime?.workingDir,
+    }
+  })
+
   const mcpConfig = {
     ENABLED_MCPS: enabledMcps
       .map((m) => `${m.id}:${m.name}:${m.image}`)
       .join(';'),
+    MCP_CONFIGS: JSON.stringify(mcpConfigs),
     DISABLED_TOOLS: namespace.disabledTools.join(','),
     NAMESPACE_ID: namespace.id,
     PORT: String(namespace.port),
     BACKEND_HOST: 'mcp-hub:3001',
+    MCP_WORKING_DIRS: workingDirs,
   }
 
   const wrapperFileName = {
@@ -86,10 +115,12 @@ async function deployNamespaceContainer(
 
   const updatedEnv = {
     ENABLED_MCPS: mcpConfig.ENABLED_MCPS,
+    MCP_CONFIGS: mcpConfig.MCP_CONFIGS,
     DISABLED_TOOLS: mcpConfig.DISABLED_TOOLS,
     NAMESPACE_ID: mcpConfig.NAMESPACE_ID,
     PORT: mcpConfig.PORT,
     BACKEND_HOST: 'mcp-hub:3001',
+    MCP_WORKING_DIRS: mcpConfig.MCP_WORKING_DIRS,
     NODE_ENV: 'production',
   }
 
@@ -101,6 +132,9 @@ async function deployNamespaceContainer(
     port: namespace.transport === 'stdio' ? undefined : namespace.port,
     transport: namespace.transport,
     mcpLabel,
+    volumes: {
+      '/shared-data': 'shared-data',
+    },
   })
 
   const newContainer = await docker.createContainer(containerOptions)
@@ -115,14 +149,14 @@ async function deployNamespaceContainer(
   }
 
   const finalShortId = newContainer.id.slice(0, 12)
-  const data = loadData()
+  const updatedData = loadData()
 
   // Remove old container metadata if updating
-  if (oldContainerId && data[oldContainerId]) {
-    delete data[oldContainerId]
+  if (oldContainerId && updatedData[oldContainerId]) {
+    delete updatedData[oldContainerId]
   }
 
-  data[finalShortId] = {
+  updatedData[finalShortId] = {
     name: `${namespace.name} (custom)`,
     image: 'node:20-alpine',
     command: 'node /app/mcp-wrapper-server.js',
@@ -134,14 +168,14 @@ async function deployNamespaceContainer(
     enabledMcps: enabledMcps.map((m) => m.id),
     disabledTools: namespace.disabledTools && namespace.disabledTools.length > 0 ? namespace.disabledTools : undefined,
   }
-  saveData(data)
+  saveData(updatedData)
 
   return {
     id: finalShortId,
-    name: data[finalShortId].name,
+    name: updatedData[finalShortId].name,
     image: 'node:20-alpine',
     status: 'running',
-    meta: data[finalShortId],
+    meta: updatedData[finalShortId],
   }
 }
 

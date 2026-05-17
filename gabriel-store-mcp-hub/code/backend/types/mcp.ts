@@ -12,6 +12,7 @@ export interface McpMeta {
   transport?: McpTransport
   runtime?: McpRuntimeConfig
   disabledTools?: string[]
+  sharedVolumeFolder?: string
   isCustomNamespace?: boolean
   namespaceId?: string
   enabledMcps?: string[]

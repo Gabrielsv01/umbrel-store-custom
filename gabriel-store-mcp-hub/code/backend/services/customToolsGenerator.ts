@@ -18,11 +18,19 @@ export interface CustomToolMethod {
   code: string; // JavaScript code for the tool implementation
 }
 
+export interface SharedVolumeAccess {
+  folder: string;
+  canRead: boolean;
+  canWrite: boolean;
+  canDelete: boolean;
+}
+
 export interface CustomToolDefinition {
   name: string;
   description?: string;
   methods: CustomToolMethod[];
   port?: number;
+  sharedVolumeAccess?: SharedVolumeAccess[];
 }
 
 /**
@@ -38,8 +46,11 @@ export function validateCustomToolDefinition(def: CustomToolDefinition): {
     errors.push('MCP name is required and must be a non-empty string');
   }
 
-  if (!Array.isArray(def.methods) || def.methods.length === 0) {
-    errors.push('At least one method is required');
+  const hasCustomMethods = Array.isArray(def.methods) && def.methods.length > 0;
+  const hasSharedVolumeMethods = Array.isArray(def.sharedVolumeAccess) && def.sharedVolumeAccess.length > 0;
+
+  if (!hasCustomMethods && !hasSharedVolumeMethods) {
+    errors.push('At least one custom method or shared volume access is required');
   }
 
   def.methods?.forEach((method, idx) => {
@@ -68,6 +79,28 @@ export function validateCustomToolDefinition(def: CustomToolDefinition): {
     }
   }
 
+  // Validate shared volume access
+  if (def.sharedVolumeAccess !== undefined) {
+    if (!Array.isArray(def.sharedVolumeAccess)) {
+      errors.push('Shared volume access must be an array');
+    } else {
+      def.sharedVolumeAccess.forEach((access, idx) => {
+        if (!access.folder || typeof access.folder !== 'string') {
+          errors.push(`Shared volume access ${idx}: folder is required and must be a string`);
+        }
+        if (typeof access.canRead !== 'boolean') {
+          errors.push(`Shared volume access ${idx}: canRead must be a boolean`);
+        }
+        if (typeof access.canWrite !== 'boolean') {
+          errors.push(`Shared volume access ${idx}: canWrite must be a boolean`);
+        }
+        if (typeof access.canDelete !== 'boolean') {
+          errors.push(`Shared volume access ${idx}: canDelete must be a boolean`);
+        }
+      });
+    }
+  }
+
   // Validate JavaScript code syntax
   def.methods?.forEach((method, idx) => {
     if (method.code) {
@@ -91,10 +124,220 @@ export function validateCustomToolDefinition(def: CustomToolDefinition): {
 }
 
 /**
+ * Generate shared volume access methods based on permissions
+ */
+function generateSharedVolumeTools(sharedVolumeAccess?: SharedVolumeAccess[]): CustomToolMethod[] {
+  if (!sharedVolumeAccess || sharedVolumeAccess.length === 0) {
+    return [];
+  }
+
+  const methods: CustomToolMethod[] = [];
+
+  // List files method
+  methods.push({
+    name: 'list_shared_files',
+    description: 'List files in allowed shared folders',
+    parameters: {
+      folder_name: {
+        type: 'string',
+        description: 'Folder name to list files from',
+        required: true,
+        enum: sharedVolumeAccess.map(a => a.folder),
+      },
+    },
+    code: `const fs = require('fs');
+const path = require('path');
+const allowedFolders = ${JSON.stringify(sharedVolumeAccess.map(a => a.folder))};
+if (!allowedFolders.includes(folder_name)) {
+  return JSON.stringify({ error: 'Access denied to folder: ' + folder_name });
+}
+const basePath = '/shared-data';
+const folderPath = path.join(basePath, folder_name);
+try {
+  const files = fs.readdirSync(folderPath);
+  const fileStats = files.map(file => {
+    const filePath = path.join(folderPath, file);
+    const stat = fs.statSync(filePath);
+    return { name: file, size: stat.size, isDirectory: stat.isDirectory(), modified: stat.mtime };
+  });
+  return JSON.stringify({ success: true, files: fileStats, folder: folder_name });
+} catch (err) {
+  return JSON.stringify({ error: err.message });
+}`,
+  });
+
+  // Read file method
+  const readableAccess = sharedVolumeAccess.filter(a => a.canRead);
+  if (readableAccess.length > 0) {
+    methods.push({
+      name: 'read_shared_file',
+      description: 'Read a file from allowed shared folders',
+      parameters: {
+        folder_name: {
+          type: 'string',
+          description: 'Folder name',
+          required: true,
+          enum: readableAccess.map(a => a.folder),
+        },
+        file_name: {
+          type: 'string',
+          description: 'File name to read',
+          required: true,
+        },
+      },
+      code: `const fs = require('fs');
+const path = require('path');
+const readableFolders = ${JSON.stringify(readableAccess.map(a => a.folder))};
+if (!readableFolders.includes(folder_name)) {
+  return JSON.stringify({ error: 'Read access denied' });
+}
+const basePath = '/shared-data';
+const filePath = path.join(basePath, folder_name, file_name);
+if (!filePath.startsWith(basePath)) {
+  return JSON.stringify({ error: 'Path traversal denied' });
+}
+try {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const fileUrl = \`/api/shared-files/\${folder_name}/\${file_name}\`;
+  return JSON.stringify({ success: true, content, fileUrl, fileName: file_name, folder: folder_name });
+} catch (err) {
+  return JSON.stringify({ error: err.message });
+}`,
+    });
+
+    methods.push({
+      name: 'read_shared_file_base64',
+      description: 'Read a file as base64 from allowed shared folders',
+      parameters: {
+        folder_name: {
+          type: 'string',
+          description: 'Folder name',
+          required: true,
+          enum: readableAccess.map(a => a.folder),
+        },
+        file_name: {
+          type: 'string',
+          description: 'File name to read',
+          required: true,
+        },
+      },
+      code: `const fs = require('fs');
+const path = require('path');
+const readableFolders = ${JSON.stringify(readableAccess.map(a => a.folder))};
+if (!readableFolders.includes(folder_name)) {
+  return JSON.stringify({ error: 'Read access denied' });
+}
+const basePath = '/shared-data';
+const filePath = path.join(basePath, folder_name, file_name);
+if (!filePath.startsWith(basePath)) {
+  return JSON.stringify({ error: 'Path traversal denied' });
+}
+try {
+  const content = fs.readFileSync(filePath);
+  const base64 = content.toString('base64');
+  const fileUrl = \`/api/shared-files/\${folder_name}/\${file_name}\`;
+  return JSON.stringify({ success: true, content: base64, fileUrl, fileName: file_name, folder: folder_name });
+} catch (err) {
+  return JSON.stringify({ error: err.message });
+}`,
+    });
+  }
+
+  // Write file method
+  const writableAccess = sharedVolumeAccess.filter(a => a.canWrite);
+  if (writableAccess.length > 0) {
+    methods.push({
+      name: 'write_shared_file',
+      description: 'Write a file to allowed shared folders',
+      parameters: {
+        folder_name: {
+          type: 'string',
+          description: 'Folder name',
+          required: true,
+          enum: writableAccess.map(a => a.folder),
+        },
+        file_name: {
+          type: 'string',
+          description: 'File name to write',
+          required: true,
+        },
+        content: {
+          type: 'string',
+          description: 'File content',
+          required: true,
+        },
+      },
+      code: `const fs = require('fs');
+const path = require('path');
+const writableFolders = ${JSON.stringify(writableAccess.map(a => a.folder))};
+if (!writableFolders.includes(folder_name)) {
+  return JSON.stringify({ error: 'Write access denied' });
+}
+const basePath = '/shared-data';
+const folderPath = path.join(basePath, folder_name);
+const filePath = path.join(folderPath, file_name);
+if (!filePath.startsWith(basePath)) {
+  return JSON.stringify({ error: 'Path traversal denied' });
+}
+try {
+  fs.mkdirSync(folderPath, { recursive: true });
+  fs.writeFileSync(filePath, content, 'utf-8');
+  return JSON.stringify({ success: true, message: 'File written', fileName: file_name, folder: folder_name });
+} catch (err) {
+  return JSON.stringify({ error: err.message });
+}`,
+    });
+  }
+
+  // Delete file method
+  const deletableAccess = sharedVolumeAccess.filter(a => a.canDelete);
+  if (deletableAccess.length > 0) {
+    methods.push({
+      name: 'delete_shared_file',
+      description: 'Delete a file from allowed shared folders',
+      parameters: {
+        folder_name: {
+          type: 'string',
+          description: 'Folder name',
+          required: true,
+          enum: deletableAccess.map(a => a.folder),
+        },
+        file_name: {
+          type: 'string',
+          description: 'File name to delete',
+          required: true,
+        },
+      },
+      code: `const fs = require('fs');
+const path = require('path');
+const deletableFolders = ${JSON.stringify(deletableAccess.map(a => a.folder))};
+if (!deletableFolders.includes(folder_name)) {
+  return JSON.stringify({ error: 'Delete access denied' });
+}
+const basePath = '/shared-data';
+const filePath = path.join(basePath, folder_name, file_name);
+if (!filePath.startsWith(basePath)) {
+  return JSON.stringify({ error: 'Path traversal denied' });
+}
+try {
+  fs.unlinkSync(filePath);
+  return JSON.stringify({ success: true, message: 'File deleted', fileName: file_name, folder: folder_name });
+} catch (err) {
+  return JSON.stringify({ error: err.message });
+}`,
+    });
+  }
+
+  return methods;
+}
+
+/**
  * Generates the JavaScript code for the custom MCP
  */
 export function generateCustomMcpCode(definition: CustomToolDefinition): string {
-  const { name, description = 'Custom MCP', methods } = definition;
+  const { name, description = 'Custom MCP', methods: userMethods } = definition;
+  const sharedVolumeMethods = generateSharedVolumeTools(definition.sharedVolumeAccess);
+  const methods = [...sharedVolumeMethods, ...userMethods];;
 
   // Build CUSTOM_TOOLS array
   const toolsArray = methods
@@ -410,6 +653,113 @@ export function generateExampleCustomTool(): CustomToolDefinition {
           discount_amount: discount_amount.toFixed(2),
           final_price: final_price.toFixed(2),
         });`,
+      },
+    ],
+  };
+}
+
+/**
+ * Example for accessing shared volumes
+ */
+export function generateSharedVolumeAccessorExample(): CustomToolDefinition {
+  return {
+    name: 'Shared Volume Accessor',
+    description: 'Access files from shared volumes across MCPs',
+    methods: [
+      {
+        name: 'list_shared_files',
+        description: 'List files in a shared folder',
+        parameters: {
+          folder_name: {
+            type: 'string',
+            description: 'Name of the folder (e.g., "echarts-server")',
+            required: true,
+          },
+        },
+        code: `const fs = require('fs');
+const path = require('path');
+const basePath = '/shared-data';
+const folderPath = path.join(basePath, folder_name);
+if (!folderPath.startsWith(basePath)) {
+  return JSON.stringify({ error: 'Access denied' });
+}
+try {
+  const files = fs.readdirSync(folderPath);
+  const fileStats = files.map(file => {
+    const filePath = path.join(folderPath, file);
+    const stat = fs.statSync(filePath);
+    return {
+      name: file,
+      size: stat.size,
+      isDirectory: stat.isDirectory(),
+      modified: stat.mtime
+    };
+  });
+  return JSON.stringify({ success: true, files: fileStats, folder: folder_name });
+} catch (err) {
+  return JSON.stringify({ error: err.message });
+}`,
+      },
+      {
+        name: 'read_shared_file',
+        description: 'Read a file from shared volume',
+        parameters: {
+          folder_name: {
+            type: 'string',
+            description: 'Folder name (e.g., "echarts-server")',
+            required: true,
+          },
+          file_name: {
+            type: 'string',
+            description: 'Name of the file to read',
+            required: true,
+          },
+        },
+        code: `const fs = require('fs');
+const path = require('path');
+const basePath = '/shared-data';
+const folderPath = path.join(basePath, folder_name);
+const filePath = path.join(folderPath, file_name);
+if (!filePath.startsWith(basePath)) {
+  return JSON.stringify({ error: 'Access denied' });
+}
+try {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  return JSON.stringify({ success: true, content, fileName: file_name });
+} catch (err) {
+  return JSON.stringify({ error: err.message });
+}`,
+      },
+      {
+        name: 'read_shared_file_base64',
+        description: 'Read a file from shared volume as base64 (for binary files)',
+        parameters: {
+          folder_name: {
+            type: 'string',
+            description: 'Folder name',
+            required: true,
+          },
+          file_name: {
+            type: 'string',
+            description: 'Name of the file',
+            required: true,
+          },
+        },
+        code: `const fs = require('fs');
+const path = require('path');
+const basePath = '/shared-data';
+const folderPath = path.join(basePath, folder_name);
+const filePath = path.join(folderPath, file_name);
+if (!filePath.startsWith(basePath)) {
+  return JSON.stringify({ error: 'Access denied' });
+}
+try {
+  const content = fs.readFileSync(filePath);
+  const base64 = content.toString('base64');
+  return JSON.stringify({ success: true, content: base64, fileName: file_name });
+} catch (err) {
+  return JSON.stringify({ error: err.message });
+}`,
       },
     ],
   };

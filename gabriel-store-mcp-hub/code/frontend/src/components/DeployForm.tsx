@@ -356,7 +356,7 @@ export default function DeployForm({
                 <input
                   value={workingDir}
                   onChange={(event) => setWorkingDir(event.target.value)}
-                  placeholder="/workspace"
+                  placeholder="/shared-data/"
                   className="input"
                 />
               </Field>

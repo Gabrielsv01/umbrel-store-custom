@@ -1,3 +1,8 @@
+volumes:
+  shared-data:
+    driver: local
+    name: shared-data
+
 services:
   mcp-hub:
     build:
@@ -7,11 +12,13 @@ services:
     environment:
       - NODE_ENV=production
       - DATA_DIR=/data
+      - SHARED_DATA_DIR=/shared-data
       - STATIC_DIR=/app/public
       - TZ=${TZ:-UTC}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${APP_DATA_DIR:-./.appdata}/data:/data
+      - shared-data:/shared-data
     ports:
       - "${APP_PORT:-5146}:3001"
     restart: unless-stopped

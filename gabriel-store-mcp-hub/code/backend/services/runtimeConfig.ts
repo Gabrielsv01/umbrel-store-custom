@@ -111,7 +111,7 @@ export function buildContainerOptions(input: BuildContainerOptionsInput): Docker
     ? { [`${portStr}/tcp`]: [{ HostPort: portStr }] }
     : {}
   const volumeMounts = Object.entries(input.volumes ?? {})
-    .map(([containerPath, hostPath]) => `${hostPath}:${containerPath}:ro`)
+    .map(([containerPath, hostPath]) => `${hostPath}:${containerPath}:rw`)
 
   const binds = [...(runtime?.volumes ?? []), ...(runtime?.bindMounts ?? []), ...volumeMounts]
 

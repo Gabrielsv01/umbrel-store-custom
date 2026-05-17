@@ -365,6 +365,76 @@ export function registerMcpToolsRoutes(
     }
   })
 
+  // POST endpoint to call a tool in a namespace - calls the enabled MCPs directly
+  fastify.post<{
+    Params: { namespaceId: string }
+    Body: { toolName: string; arguments: Record<string, unknown> }
+  }>('/api/namespaces/:namespaceId/tools/call', async (req, reply) => {
+    const { namespaceId } = req.params
+    const { toolName, arguments: toolArgs } = req.body
+
+    console.error(`[POST /api/namespaces/:namespaceId/tools/call] namespaceId=${namespaceId}, toolName=${toolName}`)
+
+    try {
+      const data = loadData()
+      let wrapperMeta = null
+
+      // Find the wrapper container for this namespace
+      for (const [id, meta] of Object.entries(data)) {
+        if ((meta as any).namespaceId === namespaceId && (meta as any).isCustomNamespace) {
+          wrapperMeta = meta as any
+          break
+        }
+      }
+
+      if (!wrapperMeta) {
+        return reply.code(404).send({ error: 'namespace wrapper not found' })
+      }
+
+      // For custom namespaces, call the namespace wrapper which handles routing
+      const port = wrapperMeta.port || 8009
+      const hosts = ['localhost', 'host.docker.internal', 'mcp-custom-ns-' + namespaceId]
+
+      for (const host of hosts) {
+        try {
+          const url = `http://${host}:${port}/mcp`
+          const payload = {
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: {
+              name: toolName,
+              arguments: toolArgs,
+            },
+          }
+
+          console.error(`[POST] Attempting to call tool via ${host}:${port}`)
+
+          const response = await fetchWithTimeout(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }, 60000)
+
+          const text = await response.text()
+          const parsed = JSON.parse(text)
+
+          console.error(`[POST] Successfully called tool via ${host}:${port}`)
+          return reply.send(parsed)
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err)
+          console.error(`[POST] host ${host} failed: ${errMsg}`)
+        }
+      }
+
+      return reply.code(500).send({ error: 'failed to connect to namespace wrapper' })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'unknown error'
+      console.error('[POST /api/namespaces/:namespaceId/tools/call] Catch Error:', message, err)
+      return reply.code(500).send({ error: message })
+    }
+  })
+
   fastify.get<{
     Params: { id: string }
   }>('/api/mcps/:id/tools', async (req, reply) => {

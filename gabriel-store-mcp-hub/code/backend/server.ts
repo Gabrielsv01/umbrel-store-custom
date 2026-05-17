@@ -15,6 +15,7 @@ import { registerMcpToolsRoutes } from './routes/mcpTools.js'
 import { registerCatalogRoutes } from './routes/catalog.js'
 import { registerNamespaceRoutes } from './routes/namespaces.js'
 import { registerCustomToolsRoutes } from './routes/customTools.js'
+import { registerSharedFilesRoutes } from './routes/sharedFiles.js'
 import {
   buildContainerOptions,
   normalizeRuntimeConfig,
@@ -229,6 +230,9 @@ registerCustomToolsRoutes(fastify, {
   saveData,
   mcpLabel: MCP_LABEL,
 })
+registerSharedFilesRoutes(fastify, {
+  sharedDataDir: '/shared-data',
+})
 
 // ─── POST /api/deploy ─────────────────────────────────────────────────────────
 
@@ -253,6 +257,7 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
       transport,
       runtime: normalizedRuntime,
       mcpLabel: MCP_LABEL,
+      volumes: { '/shared-data': 'shared-data' },
     }),
   )
 
@@ -315,6 +320,7 @@ fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
         transport,
         runtime: normalizedRuntime,
         mcpLabel: MCP_LABEL,
+        volumes: { '/shared-data': 'shared-data' },
       }),
     )
 

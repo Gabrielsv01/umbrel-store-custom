@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { VolumesModalProps } from '../types/components';
+import { VolumeExplorer } from './VolumeExplorer';
 
 function formatDate(value?: string): string {
   if (!value) return '-';
@@ -18,6 +19,7 @@ export default function VolumesModal({
   removingName,
 }: VolumesModalProps) {
   const [query, setQuery] = useState('');
+  const [exploringVolume, setExploringVolume] = useState<string | null>(null);
 
   const filteredVolumes = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -119,7 +121,14 @@ export default function VolumesModal({
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-right">
+                      <td className="px-3 py-2 text-right space-x-2 flex justify-end">
+                        <button
+                          onClick={() => setExploringVolume(volume.name)}
+                          className="rounded-lg bg-blue-600/20 px-3 py-1.5 text-xs text-blue-300 transition-colors hover:bg-blue-600/30"
+                          title="Explore volume files"
+                        >
+                          Explore
+                        </button>
                         <button
                           onClick={() => void onRemove(volume)}
                           disabled={
@@ -151,6 +160,13 @@ export default function VolumesModal({
           )}
         </div>
       </div>
+
+      {exploringVolume && (
+        <VolumeExplorer
+          volumeName={exploringVolume}
+          onClose={() => setExploringVolume(null)}
+        />
+      )}
     </div>
   );
 }
