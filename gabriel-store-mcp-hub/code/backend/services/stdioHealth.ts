@@ -112,6 +112,11 @@ export async function runStdioHealthCheck(
   }
 
   try {
+    const info = await container.inspect().catch(() => null)
+    const state = info?.State
+    const uptime = Date.now() - new Date(state?.StartedAt || 0).getTime()
+    console.error(`[stdioHealth] container uptime: ${uptime}ms, running: ${state?.Running}`)
+
     const protocolCandidates = ['2025-03-26', '2024-11-05']
     let selectedProtocol: string | null = null
 

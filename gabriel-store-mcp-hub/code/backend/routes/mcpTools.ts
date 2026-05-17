@@ -626,19 +626,35 @@ async function handleStdioTools(
           })
 
           const jsonQueue: Array<Record<string, unknown>> = []
+          const stderrLines: string[] = []
           const stdoutLineDecoder = createLineDecoder((line) => {
             const parsed = tryParseRecord(line) ?? tryParseRecordFragment(line)
-            if (parsed) jsonQueue.push(parsed)
+            if (parsed) {
+              console.error(`[handleStdioTools] ${mcpId} got JSON response: ${JSON.stringify(parsed).substring(0, 80)}...`)
+              jsonQueue.push(parsed)
+            } else if (line.trim()) {
+              console.error(`[handleStdioTools] ${mcpId} stdout: ${line}`)
+            }
+          })
+
+          const stderrDecoder = createLineDecoder((line) => {
+            if (line.trim()) {
+              console.error(`[handleStdioTools] ${mcpId} stderr: ${line}`)
+              stderrLines.push(line)
+            }
           })
 
           const decode = createDockerMultiplexDecoder((payload, streamType) => {
             if (streamType === 1) stdoutLineDecoder(payload)
+            else if (streamType === 2) stderrDecoder(payload)
           })
 
           mcpStream.on('data', (chunk: Buffer) => decode(chunk))
 
           const writeRpc = (payload: Record<string, unknown>) => {
-            mcpStream.write(`${JSON.stringify(payload)}\n`)
+            const msg = JSON.stringify(payload)
+            console.error(`[handleStdioTools] ${mcpId} sending RPC: ${msg.substring(0, 80)}...`)
+            mcpStream.write(`${msg}\n`)
           }
 
           const waitForMessage = async (
@@ -666,6 +682,7 @@ async function handleStdioTools(
                 const protocolVersion = protocolCandidates[i]
                 const requestId = 1 + i
 
+                console.error(`[handleStdioTools] ${mcpId} trying initialize with protocol ${protocolVersion}...`)
                 writeRpc({
                   jsonrpc: '2.0',
                   id: requestId,
@@ -679,12 +696,16 @@ async function handleStdioTools(
 
                 const initializeResponse = await waitForMessage((msg) => Number(msg.id) === requestId, 5000)
                 if (!!initializeResponse?.result && !initializeResponse?.error) {
+                  console.error(`[handleStdioTools] ${mcpId} initialized successfully with ${protocolVersion}`)
                   selectedProtocol = protocolVersion
                   break
+                } else {
+                  console.error(`[handleStdioTools] ${mcpId} initialize failed or timed out for ${protocolVersion}`)
                 }
               }
 
               if (!selectedProtocol) {
+                console.error(`[handleStdioTools] ${mcpId} failed to initialize with any protocol. stderr: ${stderrLines.join(' | ')}`)
                 try { (mcpStream as any).destroy() } catch {}
                 return []
               }

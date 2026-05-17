@@ -41,17 +41,30 @@ export async function runStdioToolsList(
   })
 
   const jsonQueue: Array<Record<string, unknown>> = []
+  const stderrLines: string[] = []
 
   const stdoutLineDecoder = createLineDecoder((line) => {
     const parsed = tryParseRecord(line) ?? tryParseRecordFragment(line)
     if (parsed) {
+      console.error(`[stdioToolsList] received JSON: ${JSON.stringify(parsed).substring(0, 100)}...`)
       jsonQueue.push(parsed)
+    } else if (line.trim()) {
+      console.error(`[stdioToolsList] stdout: ${line}`)
+    }
+  })
+
+  const stderrDecoder = createLineDecoder((line) => {
+    if (line.trim()) {
+      console.error(`[stdioToolsList] stderr: ${line}`)
+      stderrLines.push(line)
     }
   })
 
   const decodeChunk = createDockerMultiplexDecoder((payload, streamType) => {
     if (streamType === 1) {
       stdoutLineDecoder(payload)
+    } else if (streamType === 2) {
+      stderrDecoder(payload)
     }
   })
 
@@ -60,7 +73,9 @@ export async function runStdioToolsList(
   })
 
   const writeRpc = (payload: Record<string, unknown>) => {
-    stream.write(`${JSON.stringify(payload)}\n`)
+    const msg = JSON.stringify(payload)
+    console.error(`[stdioToolsList] sending RPC: ${msg.substring(0, 80)}...`)
+    stream.write(`${msg}\n`)
   }
 
   const waitForMessage = async (
@@ -82,6 +97,11 @@ export async function runStdioToolsList(
   }
 
   try {
+    const info = await container.inspect().catch(() => null)
+    const state = info?.State
+    const uptime = Date.now() - new Date(state?.StartedAt || 0).getTime()
+    console.error(`[stdioToolsList] container uptime: ${uptime}ms, running: ${state?.Running}`)
+
     const protocolCandidates = ['2025-03-26', '2024-11-05']
     let selectedProtocol: string | null = null
 
@@ -109,20 +129,27 @@ export async function runStdioToolsList(
     }
 
     if (!selectedProtocol) {
+      console.error(`[stdioToolsList] Failed to initialize. stderr: ${stderrLines.join('\n')}`)
       throw new Error('Failed to initialize MCP protocol')
     }
 
+    console.error(`[stdioToolsList] initialized with protocol: ${selectedProtocol}`)
     writeRpc({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} })
 
     let toolsResponse: Record<string, unknown> | null = null
     for (const requestId of [10, 11]) {
+      console.error(`[stdioToolsList] requesting tools/list with id ${requestId}`)
       writeRpc({ jsonrpc: '2.0', id: requestId, method: 'tools/list', params: {} })
       toolsResponse = await waitForMessage((msg) => Number(msg.id) === requestId, 5000)
-      if (toolsResponse) break
+      if (toolsResponse) {
+        console.error(`[stdioToolsList] got tools/list response for id ${requestId}`)
+        break
+      }
+      console.error(`[stdioToolsList] timeout waiting for tools/list id ${requestId}, retrying...`)
     }
 
     if (!toolsResponse) {
-      console.error('[stdioToolsList] No response from tools/list', { queue: jsonQueue })
+      console.error('[stdioToolsList] No response from tools/list', { queueSize: jsonQueue.length, stderr: stderrLines })
       throw new Error('tools/list request timed out')
     }
 

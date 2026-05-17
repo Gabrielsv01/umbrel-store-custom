@@ -243,6 +243,7 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
     return reply.code(400).send({ error: 'name and image are required' })
   }
 
+  console.error(`[deploy] creating container: name=${name}, image=${image}, command=${command}, transport=${transport}`)
   await ensureImageAvailable(image.trim())
 
   const normalizedRuntime = normalizeRuntimeConfig(runtime)
@@ -261,9 +262,9 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
     }),
   )
 
-  if (transport !== 'stdio') {
-    await container.start()
-  }
+  console.error(`[deploy] starting container ${container.id.slice(0, 12)}`)
+  await container.start()
+  console.error(`[deploy] container started: ${container.id.slice(0, 12)}`)
 
   const shortId = container.id.slice(0, 12)
   const data = loadData()
@@ -279,7 +280,7 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
   }
   saveData(data)
 
-  return { id: shortId, status: transport === 'stdio' ? 'created' : 'running' }
+  return { id: shortId, status: 'running' }
 })
 
 // ─── PUT /api/mcps/:id (recreate container with updated config) ─────────────
@@ -324,9 +325,9 @@ fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
       }),
     )
 
-    if (transport !== 'stdio') {
-      await container.start()
-    }
+    console.error(`[update] starting container ${container.id.slice(0, 12)}`)
+    await container.start()
+    console.error(`[update] container started: ${container.id.slice(0, 12)}`)
 
     const newShortId = container.id.slice(0, 12)
     const data = loadData()
@@ -345,7 +346,7 @@ fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
     }
     saveData(data)
 
-    return { id: newShortId, status: transport === 'stdio' ? 'created' : 'running' }
+    return { id: newShortId, status: 'running' }
   },
 )
 
