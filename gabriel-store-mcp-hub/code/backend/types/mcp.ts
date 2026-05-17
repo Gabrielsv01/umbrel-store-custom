@@ -17,6 +17,7 @@ export interface McpMeta {
   namespaceId?: string
   enabledMcps?: string[]
   isCustomToolsMcp?: boolean
+  containerName?: string
   customToolDefinition?: Record<string, unknown>
 }
 

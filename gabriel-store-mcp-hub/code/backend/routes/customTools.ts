@@ -216,6 +216,7 @@ export function registerCustomToolsRoutes(
           port,
           transport: 'http',
           isCustomToolsMcp: true,
+          containerName,
           customToolDefinition: definition as unknown as Record<string, unknown>, // Store definition for future reference
         };
 
@@ -418,6 +419,7 @@ export function registerCustomToolsRoutes(
           port,
           transport: 'http',
           isCustomToolsMcp: true,
+          containerName,
           customToolDefinition: definition as unknown as Record<string, unknown>,
         };
 

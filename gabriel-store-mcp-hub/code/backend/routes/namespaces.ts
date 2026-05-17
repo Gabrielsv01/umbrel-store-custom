@@ -79,6 +79,7 @@ async function deployNamespaceContainer(
       port: mcpData?.port || 8000,
       command: mcpData?.command,
       workingDir: mcpData?.runtime?.workingDir,
+      containerName: mcpData?.containerName,
     }
   })
 
