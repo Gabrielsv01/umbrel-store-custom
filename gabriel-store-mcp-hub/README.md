@@ -52,10 +52,12 @@ docker run -d \
   -e TZ=America/Sao_Paulo \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v $(pwd)/mcp_data:/data \
+  -v shared-data:/shared-data \
   -p 5146:3001 \
   --restart unless-stopped \
   --network mcp-hub-network \
-  gabrielsv01/mcp-hub:1.0.11
+  gabrielsv01/mcp-hub:1.0.14
+
 ```
 
 ## Estrutura do projeto
