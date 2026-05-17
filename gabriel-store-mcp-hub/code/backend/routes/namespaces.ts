@@ -185,6 +185,24 @@ export function registerNamespaceRoutes(
 ): void {
   const { docker, loadData, saveData, mcpLabel, buildContainerOptions } = options
 
+  fastify.get('/api/namespaces', async (req, reply) => {
+    const data = loadData()
+    const namespaces = Object.entries(data)
+      .filter(([_, mcpData]) => mcpData?.isCustomNamespace === true)
+      .map(([containerId, mcpData]) => ({
+        id: mcpData.namespaceId || containerId,
+        name: mcpData.name,
+        description: mcpData.name?.replace(/ \(custom\)$/, ''),
+        transport: mcpData.transport || 'http',
+        port: mcpData.port || 8000,
+        enabledMcps: mcpData.enabledMcps || [],
+        disabledTools: mcpData.disabledTools || [],
+        containerId,
+        meta: mcpData,
+      }))
+    return reply.send(namespaces)
+  })
+
   fastify.post<{ Body: DeployNamespacePayload }>(
     '/api/namespaces/deploy',
     async (req, reply) => {

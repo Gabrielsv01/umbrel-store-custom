@@ -5,16 +5,24 @@ import NamespaceList from './builder/NamespaceList';
 import BuilderInfo from './builder/BuilderInfo';
 import McpSelector from './builder/McpSelector';
 import BuilderToolsManager from './builder/BuilderToolsManager';
-import { deployNamespaceAsMcp, updateNamespaceAsMcp, deleteNamespaceAsMcp } from '../services/api';
+import {
+  deployNamespaceAsMcp,
+  updateNamespaceAsMcp,
+  deleteNamespaceAsMcp,
+} from '../services/api';
 
 interface MCPBuilderProps {
   readonly mcps: McpContainer[];
   readonly onMcpDeployed?: () => void;
 }
 
-export default function MCPBuilder({ mcps, onMcpDeployed }: Readonly<MCPBuilderProps>) {
+export default function MCPBuilder({
+  mcps,
+  onMcpDeployed,
+}: Readonly<MCPBuilderProps>) {
   const [namespaces, setNamespaces] = useState<McpNamespace[]>([]);
-  const [selectedNamespace, setSelectedNamespace] = useState<McpNamespace | null>(null);
+  const [selectedNamespace, setSelectedNamespace] =
+    useState<McpNamespace | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [deploying, setDeploying] = useState<string | null>(null);
   const [deployError, setDeployError] = useState<string | null>(null);
@@ -27,7 +35,15 @@ export default function MCPBuilder({ mcps, onMcpDeployed }: Readonly<MCPBuilderP
   });
 
   useEffect(() => {
+    // Load from localStorage first (for instant UI), then fetch from backend
     loadNamespaces();
+    loadNamespacesFromBackend();
+
+    // Refetch namespaces from backend every 5 seconds to stay in sync
+    const interval = setInterval(() => {
+      loadNamespacesFromBackend();
+    }, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -41,6 +57,32 @@ export default function MCPBuilder({ mcps, onMcpDeployed }: Readonly<MCPBuilderP
     if (stored) {
       const data = JSON.parse(stored) as McpNamespace[];
       setNamespaces(data);
+    }
+  };
+
+  const loadNamespacesFromBackend = async () => {
+    try {
+      const response = await fetch('/api/namespaces');
+      if (response.ok) {
+        const backendNamespaces = (await response.json()) as Array<any>;
+        // Convert backend format to frontend format
+        const converted: McpNamespace[] = backendNamespaces.map((ns: any) => ({
+          id: ns.id || ns.containerId,
+          name: ns.name,
+          description: ns.description,
+          transport: ns.transport,
+          port: ns.port,
+          enabledMcps: ns.enabledMcps,
+          disabledTools: ns.disabledTools,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }));
+        setNamespaces(converted);
+        // Also update localStorage to keep them in sync
+        localStorage.setItem('mcp_namespaces', JSON.stringify(converted));
+      }
+    } catch (error) {
+      console.error('Failed to load namespaces from backend:', error);
     }
   };
 
@@ -62,7 +104,12 @@ export default function MCPBuilder({ mcps, onMcpDeployed }: Readonly<MCPBuilderP
     setNamespaces(updated);
   };
 
-  const handleCreateNamespace = (name: string, description?: string, transport: McpTransport = 'http', port: number = 8000) => {
+  const handleCreateNamespace = (
+    name: string,
+    description?: string,
+    transport: McpTransport = 'http',
+    port: number = 8000
+  ) => {
     const newNamespace: McpNamespace = {
       id: `ns_${Date.now()}`,
       name,
@@ -101,10 +148,15 @@ export default function MCPBuilder({ mcps, onMcpDeployed }: Readonly<MCPBuilderP
       try {
         await deleteNamespaceAsMcp(id);
         customMcpIds.delete(id);
-        localStorage.setItem('custom_mcp_ids', JSON.stringify(Array.from(customMcpIds)));
+        localStorage.setItem(
+          'custom_mcp_ids',
+          JSON.stringify(Array.from(customMcpIds))
+        );
       } catch (error) {
         setDeployError(
-          error instanceof Error ? error.message : 'Failed to delete namespace container'
+          error instanceof Error
+            ? error.message
+            : 'Failed to delete namespace container'
         );
         return;
       }
@@ -175,7 +227,10 @@ export default function MCPBuilder({ mcps, onMcpDeployed }: Readonly<MCPBuilderP
 
       // Track custom MCP IDs in localStorage
       customMcpIds.add(selectedNamespace.id);
-      localStorage.setItem('custom_mcp_ids', JSON.stringify(Array.from(customMcpIds)));
+      localStorage.setItem(
+        'custom_mcp_ids',
+        JSON.stringify(Array.from(customMcpIds))
+      );
 
       setDeploying(null);
       onMcpDeployed?.();
@@ -203,61 +258,61 @@ export default function MCPBuilder({ mcps, onMcpDeployed }: Readonly<MCPBuilderP
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
-        {selectedNamespace ? (
-          <div className="space-y-8">
-            <BuilderInfo namespace={selectedNamespace} statistics={statistics} />
+      {selectedNamespace ? (
+        <div className="space-y-8">
+          <BuilderInfo namespace={selectedNamespace} statistics={statistics} />
 
-            <McpSelector
-              namespace={selectedNamespace}
-              availableMcps={mcps}
-              onToggleMcp={handleToggleMcp}
-            />
-
-            <BuilderToolsManager
-              namespace={selectedNamespace}
-              availableMcps={mcps}
-              onToggleTool={handleToggleTool}
-            />
-
-            {deployError && (
-              <div className="rounded bg-red-900/30 p-4 text-sm text-red-300">
-                {deployError}
-              </div>
-            )}
-
-            <div className="flex gap-4">
-              <button
-                onClick={() => setSelectedNamespace(null)}
-                className="rounded bg-gray-800 px-4 py-2 hover:bg-gray-700"
-              >
-                Back to Namespaces
-              </button>
-
-              <button
-                onClick={handleDeployNamespace}
-                disabled={
-                  deploying !== null ||
-                  !selectedNamespace ||
-                  selectedNamespace.enabledMcps.length === 0
-                }
-                className="rounded bg-green-600 px-4 py-2 font-medium hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed"
-              >
-                {deployButtonText}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <NamespaceList
-            namespaces={namespaces}
-            selectedId={selectedNamespace?.id}
-            onSelect={setSelectedNamespace}
-            onDelete={handleDeleteNamespace}
-            onUpdate={handleUpdateNamespace}
-            onCreateNew={() => setIsCreating(true)}
-            isCreating={isCreating}
-            onCreateNamespace={handleCreateNamespace}
+          <McpSelector
+            namespace={selectedNamespace}
+            availableMcps={mcps}
+            onToggleMcp={handleToggleMcp}
           />
-        )}
+
+          <BuilderToolsManager
+            namespace={selectedNamespace}
+            availableMcps={mcps}
+            onToggleTool={handleToggleTool}
+          />
+
+          {deployError && (
+            <div className="rounded bg-red-900/30 p-4 text-sm text-red-300">
+              {deployError}
+            </div>
+          )}
+
+          <div className="flex gap-4">
+            <button
+              onClick={() => setSelectedNamespace(null)}
+              className="rounded bg-gray-800 px-4 py-2 hover:bg-gray-700"
+            >
+              Back to Namespaces
+            </button>
+
+            <button
+              onClick={handleDeployNamespace}
+              disabled={
+                deploying !== null ||
+                !selectedNamespace ||
+                selectedNamespace.enabledMcps.length === 0
+              }
+              className="rounded bg-green-600 px-4 py-2 font-medium hover:bg-green-700 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed"
+            >
+              {deployButtonText}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <NamespaceList
+          namespaces={namespaces}
+          selectedId={selectedNamespace ? selectedNamespace['id'] : undefined}
+          onSelect={setSelectedNamespace}
+          onDelete={handleDeleteNamespace}
+          onUpdate={handleUpdateNamespace}
+          onCreateNew={() => setIsCreating(true)}
+          isCreating={isCreating}
+          onCreateNamespace={handleCreateNamespace}
+        />
+      )}
     </div>
   );
 }

@@ -421,6 +421,50 @@ export function registerCustomToolsRoutes(
           customToolDefinition: definition as unknown as Record<string, unknown>,
         };
 
+        // Update any custom namespaces that reference the old container ID
+        for (const [mcpId, mcpData] of Object.entries(updatedData)) {
+          if (mcpData?.isCustomNamespace && Array.isArray(mcpData.enabledMcps)) {
+            const idx = mcpData.enabledMcps.indexOf(containerId);
+            if (idx >= 0) {
+              mcpData.enabledMcps[idx] = newContainerId;
+              console.error(`[customTools] Updated namespace ${mcpId} to reference ${newContainerId} instead of ${containerId}`);
+
+              // Regenerate namespace env variables to reflect the new container ID
+              const enabledMcpsList = mcpData.enabledMcps
+                .map((id: string) => {
+                  const mcp = updatedData[id] as any;
+                  if (mcp) {
+                    return `${id}:${mcp.name}:${mcp.image}`;
+                  }
+                  return null;
+                })
+                .filter(Boolean)
+                .join(';');
+
+              const mcpConfigs = mcpData.enabledMcps
+                .map((id: string) => {
+                  const mcp = updatedData[id] as any;
+                  if (!mcp) return null;
+                  return {
+                    id,
+                    name: mcp.name,
+                    image: mcp.image,
+                    transport: mcp.transport || 'http',
+                    port: mcp.port || 8000,
+                    command: mcp.command,
+                  };
+                })
+                .filter(Boolean);
+
+              if (mcpData.env) {
+                mcpData.env.ENABLED_MCPS = enabledMcpsList;
+                mcpData.env.MCP_CONFIGS = JSON.stringify(mcpConfigs);
+                console.error(`[customTools] Regenerated namespace ${mcpId} env variables`);
+              }
+            }
+          }
+        }
+
         saveData(updatedData);
         console.error(`[customTools] Updated metadata: removed ${containerId}, added ${newContainerId}`);
 
