@@ -454,6 +454,7 @@ export function registerCustomToolsRoutes(
                     transport: mcp.transport || 'http',
                     port: mcp.port || 8000,
                     command: mcp.command,
+                    containerName: mcp.containerName,
                   };
                 })
                 .filter(Boolean);
@@ -469,6 +470,24 @@ export function registerCustomToolsRoutes(
 
         saveData(updatedData);
         console.error(`[customTools] Updated metadata: removed ${containerId}, added ${newContainerId}`);
+
+        // Restart namespace containers that reference this custom MCP to reload configs
+        for (const [mcpId, mcpData] of Object.entries(updatedData)) {
+          if (mcpData?.isCustomNamespace && Array.isArray(mcpData.enabledMcps)) {
+            if (mcpData.enabledMcps.includes(newContainerId)) {
+              try {
+                const namespaceContainer = docker.getContainer(mcpId);
+                const info = await namespaceContainer.inspect().catch(() => null);
+                if (info?.State?.Running) {
+                  console.error(`[customTools] Restarting namespace container ${mcpId} to reload configs`);
+                  await namespaceContainer.restart();
+                }
+              } catch (err) {
+                console.error(`[customTools] Failed to restart namespace ${mcpId}:`, err instanceof Error ? err.message : String(err));
+              }
+            }
+          }
+        }
 
         return reply.code(200).send({
           success: true,

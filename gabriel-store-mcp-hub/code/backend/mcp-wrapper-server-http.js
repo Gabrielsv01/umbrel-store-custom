@@ -11,7 +11,7 @@ const ENABLED_MCPS = process.env.ENABLED_MCPS || '';
 const MCP_CONFIGS_STR = process.env.MCP_CONFIGS || '[]';
 const DISABLED_TOOLS = process.env.DISABLED_TOOLS || '';
 const NAMESPACE_ID = process.env.NAMESPACE_ID || 'unknown';
-const BACKEND_HOST = process.env.BACKEND_HOST || 'localhost:51099';
+const BACKEND_HOST = process.env.BACKEND_HOST || 'localhost:3001';
 
 // Parse MCP configurations from environment
 let enabledMcpsList = [];
@@ -87,18 +87,20 @@ async function fetchRealToolsFromBackend() {
   });
 }
 
-async function callHttpMcp(mcp, toolName, arguments_) {
+async function callHttpMcp(mcp, toolName, arguments_, id) {
   const host = mcp.containerName || 'localhost';
   const url = `http://${host}:${mcp.port}/mcp`;
   const body = JSON.stringify({
     jsonrpc: '2.0',
-    id: 1,
+    id,
     method: 'tools/call',
     params: {
       name: toolName,
       arguments: arguments_,
     },
   });
+
+  console.log(`[MCP HTTP] Calling HTTP MCP "${mcp.name}" at ${host}:${mcp.port} (containerName: ${mcp.containerName}, id: ${mcp.id})`);
 
   return new Promise((resolve, reject) => {
     const req = http.request(url, {
@@ -123,12 +125,14 @@ async function callHttpMcp(mcp, toolName, arguments_) {
     });
 
     req.on('error', (err) => {
-      reject(new Error(`HTTP request to ${mcp.name} via ${host}:${mcp.port} failed: ${err.message}`));
+      const errMsg = `${err.code || 'UNKNOWN'}: ${err.message}`;
+      console.log(`[MCP HTTP] HTTP error for ${mcp.name}: ${errMsg}`);
+      reject(new Error(`HTTP request to ${mcp.name} via ${host}:${mcp.port} failed: ${errMsg}`));
     });
 
     req.on('timeout', () => {
       req.destroy();
-      reject(new Error(`HTTP request to ${mcp.name} via ${host}:${mcp.port} timed out`));
+      reject(new Error(`HTTP request to ${mcp.name} via ${host}:${mcp.port} timed out after 30s`));
     });
 
     req.write(body);
@@ -136,11 +140,11 @@ async function callHttpMcp(mcp, toolName, arguments_) {
   });
 }
 
-async function callBackendStdioMcp(mcp, toolName, arguments_) {
+async function callBackendStdioMcp(mcp, toolName, arguments_, id) {
   const url = `http://${BACKEND_HOST}/api/mcp/inspect/${mcp.id}`;
   const body = JSON.stringify({
     jsonrpc: '2.0',
-    id: 1,
+    id,
     method: 'tools/call',
     params: {
       name: toolName,
@@ -184,7 +188,7 @@ async function callBackendStdioMcp(mcp, toolName, arguments_) {
   });
 }
 
-async function forwardToolCallToMcp(toolName, arguments_) {
+async function forwardToolCallToMcp(toolName, arguments_, id) {
   console.log(`[MCP HTTP] Forwarding tool call: ${toolName}`);
 
   for (const mcp of enabledMcpsList) {
@@ -193,9 +197,9 @@ async function forwardToolCallToMcp(toolName, arguments_) {
     try {
       let response;
       if (mcp.transport === 'stdio') {
-        response = await callBackendStdioMcp(mcp, toolName, arguments_);
+        response = await callBackendStdioMcp(mcp, toolName, arguments_, id);
       } else {
-        response = await callHttpMcp(mcp, toolName, arguments_);
+        response = await callHttpMcp(mcp, toolName, arguments_, id);
       }
 
       if (response.result?.content?.[0]?.text?.includes('not found')) {
@@ -324,7 +328,7 @@ async function handleMcpRequest(payload) {
         };
       }
 
-      const mcpResponse = await forwardToolCallToMcp(toolName, params?.arguments || {});
+      const mcpResponse = await forwardToolCallToMcp(toolName, params?.arguments || {}, id);
       return {
         jsonrpc,
         id,

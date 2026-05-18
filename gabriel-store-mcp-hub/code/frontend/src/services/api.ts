@@ -3,9 +3,17 @@ import type { HttpHealthResult, StdioHealthState } from '../types/health';
 import type { DeployPayload, McpContainer } from '../types/mcp';
 import type { ImageRecord, VolumeRecord } from '../types/resources';
 import type { CatalogEntry } from '../types/catalog';
-import type { JsonRpcPayload, JsonRpcResponse, McpTool } from '../types/inspector';
+import type {
+  JsonRpcPayload,
+  JsonRpcResponse,
+  McpTool,
+} from '../types/inspector';
 import type { McpNamespace } from '../types/builder';
-import type { CustomToolDefinition, ValidateResponse, DeployResponse } from '../types/customTools';
+import type {
+  CustomToolDefinition,
+  ValidateResponse,
+  DeployResponse,
+} from '../types/customTools';
 
 type RequestOptions = RequestInit | undefined;
 

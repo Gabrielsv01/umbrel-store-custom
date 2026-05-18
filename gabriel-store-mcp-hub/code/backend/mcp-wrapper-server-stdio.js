@@ -14,7 +14,7 @@ const ENABLED_MCPS = process.env.ENABLED_MCPS || '';
 const MCP_CONFIGS_STR = process.env.MCP_CONFIGS || '[]';
 const DISABLED_TOOLS = process.env.DISABLED_TOOLS || '';
 const NAMESPACE_ID = process.env.NAMESPACE_ID || 'unknown';
-const BACKEND_HOST = process.env.BACKEND_HOST || 'localhost:51099';
+const BACKEND_HOST = process.env.BACKEND_HOST || 'localhost:3001';
 
 // Parse MCP configurations from environment
 let enabledMcpsList = [];
@@ -52,8 +52,6 @@ console.error(`[MCP STDIO] Started - Namespace: ${NAMESPACE_ID}`);
 console.error(`[MCP STDIO] Enabled MCPs: ${enabledMcpsList.map((m) => `${m.name} (${m.transport})`).join(', ')}`);
 console.error(`[MCP STDIO] Disabled tools: ${Array.from(disabledToolsSet).join(', ')}`);
 
-const stdioMcpProcesses = new Map();
-let messageIdCounter = 1;
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -134,147 +132,19 @@ async function fetchRealToolsFromBackend() {
   });
 }
 
-async function getOrSpawnStdioMcp(mcp) {
-  if (stdioMcpProcesses.has(mcp.id)) {
-    return stdioMcpProcesses.get(mcp.id);
-  }
-
-  console.error(`[MCP STDIO] Spawning stdio MCP ${mcp.name}`);
-
-  const spawnOpts = {
-    stdio: ['pipe', 'pipe', 'pipe'],
-  };
-
-  if (mcp.workingDir) {
-    spawnOpts.cwd = mcp.workingDir;
-    try {
-      fs.mkdirSync(mcp.workingDir, { recursive: true });
-      console.error(`[MCP STDIO] Created working directory: ${mcp.workingDir}`);
-    } catch (err) {
-      console.error(`[MCP STDIO] Failed to create working directory ${mcp.workingDir}:`, err.message);
-    }
-  }
-
-  const child = spawn(mcp.command || 'npx', mcp.args || ['-y', mcp.name], spawnOpts);
-  const process = {
-    child,
-    queue: [],
-    isReady: false,
-    pending: new Map(),
-  };
-
-  let buffer = '';
-  child.stdout.on('data', (data) => {
-    buffer += data.toString();
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const response = JSON.parse(line);
-        if (response.id && process.pending.has(response.id)) {
-          const callback = process.pending.get(response.id);
-          process.pending.delete(response.id);
-          callback(response);
-        }
-      } catch (err) {
-        console.error(`[MCP STDIO] Failed to parse stdio response:`, err.message);
-      }
-    }
-  });
-
-  child.stderr.on('data', (data) => {
-    console.error(`[MCP STDIO] stderr from ${mcp.name}:`, data.toString());
-  });
-
-  child.on('error', (err) => {
-    console.error(`[MCP STDIO] stdio MCP ${mcp.name} error:`, err.message);
-    stdioMcpProcesses.delete(mcp.id);
-  });
-
-  stdioMcpProcesses.set(mcp.id, process);
-
-  const initId = messageIdCounter++;
-  await new Promise((resolve) => {
-    const timeout = setTimeout(() => {
-      console.warn(`[MCP STDIO] Initialize timeout for ${mcp.name}`);
-      resolve();
-    }, 5000);
-
-    process.pending.set(initId, (response) => {
-      clearTimeout(timeout);
-      if (response.result) {
-        console.error(`[MCP STDIO] Initialized ${mcp.name} successfully`);
-        process.isReady = true;
-      } else {
-        console.warn(`[MCP STDIO] Initialize response error:`, response.error);
-        process.isReady = true;
-      }
-      resolve();
-    });
-
-    const initRequest = {
-      jsonrpc: '2.0',
-      id: initId,
-      method: 'initialize',
-      params: {
-        protocolVersion: '2024-11-05',
-        capabilities: {},
-        clientInfo: {
-          name: 'MCP STDIO Namespace',
-          version: '1.0.0',
-        },
-      },
-    };
-
-    process.child.stdin.write(JSON.stringify(initRequest) + '\n');
-  });
-
-  return process;
-}
-
-async function callStdioMcp(mcp, toolName, arguments_) {
-  const process = await getOrSpawnStdioMcp(mcp);
-  const id = messageIdCounter++;
-
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      process.pending.delete(id);
-      reject(new Error(`stdio MCP ${mcp.name} timed out`));
-    }, 120000);
-
-    process.pending.set(id, (response) => {
-      clearTimeout(timeout);
-      resolve(response);
-    });
-
-    const request = {
-      jsonrpc: '2.0',
-      id,
-      method: 'tools/call',
-      params: {
-        name: toolName,
-        arguments: arguments_,
-      },
-    };
-
-    process.child.stdin.write(JSON.stringify(request) + '\n');
-  });
-}
-
-async function callHttpMcp(mcp, toolName, arguments_) {
-  const host = mcp.containerName || 'localhost';
-  const url = `http://${host}:${mcp.port}/mcp`;
+async function callBackendStdioMcp(mcp, toolName, arguments_, id) {
+  const url = `http://${BACKEND_HOST}/api/mcp/inspect/${mcp.id}`;
   const body = JSON.stringify({
     jsonrpc: '2.0',
-    id: 1,
+    id,
     method: 'tools/call',
     params: {
       name: toolName,
       arguments: arguments_,
     },
   });
+
+  console.error(`[MCP STDIO] Calling backend stdio MCP "${mcp.name}" (id: ${mcp.id})`);
 
   return new Promise((resolve, reject) => {
     const req = http.request(url, {
@@ -290,7 +160,7 @@ async function callHttpMcp(mcp, toolName, arguments_) {
       res.on('end', () => {
         try {
           const response = JSON.parse(data);
-          console.error(`[MCP STDIO] Got response from HTTP MCP ${mcp.name}`);
+          console.error(`[MCP STDIO] Got response from backend stdio MCP ${mcp.name}`);
           resolve(response);
         } catch (err) {
           reject(new Error(`Failed to parse response from ${mcp.name}`));
@@ -299,12 +169,12 @@ async function callHttpMcp(mcp, toolName, arguments_) {
     });
 
     req.on('error', (err) => {
-      reject(new Error(`HTTP request to ${mcp.name} failed: ${err.message}`));
+      reject(new Error(`Backend request to ${mcp.name} failed: ${err.message}`));
     });
 
     req.on('timeout', () => {
       req.destroy();
-      reject(new Error(`HTTP request to ${mcp.name} timed out`));
+      reject(new Error(`Backend request to ${mcp.name} timed out`));
     });
 
     req.write(body);
@@ -312,7 +182,60 @@ async function callHttpMcp(mcp, toolName, arguments_) {
   });
 }
 
-async function forwardToolCallToMcp(toolName, arguments_) {
+async function callHttpMcp(mcp, toolName, arguments_, id) {
+  const host = mcp.containerName || 'localhost';
+  const url = `http://${host}:${mcp.port}/mcp`;
+  const body = JSON.stringify({
+    jsonrpc: '2.0',
+    id,
+    method: 'tools/call',
+    params: {
+      name: toolName,
+      arguments: arguments_,
+    },
+  });
+
+  console.error(`[MCP STDIO] Calling HTTP MCP "${mcp.name}" at ${host}:${mcp.port} (containerName: ${mcp.containerName}, id: ${mcp.id})`);
+
+  return new Promise((resolve, reject) => {
+    const req = http.request(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+      timeout: 30000,
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const response = JSON.parse(data);
+          console.error(`[MCP STDIO] Got response from HTTP MCP ${mcp.name} via ${host}:${mcp.port}`);
+          resolve(response);
+        } catch (err) {
+          reject(new Error(`Failed to parse response from ${mcp.name}`));
+        }
+      });
+    });
+
+    req.on('error', (err) => {
+      const errMsg = `${err.code || 'UNKNOWN'}: ${err.message}`;
+      console.error(`[MCP STDIO] HTTP error for ${mcp.name}: ${errMsg}`);
+      reject(new Error(`HTTP request to ${mcp.name} via ${host}:${mcp.port} failed: ${errMsg}`));
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error(`HTTP request to ${mcp.name} via ${host}:${mcp.port} timed out after 30s`));
+    });
+
+    req.write(body);
+    req.end();
+  });
+}
+
+async function forwardToolCallToMcp(toolName, arguments_, id) {
   console.error(`[MCP STDIO] Forwarding tool call: ${toolName}`);
 
   for (const mcp of enabledMcpsList) {
@@ -321,9 +244,9 @@ async function forwardToolCallToMcp(toolName, arguments_) {
     try {
       let response;
       if (mcp.transport === 'stdio') {
-        response = await callStdioMcp(mcp, toolName, arguments_);
+        response = await callBackendStdioMcp(mcp, toolName, arguments_, id);
       } else {
-        response = await callHttpMcp(mcp, toolName, arguments_);
+        response = await callHttpMcp(mcp, toolName, arguments_, id);
       }
 
       if (response.result?.content?.[0]?.text?.includes('not found')) {
@@ -398,7 +321,7 @@ async function handleMcpRequest(payload) {
         };
       }
 
-      const mcpResponse = await forwardToolCallToMcp(toolName, params?.arguments || {});
+      const mcpResponse = await forwardToolCallToMcp(toolName, params?.arguments || {}, id);
       return {
         jsonrpc,
         id,

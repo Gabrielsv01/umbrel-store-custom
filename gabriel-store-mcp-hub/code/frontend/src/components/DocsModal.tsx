@@ -180,6 +180,68 @@ const ENDPOINT_SECTIONS: EndpointSection[] = [
       },
     ],
   },
+  {
+    title: 'Custom Tools',
+    endpoints: [
+      {
+        method: 'POST',
+        path: '/api/custom-tools/validate',
+        description: 'Valida uma definição de ferramenta customizada.',
+        exampleTemplate:
+          'curl -sS -X POST http://localhost:5146/api/custom-tools/validate -H \'Content-Type: application/json\' -d \'{"name":"my-tool","description":"A custom tool","command":"node tool.js"}\'',
+      },
+      {
+        method: 'POST',
+        path: '/api/custom-tools/deploy',
+        description: 'Deploy de uma nova ferramenta customizada como container.',
+        exampleTemplate:
+          'curl -sS -X POST http://localhost:5146/api/custom-tools/deploy -H \'Content-Type: application/json\' -d \'{"name":"my-tool","description":"A custom tool","command":"node tool.js","image":"node:22-bookworm"}\'',
+      },
+      {
+        method: 'PUT',
+        path: '/api/custom-tools/:containerId',
+        description: 'Atualiza uma ferramenta customizada existente.',
+        exampleTemplate:
+          'curl -sS -X PUT http://localhost:5146/api/custom-tools/SEU_ID -H \'Content-Type: application/json\' -d \'{"name":"my-tool","description":"Updated tool","command":"node tool.js"}\'',
+      },
+    ],
+  },
+  {
+    title: 'Namespaces',
+    endpoints: [
+      {
+        method: 'POST',
+        path: '/api/namespaces/deploy',
+        description: 'Deploy de um novo namespace como MCP agregador.',
+        exampleTemplate:
+          'curl -sS -X POST http://localhost:5146/api/namespaces/deploy -H \'Content-Type: application/json\' -d \'{"namespace":{"id":"ns_123","name":"My Namespace"},"enabledMcps":[]}\'',
+      },
+      {
+        method: 'PUT',
+        path: '/api/namespaces/:namespaceId',
+        description: 'Atualiza um namespace existente.',
+        exampleTemplate:
+          'curl -sS -X PUT http://localhost:5146/api/namespaces/SEU_ID -H \'Content-Type: application/json\' -d \'{"namespace":{"id":"ns_123","name":"Updated Namespace"},"enabledMcps":[]}\'',
+      },
+      {
+        method: 'DELETE',
+        path: '/api/namespaces/:namespaceId',
+        description: 'Remove um namespace.',
+        exampleTemplate: 'curl -sS -X DELETE http://localhost:5146/api/namespaces/SEU_ID',
+      },
+    ],
+  },
+  {
+    title: 'Debug',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/api/mcp/:id/debug',
+        description: 'Retorna informações detalhadas de debug para um container MCP.',
+        exampleTemplate: 'curl -sS http://localhost:5146/api/mcp/SEU_ID/debug',
+      },
+    ],
+  },
 ];
 
 export default function DocsModal({ onClose }: DocsModalProps) {

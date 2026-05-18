@@ -15,6 +15,7 @@ import { registerMcpToolsRoutes } from './routes/mcpTools.js'
 import { registerCatalogRoutes } from './routes/catalog.js'
 import { registerNamespaceRoutes } from './routes/namespaces.js'
 import { registerCustomToolsRoutes } from './routes/customTools.js'
+import { registerMcpDebugRoutes } from './routes/mcpDebug.js'
 import { registerSharedFilesRoutes } from './routes/sharedFiles.js'
 import {
   buildContainerOptions,
@@ -228,6 +229,11 @@ registerCustomToolsRoutes(fastify, {
   docker,
   loadData,
   saveData,
+  mcpLabel: MCP_LABEL,
+})
+registerMcpDebugRoutes(fastify, {
+  docker,
+  loadData,
   mcpLabel: MCP_LABEL,
 })
 registerSharedFilesRoutes(fastify, {
