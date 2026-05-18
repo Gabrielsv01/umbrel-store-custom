@@ -163,7 +163,7 @@ custom_mcp_ids: ["short_id_1", "short_id_2"]
 ```json
 {
   "short_id_1": {
-    "name": "Research Tools (custom)",
+    "name": "Research Tools ",
     "isCustomNamespace": true,
     "enabledMcps": ["id1", "id2"],
     "env": { "ENABLED_MCPS": "..." }

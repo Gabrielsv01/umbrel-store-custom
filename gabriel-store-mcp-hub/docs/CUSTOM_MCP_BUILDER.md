@@ -116,7 +116,7 @@ A página **MCP Builder** permite criar servidores MCP customizados que combinam
      ```json
      {
        "container_short_id": {
-         "name": "Research Tools (custom)",
+         "name": "Research Tools",
          "isCustomNamespace": true,
          "namespaceId": "ns_timestamp",
          "enabledMcps": ["id1", "id2"],

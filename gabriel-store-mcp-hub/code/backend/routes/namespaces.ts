@@ -158,7 +158,7 @@ async function deployNamespaceContainer(
   }
 
   updatedData[finalShortId] = {
-    name: `${namespace.name} (custom)`,
+    name: `${namespace.name}`,
     image: 'node:20-alpine',
     command: 'node /app/mcp-wrapper-server.js',
     env: mcpConfig,
