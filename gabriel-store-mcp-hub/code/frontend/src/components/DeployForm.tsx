@@ -137,11 +137,12 @@ export default function DeployForm({
       const env = Object.fromEntries(
         envPairs
           .filter((pair) => pair.key.trim())
+          .filter((pair) => !pair.secret || pair.value.trim())
           .map((pair) => [pair.key.trim(), pair.value])
       );
 
       const secretKeys = envPairs
-        .filter((pair) => pair.key.trim() && pair.secret)
+        .filter((pair) => pair.key.trim() && pair.secret && pair.value.trim())
         .map((pair) => pair.key.trim());
 
       const runtime = {
@@ -305,7 +306,7 @@ export default function DeployForm({
                     onChange={(event) =>
                       updateEnv(index, 'value', event.target.value)
                     }
-                    placeholder="value"
+                    placeholder={pair.secret && !pair.value ? '[Secret stored - not displayed]' : 'value'}
                     type={pair.secret ? 'password' : 'text'}
                     className="input flex-1 font-mono text-xs"
                   />
