@@ -7,6 +7,7 @@ export interface ImageRecord {
   inUse: boolean;
   containersUsing?: number;
   isDangling?: boolean;
+  platform?: string;
 }
 
 export interface VolumeRecord {

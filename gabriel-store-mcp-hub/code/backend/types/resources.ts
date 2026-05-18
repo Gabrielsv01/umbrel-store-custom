@@ -2,10 +2,12 @@ import type Docker from 'dockerode'
 
 export interface PullImageBody {
   image: string
+  platform?: string
 }
 
 export interface PullImageQuery {
   image?: string
+  platform?: string
 }
 
 export interface DockerImageSummary {
@@ -17,11 +19,14 @@ export interface DockerImageSummary {
   isDangling: boolean
   inUse: boolean
   containersUsing: number
+  platform?: string
 }
 
 export interface ImageRoutesDeps {
   docker: Docker
-  pullImage: (image: string) => Promise<void>
+  pullImage: (image: string, platform?: string) => Promise<void>
+  loadImagePlatforms: () => Record<string, string>
+  recordImagePlatform: (imageRef: string, platform?: string) => void
 }
 
 export interface DockerVolumeSummary {

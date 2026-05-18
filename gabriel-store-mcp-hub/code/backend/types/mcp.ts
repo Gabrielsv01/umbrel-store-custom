@@ -6,6 +6,7 @@ export interface McpMeta {
   name: string
   image: string
   command?: string
+  platform?: string
   env?: Record<string, string>
   secretKeys?: string[]
   port?: number | string
@@ -29,6 +30,7 @@ export interface DeployBody {
   name: string
   image: string
   command?: string
+  platform?: string
   env?: Record<string, string>
   secretKeys?: string[]
   port?: number | string
@@ -40,6 +42,7 @@ export interface UpdateBody {
   name: string
   image: string
   command?: string
+  platform?: string
   env?: Record<string, string>
   secretKeys?: string[]
   port?: number | string

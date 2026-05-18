@@ -34,6 +34,7 @@ export default function ImagesModal({
 }: ImagesModalProps) {
   const [query, setQuery] = useState('');
   const [pullRef, setPullRef] = useState('');
+  const [platform, setPlatform] = useState('');
 
   const filteredImages = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -82,8 +83,17 @@ export default function ImagesModal({
               placeholder="mcp/wikipedia-mcp:latest"
               className="input max-w-xl"
             />
+            <input
+              value={platform}
+              onChange={(event) => setPlatform(event.target.value)}
+              placeholder="linux/arm64 (optional)"
+              className="input max-w-xs text-xs"
+            />
             <button
-              onClick={() => void onPull(pullRef, () => setPullRef(''))}
+              onClick={() => void onPull(pullRef, platform, () => {
+                setPullRef('');
+                setPlatform('');
+              })}
               disabled={pulling || !pullRef.trim()}
               className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
             >
@@ -164,9 +174,18 @@ export default function ImagesModal({
                   {filteredImages.map((image) => (
                     <tr key={image.id}>
                       <td className="px-3 py-2 text-xs text-gray-200">
-                        {image.tags.length > 0
-                          ? image.tags.join(', ')
-                          : '<none>'}
+                        <div className="flex flex-col gap-1">
+                          <div>
+                            {image.tags.length > 0
+                              ? image.tags.join(', ')
+                              : '<none>'}
+                          </div>
+                          {image.platform && (
+                            <span className="inline-flex w-fit rounded-full bg-purple-500/20 px-2 py-0.5 text-xs text-purple-300">
+                              🔷 {image.platform}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-2 font-mono text-xs text-gray-400">
                         {image.shortId}

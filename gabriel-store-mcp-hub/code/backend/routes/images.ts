@@ -8,7 +8,7 @@ import type {
 } from '../types/resources.js'
 
 export function registerImageRoutes(fastify: FastifyInstance, deps: ImageRoutesDeps): void {
-  const { docker, pullImage } = deps
+  const { docker, pullImage, loadImagePlatforms, recordImagePlatform } = deps
 
   fastify.get('/api/images', async () => {
     const [images, containers] = await Promise.all([
@@ -22,11 +22,14 @@ export function registerImageRoutes(fastify: FastifyInstance, deps: ImageRoutesD
       usageCountByImageId.set(imageId, (usageCountByImageId.get(imageId) ?? 0) + 1)
     }
 
+    const imagePlatforms = loadImagePlatforms()
+
     const result: DockerImageSummary[] = images
       .map((image) => {
         const tags = (image.RepoTags ?? []).filter((tag) => tag !== '<none>:<none>')
         const containersUsing = usageCountByImageId.get(image.Id) ?? 0
         const shortId = image.Id.replace(/^sha256:/, '').slice(0, 12)
+        const platform = tags.length > 0 ? imagePlatforms[tags[0]!.toLowerCase()] : undefined
         return {
           id: image.Id,
           shortId,
@@ -36,6 +39,7 @@ export function registerImageRoutes(fastify: FastifyInstance, deps: ImageRoutesD
           isDangling: tags.length === 0,
           inUse: containersUsing > 0,
           containersUsing,
+          platform,
         }
       })
       .sort((a, b) => b.created - a.created)
@@ -45,18 +49,20 @@ export function registerImageRoutes(fastify: FastifyInstance, deps: ImageRoutesD
 
   fastify.post<{ Body: PullImageBody }>('/api/images/pull', async (req, reply) => {
     const image = req.body?.image?.trim()
+    const platform = req.body?.platform?.trim()
     if (!image) {
       return reply.code(400).send({ error: 'image is required' })
     }
 
-    await pullImage(image)
-    return { ok: true, image }
+    await pullImage(image, platform)
+    return { ok: true, image, platform }
   })
 
   fastify.get<{ Querystring: PullImageQuery }>(
     '/api/images/pull/stream',
     async (req, reply) => {
       const image = req.query?.image?.trim()
+      const platform = req.query?.platform?.trim()
       if (!image) {
         return reply.code(400).send({ error: 'image is required' })
       }
@@ -83,7 +89,8 @@ export function registerImageRoutes(fastify: FastifyInstance, deps: ImageRoutesD
       })
 
       try {
-        stream = await docker.pull(image)
+        const options = platform ? { platform } : {}
+        stream = await docker.pull(image, options)
         send({ type: 'start', image })
 
         await new Promise<void>((resolve, reject) => {
@@ -91,6 +98,7 @@ export function registerImageRoutes(fastify: FastifyInstance, deps: ImageRoutesD
             stream as NodeJS.ReadableStream,
             (err) => {
               if (err) return reject(err)
+              recordImagePlatform(image, platform)
               resolve()
             },
             (event) => {

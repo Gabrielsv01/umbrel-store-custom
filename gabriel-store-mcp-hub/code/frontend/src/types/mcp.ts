@@ -49,6 +49,7 @@ export interface DeployPayload {
   transport: McpTransport;
   command?: string;
   port?: number;
+  platform?: string;
   env: JsonRecord;
   secretKeys?: string[];
   runtime: McpRuntime;

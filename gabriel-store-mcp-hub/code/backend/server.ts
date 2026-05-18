@@ -33,6 +33,7 @@ const docker = new Docker({ socketPath: '/var/run/docker.sock' })
 const MCP_LABEL = 'gabriel.mcp-hub'
 const DATA_DIR = process.env.DATA_DIR ?? '/data'
 const DATA_FILE = path.join(DATA_DIR, 'mcps.json')
+const IMAGE_PLATFORMS_FILE = path.join(DATA_DIR, 'image-platforms.json')
 const STATIC_DIR = process.env.STATIC_DIR ?? path.resolve(process.cwd(), 'public')
 const HAS_STATIC = fs.existsSync(STATIC_DIR)
 const INDEX_FILE = path.join(STATIC_DIR, 'index.html')
@@ -57,6 +58,31 @@ function saveData(data: McpRecord): void {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2))
 }
 
+function loadImagePlatforms(): Record<string, string> {
+  try {
+    return JSON.parse(fs.readFileSync(IMAGE_PLATFORMS_FILE, 'utf8')) as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+
+function saveImagePlatforms(data: Record<string, string>): void {
+  fs.writeFileSync(IMAGE_PLATFORMS_FILE, JSON.stringify(data, null, 2))
+}
+
+function recordImagePlatform(imageRef: string, platform?: string): void {
+  if (!platform?.trim()) return
+  try {
+    const platforms = loadImagePlatforms()
+    const key = imageRef.toLowerCase()
+    platforms[key] = platform.trim()
+    saveImagePlatforms(platforms)
+    console.error(`[recordImagePlatform] Recorded: ${key} = ${platform}`)
+  } catch (err) {
+    console.error('[recordImagePlatform] Error:', err instanceof Error ? err.message : err)
+  }
+}
+
 function isImageMissingError(err: unknown): boolean {
   const maybeError = err as { statusCode?: number; message?: string }
   return (
@@ -66,13 +92,17 @@ function isImageMissingError(err: unknown): boolean {
   )
 }
 
-async function pullImage(image: string): Promise<void> {
-  const stream = await docker.pull(image)
+async function pullImage(image: string, platform?: string): Promise<void> {
+  console.error(`[pullImage] Starting pull: image=${image}, platform=${platform}`)
+  const options = platform ? { platform } : {}
+  const stream = await docker.pull(image, options)
   await new Promise<void>((resolve, reject) => {
     docker.modem.followProgress(
       stream,
       (err) => {
+        console.error(`[pullImage] Finished: image=${image}, platform=${platform}, error=${err ? 'yes' : 'no'}`)
         if (err) return reject(err)
+        recordImagePlatform(image, platform)
         resolve()
       },
       () => undefined,
@@ -80,12 +110,12 @@ async function pullImage(image: string): Promise<void> {
   })
 }
 
-async function ensureImageAvailable(image: string): Promise<void> {
+async function ensureImageAvailable(image: string, platform?: string): Promise<void> {
   try {
     await docker.getImage(image).inspect()
   } catch (err) {
     if (!isImageMissingError(err)) throw err
-    await pullImage(image)
+    await pullImage(image, platform)
   }
 }
 
@@ -193,7 +223,7 @@ fastify.get('/api/mcps', async () => {
   })
 })
 
-registerImageRoutes(fastify, { docker, pullImage })
+registerImageRoutes(fastify, { docker, pullImage, loadImagePlatforms, recordImagePlatform })
 registerVolumeRoutes(fastify, { docker })
 registerStdioRoutes(fastify, {
   resolveStdioContainer,
@@ -243,14 +273,14 @@ registerSharedFilesRoutes(fastify, {
 // ─── POST /api/deploy ─────────────────────────────────────────────────────────
 
 fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
-  const { name, image, command, env = {}, secretKeys, port, transport = 'http', runtime } = req.body ?? {}
+  const { name, image, command, platform, env = {}, secretKeys, port, transport = 'http', runtime } = req.body ?? {}
 
   if (!name?.trim() || !image?.trim()) {
     return reply.code(400).send({ error: 'name and image are required' })
   }
 
-  console.error(`[deploy] creating container: name=${name}, image=${image}, command=${command}, transport=${transport}`)
-  await ensureImageAvailable(image.trim())
+  console.error(`[deploy] creating container: name=${name}, image=${image}, platform=${platform}, command=${command}, transport=${transport}`)
+  await ensureImageAvailable(image.trim(), platform?.trim())
 
   const normalizedRuntime = normalizeRuntimeConfig(runtime)
 
@@ -278,6 +308,7 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
     name: name.trim(),
     image: image.trim(),
     command,
+    platform: platform?.trim(),
     env,
     secretKeys: secretKeys && secretKeys.length > 0 ? secretKeys : undefined,
     port,
@@ -294,13 +325,13 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
 fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
   '/api/mcps/:id',
   async (req, reply) => {
-    const { name, image, command, env = {}, secretKeys, port, transport = 'http', runtime } = req.body ?? {}
+    const { name, image, command, platform, env = {}, secretKeys, port, transport = 'http', runtime } = req.body ?? {}
 
     if (!name?.trim() || !image?.trim()) {
       return reply.code(400).send({ error: 'name and image are required' })
     }
 
-    await ensureImageAvailable(image.trim())
+    await ensureImageAvailable(image.trim(), platform?.trim())
 
     const all = await docker.listContainers({
       all: true,
@@ -343,6 +374,7 @@ fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
       name: name.trim(),
       image: image.trim(),
       command,
+      platform: platform?.trim(),
       env,
       secretKeys: secretKeys && secretKeys.length > 0 ? secretKeys : undefined,
       port,

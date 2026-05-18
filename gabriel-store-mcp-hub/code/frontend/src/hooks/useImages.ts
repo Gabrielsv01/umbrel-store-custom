@@ -61,7 +61,7 @@ export function useImages() {
   );
 
   const handlePullImage = useCallback(
-    async (imageRef: string, onSuccess?: () => void) => {
+    async (imageRef: string, platform?: string, onSuccess?: () => void) => {
       const ref = imageRef.trim();
       if (!ref) return;
 
@@ -82,9 +82,11 @@ export function useImages() {
 
       try {
         await new Promise<void>((resolve, reject) => {
-          const source = new EventSource(
-            `/api/images/pull/stream?image=${encodeURIComponent(ref)}`
-          );
+          let url = `/api/images/pull/stream?image=${encodeURIComponent(ref)}`;
+          if (platform?.trim()) {
+            url += `&platform=${encodeURIComponent(platform.trim())}`;
+          }
+          const source = new EventSource(url);
 
           source.onmessage = (event) => {
             try {

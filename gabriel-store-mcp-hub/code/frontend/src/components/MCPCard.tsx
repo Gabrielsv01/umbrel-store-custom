@@ -311,6 +311,11 @@ export default function MCPCard({
             />
             {mcp.status}
           </span>
+          {mcp.meta?.platform && (
+            <span className="rounded-full bg-purple-500/15 px-2 py-0.5 text-xs text-purple-300">
+              🔷 {mcp.meta.platform}
+            </span>
+          )}
           <button
             ref={buttonRef}
             type="button"

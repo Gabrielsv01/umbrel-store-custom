@@ -63,6 +63,7 @@ export default function DeployForm({
 
   const [name, setName] = useState(initialValues?.name ?? '');
   const [image, setImage] = useState(initialValues?.image ?? '');
+  const [platform, setPlatform] = useState(initialValues?.platform ?? '');
   const [transport, setTransport] = useState<
     'http' | 'stdio' | 'streamable-http'
   >(initialValues?.transport ?? 'http');
@@ -163,6 +164,7 @@ export default function DeployForm({
       await onDeploy({
         name: name.trim(),
         image: image.trim(),
+        platform: platform.trim() || undefined,
         transport,
         command: command.trim() || undefined,
         port: transport !== 'stdio' && port ? Number(port) : undefined,
@@ -220,6 +222,15 @@ export default function DeployForm({
                   <option key={suggestion} value={suggestion} />
                 ))}
               </datalist>
+            </Field>
+
+            <Field label="Platform (optional)">
+              <input
+                value={platform}
+                onChange={(event) => setPlatform(event.target.value)}
+                placeholder="linux/arm64"
+                className="input"
+              />
             </Field>
 
             <Field label="Transport">
