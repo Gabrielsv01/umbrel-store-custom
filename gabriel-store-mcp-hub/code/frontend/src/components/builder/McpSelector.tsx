@@ -8,8 +8,7 @@ interface McpSelectorProps {
 }
 
 function isCustomToolsMcp(mcp: McpContainer): boolean {
-  const lowerName = mcp.name.toLowerCase();
-  return lowerName.includes('custom') || lowerName.includes('tools');
+  return mcp.meta?.isCustomToolsMcp === true;
 }
 
 function renderMcpItem(

@@ -264,13 +264,17 @@ export default function MCPBuilder({
 
           <McpSelector
             namespace={selectedNamespace}
-            availableMcps={mcps}
+            availableMcps={mcps.filter(
+              (mcp) => !mcp.meta?.isCustomNamespace
+            )}
             onToggleMcp={handleToggleMcp}
           />
 
           <BuilderToolsManager
             namespace={selectedNamespace}
-            availableMcps={mcps}
+            availableMcps={mcps.filter(
+              (mcp) => !mcp.meta?.isCustomNamespace
+            )}
             onToggleTool={handleToggleTool}
           />
 

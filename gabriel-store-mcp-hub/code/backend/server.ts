@@ -204,6 +204,14 @@ fastify.get('/api/mcps', async () => {
     }
   }
 
+  // Migration: mark containers with enabledMcps as custom namespaces
+  for (const [shortId, meta] of Object.entries(stored)) {
+    if (Array.isArray(meta.enabledMcps) && meta.enabledMcps.length > 0 && !meta.isCustomNamespace) {
+      meta.isCustomNamespace = true
+      dataChanged = true
+    }
+  }
+
   if (dataChanged) {
     saveData(stored)
   }
