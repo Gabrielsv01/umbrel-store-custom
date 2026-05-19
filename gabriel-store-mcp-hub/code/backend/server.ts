@@ -273,7 +273,7 @@ registerSharedFilesRoutes(fastify, {
 // ─── POST /api/deploy ─────────────────────────────────────────────────────────
 
 fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
-  const { name, image, command, platform, env = {}, secretKeys, port, transport = 'http', runtime } = req.body ?? {}
+  const { name, image, command, platform, env = {}, secretKeys, port, transport = 'http', runtime, httpHeaders } = req.body ?? {}
 
   if (!name?.trim() || !image?.trim()) {
     return reply.code(400).send({ error: 'name and image are required' })
@@ -302,6 +302,14 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
   await container.start()
   console.error(`[deploy] container started: ${container.id.slice(0, 12)}`)
 
+  try {
+    const mcpHubNetwork = docker.getNetwork('mcp-hub-network')
+    await mcpHubNetwork.connect({ Container: container.id })
+    console.error(`[deploy] connected container to mcp-hub-network`)
+  } catch (err) {
+    console.error(`[deploy] failed to connect to network:`, err instanceof Error ? err.message : String(err))
+  }
+
   const shortId = container.id.slice(0, 12)
   const data = loadData()
   data[shortId] = {
@@ -314,6 +322,8 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
     port,
     transport,
     runtime: normalizedRuntime,
+    containerName: name.trim(),
+    httpHeaders: httpHeaders && Object.keys(httpHeaders).length > 0 ? httpHeaders : undefined,
   }
   saveData(data)
 
@@ -325,7 +335,7 @@ fastify.post<{ Body: DeployBody }>('/api/deploy', async (req, reply) => {
 fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
   '/api/mcps/:id',
   async (req, reply) => {
-    const { name, image, command, platform, env = {}, secretKeys, port, transport = 'http', runtime } = req.body ?? {}
+    const { name, image, command, platform, env = {}, secretKeys, port, transport = 'http', runtime, httpHeaders } = req.body ?? {}
 
     if (!name?.trim() || !image?.trim()) {
       return reply.code(400).send({ error: 'name and image are required' })
@@ -366,6 +376,14 @@ fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
     await container.start()
     console.error(`[update] container started: ${container.id.slice(0, 12)}`)
 
+    try {
+      const mcpHubNetwork = docker.getNetwork('mcp-hub-network')
+      await mcpHubNetwork.connect({ Container: container.id })
+      console.error(`[update] connected container to mcp-hub-network`)
+    } catch (err) {
+      console.error(`[update] failed to connect to network:`, err instanceof Error ? err.message : String(err))
+    }
+
     const newShortId = container.id.slice(0, 12)
     const data = loadData()
     const oldMeta = data[oldShortId]
@@ -381,6 +399,8 @@ fastify.put<{ Params: { id: string }; Body: UpdateBody }>(
       transport,
       runtime: normalizedRuntime,
       disabledTools: oldMeta?.disabledTools,
+      containerName: name.trim(),
+      httpHeaders: httpHeaders && Object.keys(httpHeaders).length > 0 ? httpHeaders : undefined,
     }
     saveData(data)
 

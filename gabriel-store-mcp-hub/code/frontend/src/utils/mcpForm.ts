@@ -16,5 +16,6 @@ export function mapMcpToEditValues(mcp: McpContainer): EditMcpValues {
     env: mcp.meta?.env || {},
     secretKeys: mcp.meta?.secretKeys,
     runtime: mcp.meta?.runtime || {},
+    httpHeaders: mcp.meta?.httpHeaders || {},
   };
 }

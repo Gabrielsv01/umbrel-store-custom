@@ -20,6 +20,7 @@ export interface McpMeta {
   isCustomToolsMcp?: boolean
   containerName?: string
   customToolDefinition?: Record<string, unknown>
+  httpHeaders?: Record<string, string>
 }
 
 export interface McpRecord {
@@ -36,6 +37,7 @@ export interface DeployBody {
   port?: number | string
   transport?: McpTransport
   runtime?: McpRuntimeConfig
+  httpHeaders?: Record<string, string>
 }
 
 export interface UpdateBody {
@@ -48,6 +50,7 @@ export interface UpdateBody {
   port?: number | string
   transport?: McpTransport
   runtime?: McpRuntimeConfig
+  httpHeaders?: Record<string, string>
 }
 
 export interface ActionBody {

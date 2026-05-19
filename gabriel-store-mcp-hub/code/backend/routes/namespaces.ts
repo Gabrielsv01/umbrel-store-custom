@@ -71,7 +71,7 @@ async function deployNamespaceContainer(
 
   const mcpConfigs = enabledMcps.map((m) => {
     const mcpData = data[m.id] as any
-    return {
+    const config: any = {
       id: m.id,
       name: m.name,
       image: m.image,
@@ -81,6 +81,10 @@ async function deployNamespaceContainer(
       workingDir: mcpData?.runtime?.workingDir,
       containerName: mcpData?.containerName,
     }
+    if (mcpData?.httpHeaders && typeof mcpData.httpHeaders === 'object') {
+      config.httpHeaders = mcpData.httpHeaders
+    }
+    return config
   })
 
   const mcpConfig = {
@@ -168,6 +172,7 @@ async function deployNamespaceContainer(
     namespaceId: namespace.id,
     enabledMcps: enabledMcps.map((m) => m.id),
     disabledTools: namespace.disabledTools && namespace.disabledTools.length > 0 ? namespace.disabledTools : undefined,
+    containerName,
   }
   saveData(updatedData)
 

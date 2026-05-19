@@ -32,6 +32,7 @@ export interface McpMeta {
   enabledMcps?: string[];
   isCustomToolsMcp?: boolean;
   customToolDefinition?: Record<string, unknown>;
+  httpHeaders?: JsonRecord;
 }
 
 export interface McpContainer {
@@ -53,6 +54,7 @@ export interface DeployPayload {
   env: JsonRecord;
   secretKeys?: string[];
   runtime: McpRuntime;
+  httpHeaders?: JsonRecord;
 }
 
 export interface EditMcpValues extends DeployPayload {

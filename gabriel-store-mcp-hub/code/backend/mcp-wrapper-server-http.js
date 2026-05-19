@@ -87,7 +87,7 @@ async function fetchRealToolsFromBackend() {
   });
 }
 
-async function callHttpMcp(mcp, toolName, arguments_, id) {
+async function callHttpMcp(mcp, toolName, arguments_, id, requestHeaders = {}) {
   const host = mcp.containerName || 'localhost';
   const url = `http://${host}:${mcp.port}/mcp`;
   const body = JSON.stringify({
@@ -103,12 +103,35 @@ async function callHttpMcp(mcp, toolName, arguments_, id) {
   console.log(`[MCP HTTP] Calling HTTP MCP "${mcp.name}" at ${host}:${mcp.port} (containerName: ${mcp.containerName}, id: ${mcp.id})`);
 
   return new Promise((resolve, reject) => {
+    const headers = {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(body),
+    };
+
+    // 1. Add metadata headers (default values)
+    if (mcp.httpHeaders && typeof mcp.httpHeaders === 'object') {
+      Object.assign(headers, mcp.httpHeaders);
+    }
+
+    // 2. Merge headers from the original request (but exclude technical headers)
+    const technicalHeaders = new Set([
+      'host',
+      'connection',
+      'transfer-encoding',
+      'user-agent',
+      'accept-encoding',
+      'accept',
+    ]);
+
+    for (const [key, value] of Object.entries(requestHeaders)) {
+      if (!technicalHeaders.has(key.toLowerCase())) {
+        headers[key] = value;
+      }
+    }
+
     const req = http.request(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body),
-      },
+      headers,
       timeout: 30000,
     }, (res) => {
       let data = '';
@@ -188,7 +211,7 @@ async function callBackendStdioMcp(mcp, toolName, arguments_, id) {
   });
 }
 
-async function forwardToolCallToMcp(toolName, arguments_, id) {
+async function forwardToolCallToMcp(toolName, arguments_, id, requestHeaders = {}) {
   console.log(`[MCP HTTP] Forwarding tool call: ${toolName}`);
 
   for (const mcp of enabledMcpsList) {
@@ -199,7 +222,7 @@ async function forwardToolCallToMcp(toolName, arguments_, id) {
       if (mcp.transport === 'stdio') {
         response = await callBackendStdioMcp(mcp, toolName, arguments_, id);
       } else {
-        response = await callHttpMcp(mcp, toolName, arguments_, id);
+        response = await callHttpMcp(mcp, toolName, arguments_, id, requestHeaders);
       }
 
       if (response.result?.content?.[0]?.text?.includes('not found')) {
@@ -260,7 +283,7 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const payload = JSON.parse(body);
-        const response = await handleMcpRequest(payload);
+        const response = await handleMcpRequest(payload, req.headers);
         res.writeHead(200);
         res.end(JSON.stringify(response));
       } catch (error) {
@@ -283,7 +306,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-async function handleMcpRequest(payload) {
+async function handleMcpRequest(payload, requestHeaders = {}) {
   const { jsonrpc = '2.0', id, method, params } = payload;
 
   // Handle different MCP methods
@@ -328,7 +351,7 @@ async function handleMcpRequest(payload) {
         };
       }
 
-      const mcpResponse = await forwardToolCallToMcp(toolName, params?.arguments || {}, id);
+      const mcpResponse = await forwardToolCallToMcp(toolName, params?.arguments || {}, id, requestHeaders);
       return {
         jsonrpc,
         id,

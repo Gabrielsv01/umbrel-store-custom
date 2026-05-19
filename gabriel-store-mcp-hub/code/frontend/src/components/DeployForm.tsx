@@ -7,6 +7,11 @@ type EnvPair = {
   secret: boolean;
 };
 
+type HeaderPair = {
+  key: string;
+  value: string;
+};
+
 const IMAGE_SUGGESTIONS = [
   'alpine:3.20',
   'debian:bookworm-slim',
@@ -61,6 +66,14 @@ export default function DeployForm({
         }))
       : [{ key: '', value: '', secret: false }];
 
+  const initialHeaderPairs: HeaderPair[] =
+    initialValues?.httpHeaders && Object.keys(initialValues.httpHeaders).length > 0
+      ? Object.entries(initialValues.httpHeaders).map(([key, value]) => ({
+          key,
+          value: String(value ?? ''),
+        }))
+      : [{ key: '', value: '' }];
+
   const [name, setName] = useState(initialValues?.name ?? '');
   const [image, setImage] = useState(initialValues?.image ?? '');
   const [platform, setPlatform] = useState(initialValues?.platform ?? '');
@@ -106,6 +119,7 @@ export default function DeployForm({
     initialValues?.runtime?.shmSize ? String(initialValues.runtime.shmSize) : ''
   );
   const [envPairs, setEnvPairs] = useState<EnvPair[]>(initialEnvPairs);
+  const [headerPairs, setHeaderPairs] = useState<HeaderPair[]>(initialHeaderPairs);
   const [deploying, setDeploying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -124,6 +138,21 @@ export default function DeployForm({
     value: string | boolean
   ) =>
     setEnvPairs((pairs) =>
+      pairs.map((pair, pairIndex) =>
+        pairIndex === index ? { ...pair, [field]: value } : pair
+      )
+    );
+
+  const addHeader = () =>
+    setHeaderPairs((pairs) => [...pairs, { key: '', value: '' }]);
+  const removeHeader = (index: number) =>
+    setHeaderPairs((pairs) => pairs.filter((_, pairIndex) => pairIndex !== index));
+  const updateHeader = (
+    index: number,
+    field: keyof HeaderPair,
+    value: string
+  ) =>
+    setHeaderPairs((pairs) =>
       pairs.map((pair, pairIndex) =>
         pairIndex === index ? { ...pair, [field]: value } : pair
       )
@@ -161,6 +190,12 @@ export default function DeployForm({
         shmSize: shmSize.trim() || undefined,
       };
 
+      const httpHeaders = Object.fromEntries(
+        headerPairs
+          .filter((pair) => pair.key.trim())
+          .map((pair) => [pair.key.trim(), pair.value])
+      );
+
       await onDeploy({
         name: name.trim(),
         image: image.trim(),
@@ -171,6 +206,7 @@ export default function DeployForm({
         env,
         secretKeys: secretKeys.length > 0 ? secretKeys : undefined,
         runtime,
+        httpHeaders: Object.keys(httpHeaders).length > 0 ? httpHeaders : undefined,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Deploy failed';
@@ -333,6 +369,52 @@ export default function DeployForm({
                     <button
                       type="button"
                       onClick={() => removeEnv(index)}
+                      className="px-2 text-red-400 hover:text-red-300"
+                    >
+                      x
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-xs text-gray-400">
+                HTTP Headers (optional)
+              </span>
+              <button
+                type="button"
+                onClick={addHeader}
+                className="text-xs text-blue-400 hover:text-blue-300"
+              >
+                + Add
+              </button>
+            </div>
+            <div className="flex flex-col gap-2">
+              {headerPairs.map((pair, index) => (
+                <div key={index} className="flex gap-2">
+                  <input
+                    value={pair.key}
+                    onChange={(event) =>
+                      updateHeader(index, 'key', event.target.value)
+                    }
+                    placeholder="Header-Name"
+                    className="input flex-1 font-mono text-xs"
+                  />
+                  <input
+                    value={pair.value}
+                    onChange={(event) =>
+                      updateHeader(index, 'value', event.target.value)
+                    }
+                    placeholder="header-value"
+                    className="input flex-1 font-mono text-xs"
+                  />
+                  {headerPairs.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeHeader(index)}
                       className="px-2 text-red-400 hover:text-red-300"
                     >
                       x

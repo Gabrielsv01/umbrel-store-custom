@@ -330,14 +330,21 @@ async function handleHttpInspect(
         const url = `http://${host}:${port}${path}`
 
         try {
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            Accept: 'application/json, text/event-stream',
+          }
+
+          // Add custom headers from metadata (e.g., X-Tenant-ID for nocturnusai)
+          if (meta?.httpHeaders && typeof meta.httpHeaders === 'object') {
+            Object.assign(headers, meta.httpHeaders)
+          }
+
           const response = await fetchWithTimeout(
             url,
             {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json, text/event-stream',
-              },
+              headers,
               body: JSON.stringify(payload),
             },
             10000,

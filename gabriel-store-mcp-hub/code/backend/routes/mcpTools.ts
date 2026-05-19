@@ -85,7 +85,7 @@ async function fetchMcpTools(
   if (transport === 'stdio') {
     return fetchStdioMcpTools(container, createDockerMultiplexDecoder)
   } else if (transport === 'http' || transport === 'streamable-http') {
-    return fetchHttpMcpTools(container, port)
+    return fetchHttpMcpTools(container, port, meta)
   }
 
   return []
@@ -184,7 +184,7 @@ async function fetchStdioMcpTools(
   }
 }
 
-async function fetchHttpMcpTools(container: any, port: number): Promise<McpTool[]> {
+async function fetchHttpMcpTools(container: any, port: number, meta?: any): Promise<McpTool[]> {
   try {
     const hosts = await getContainerHosts(container, container.modem.socketPath ? undefined : 'localhost')
     const validHosts = hosts.filter(h => !h.includes(' '))
@@ -199,11 +199,18 @@ async function fetchHttpMcpTools(container: any, port: number): Promise<McpTool[
           params: {},
         }
 
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        }
+        if (meta?.httpHeaders && typeof meta.httpHeaders === 'object') {
+          Object.assign(headers, meta.httpHeaders)
+        }
+
         const response = await fetchWithTimeout(
           url,
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify(payload),
           },
           5000,
@@ -906,11 +913,18 @@ async function handleHttpTools(
           params: {},
         }
 
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        }
+        if (meta?.httpHeaders && typeof meta.httpHeaders === 'object') {
+          Object.assign(headers, meta.httpHeaders)
+        }
+
         const response = await fetchWithTimeout(
           url,
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify(payload),
           },
           5000,
