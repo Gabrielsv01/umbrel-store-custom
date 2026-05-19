@@ -14,6 +14,7 @@ import type {
   ValidateResponse,
   DeployResponse,
 } from '../types/customTools';
+import type { DockerBuildProgress, DockerBuildPayload } from '../types/dockerBuilder';
 
 type RequestOptions = RequestInit | undefined;
 
@@ -292,4 +293,55 @@ export async function updateCustomTool(
     },
     'Failed to update custom tool'
   ) as Promise<DeployResponse>;
+}
+
+// ─── Docker Build API ─────────────────────────────────────────────────────────
+
+export function buildDockerImageStream(
+  dockerfile: string,
+  imageName: string,
+  tag: string = 'latest',
+  buildArgs?: Record<string, string>,
+  platform?: string,
+  onMessage?: (data: DockerBuildProgress) => void,
+  onError?: (error: Error) => void
+): { close: () => void } {
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(dockerfile);
+  const binary = String.fromCharCode(...Array.from(bytes));
+  const dockerfileBase64 = btoa(binary);
+  const params = new URLSearchParams({
+    dockerfile: dockerfileBase64,
+    imageName,
+    tag,
+    ...(buildArgs && { buildArgs: JSON.stringify(buildArgs) }),
+    ...(platform && { platform }),
+  });
+
+  const source = new EventSource(`/api/docker/build/stream?${params}`);
+  let closed = false;
+
+  source.onmessage = (event) => {
+    if (closed) return;
+
+    try {
+      const data = JSON.parse(event.data) as DockerBuildProgress;
+      onMessage?.(data);
+    } catch {
+      onError?.(new Error('Failed to parse build progress'));
+    }
+  };
+
+  source.onerror = () => {
+    closed = true;
+    source.close();
+    onError?.(new Error('Build connection failed'));
+  };
+
+  return {
+    close: () => {
+      closed = true;
+      source.close();
+    },
+  };
 }

@@ -35,17 +35,28 @@ export default function ImagesModal({
   const [query, setQuery] = useState('');
   const [pullRef, setPullRef] = useState('');
   const [platform, setPlatform] = useState('');
+  const [showDangling, setShowDangling] = useState(false);
 
   const filteredImages = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return images;
+    let result = images;
 
-    return images.filter((image) => {
-      const tagsText = image.tags.join(' ').toLowerCase();
-      const idText = `${image.shortId} ${image.id}`.toLowerCase();
-      return tagsText.includes(term) || idText.includes(term);
-    });
-  }, [images, query]);
+    // Filter by query
+    const term = query.trim().toLowerCase();
+    if (term) {
+      result = result.filter((image) => {
+        const tagsText = image.tags.join(' ').toLowerCase();
+        const idText = `${image.shortId} ${image.id}`.toLowerCase();
+        return tagsText.includes(term) || idText.includes(term);
+      });
+    }
+
+    // Filter out dangling unless explicitly shown
+    if (!showDangling) {
+      result = result.filter((image) => !image.isDangling);
+    }
+
+    return result;
+  }, [images, query, showDangling]);
 
   const hasPercent = Number.isFinite(pullProgress?.percent);
 
@@ -140,9 +151,21 @@ export default function ImagesModal({
               placeholder="Search by image name/tag or id"
               className="input max-w-xl"
             />
-            <p className="text-xs text-gray-400">
-              Showing {filteredImages.length} of {images.length}
-            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowDangling(!showDangling)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  showDangling
+                    ? 'bg-yellow-600/30 text-yellow-300 hover:bg-yellow-600/40'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                {showDangling ? 'Hide' : 'Show'} Dangling
+              </button>
+              <p className="text-xs text-gray-400">
+                Showing {filteredImages.length} of {images.length}
+              </p>
+            </div>
           </div>
 
           {loading ? (

@@ -17,6 +17,7 @@ import { registerNamespaceRoutes } from './routes/namespaces.js'
 import { registerCustomToolsRoutes } from './routes/customTools.js'
 import { registerMcpDebugRoutes } from './routes/mcpDebug.js'
 import { registerSharedFilesRoutes } from './routes/sharedFiles.js'
+import { registerBuildImageRoutes } from './routes/buildImage.js'
 import {
   buildContainerOptions,
   normalizeRuntimeConfig,
@@ -232,6 +233,7 @@ fastify.get('/api/mcps', async () => {
 })
 
 registerImageRoutes(fastify, { docker, pullImage, loadImagePlatforms, recordImagePlatform })
+registerBuildImageRoutes(fastify, { docker })
 registerVolumeRoutes(fastify, { docker })
 registerStdioRoutes(fastify, {
   resolveStdioContainer,
@@ -454,12 +456,26 @@ fastify.post<{ Params: { id: string }; Body: ActionBody }>(
 // ─── GET /api/logs/:id (SSE) ──────────────────────────────────────────────────
 
 fastify.get<{ Params: { id: string } }>('/api/logs/:id', async (req, reply) => {
-  const all = await docker.listContainers({
-    all: true,
-    filters: JSON.stringify({ label: [`${MCP_LABEL}=true`] }),
-  })
-  const match = all.find((c) => c.Id.startsWith(req.params.id))
-  if (!match) return reply.code(404).send({ error: 'container not found' })
+  let containerId: string | undefined
+
+  // Handle special case for system/mcp-hub logs
+  if (req.params.id === 'system' || req.params.id === 'mcp-hub') {
+    const all = await docker.listContainers({ all: true })
+    const container = all.find((c) =>
+      c.Names.includes('/mcp-hub') || c.Id.startsWith('mcp-hub')
+    )
+    if (!container) return reply.code(404).send({ error: 'mcp-hub container not found' })
+    containerId = container.Id
+  } else {
+    // Regular MCP container logs
+    const all = await docker.listContainers({
+      all: true,
+      filters: JSON.stringify({ label: [`${MCP_LABEL}=true`] }),
+    })
+    const container = all.find((c) => c.Id.startsWith(req.params.id))
+    if (!container) return reply.code(404).send({ error: 'container not found' })
+    containerId = container.Id
+  }
 
   reply.hijack()
   reply.raw.writeHead(200, {
@@ -468,7 +484,7 @@ fastify.get<{ Params: { id: string } }>('/api/logs/:id', async (req, reply) => {
     Connection: 'keep-alive',
   })
 
-  const stream = await docker.getContainer(match.Id).logs({
+  const stream = await docker.getContainer(containerId).logs({
     follow: true,
     stdout: true,
     stderr: true,

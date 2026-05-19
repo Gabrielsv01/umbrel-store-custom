@@ -11,6 +11,7 @@ import MCPInspector from './components/MCPInspector';
 import ToolsManager from './components/ToolsManager';
 import MCPBuilder from './components/MCPBuilder';
 import CustomToolsCreator from './components/CustomToolsCreator';
+import DockerBuilder from './components/DockerBuilder';
 import { listImages } from './services/api';
 import { useMcps } from './hooks/useMcps';
 import { useImages } from './hooks/useImages';
@@ -27,6 +28,7 @@ export default function App() {
   const [view, setView] = useState<
     'hub' | 'inspector' | 'builder' | 'custom-tools'
   >('hub');
+  const [showDockerBuilder, setShowDockerBuilder] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
@@ -256,6 +258,8 @@ export default function App() {
               setView={setView}
               onOpenImages={openImages}
               onOpenVolumes={openVolumes}
+              onOpenDockerBuilder={() => setShowDockerBuilder(true)}
+              onOpenSystemLogs={() => setLogTarget({ id: 'system', name: 'MCP Hub System' })}
             />
           </div>
         </div>
@@ -292,15 +296,8 @@ export default function App() {
             ) : (
               <div className="space-y-8">
                 {(() => {
-                  const customNamespaceIds = new Set(
-                    JSON.parse(localStorage.getItem('custom_mcp_ids') || '[]')
-                  );
-                  const customMcps = mcps.filter((m) =>
-                    customNamespaceIds.has(m.meta?.namespaceId)
-                  );
-                  const regularMcps = mcps.filter(
-                    (m) => !customNamespaceIds.has(m.meta?.namespaceId)
-                  );
+                  const customMcps = mcps.filter((m) => m.meta?.isCustomNamespace);
+                  const regularMcps = mcps.filter((m) => !m.meta?.isCustomNamespace);
 
                   return (
                     <>
@@ -462,6 +459,10 @@ export default function App() {
           onRemove={handleRemoveVolume}
           removingName={removingVolumeName}
         />
+      )}
+
+      {showDockerBuilder && (
+        <DockerBuilder onClose={() => setShowDockerBuilder(false)} />
       )}
     </div>
   );

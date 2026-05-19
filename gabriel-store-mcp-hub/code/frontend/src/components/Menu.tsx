@@ -9,6 +9,8 @@ interface MenuProps {
   >;
   onOpenImages: () => Promise<void>;
   onOpenVolumes: () => Promise<void>;
+  onOpenDockerBuilder: () => void;
+  onOpenSystemLogs: () => void;
 }
 
 export default function Menu({
@@ -18,6 +20,8 @@ export default function Menu({
   setView,
   onOpenImages,
   onOpenVolumes,
+  onOpenDockerBuilder,
+  onOpenSystemLogs,
 }: Readonly<MenuProps>) {
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
@@ -204,6 +208,18 @@ export default function Menu({
               className="px-3 py-2 text-left text-xs text-blue-400 transition-colors hover:bg-gray-900 flex items-center gap-2"
             >
               <span>+</span> Deploy MCP
+            </button>
+            <button
+              onClick={() => handleMenuClick(onOpenDockerBuilder)}
+              className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900 flex items-center gap-2"
+            >
+              🐳 Docker Builder
+            </button>
+            <button
+              onClick={() => handleMenuClick(onOpenSystemLogs)}
+              className="px-3 py-2 text-left text-xs text-gray-200 transition-colors hover:bg-gray-900 flex items-center gap-2"
+            >
+              📋 System Logs
             </button>
           </div>
         </>
