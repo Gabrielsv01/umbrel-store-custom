@@ -88,14 +88,6 @@ export default function DockerBuilder({ onClose }: DockerBuilderProps) {
               <div className="flex gap-2">
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(lastBuiltImage);
-                  }}
-                  className="rounded bg-green-700 px-3 py-1 text-xs hover:bg-green-600"
-                >
-                  Copy Image Name
-                </button>
-                <button
-                  onClick={() => {
                     setImageName('my-mcp');
                     setTag('latest');
                     setDockerfile(DEFAULT_DOCKERFILE);
