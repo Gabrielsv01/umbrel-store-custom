@@ -202,7 +202,7 @@ export default function DeployForm({
         platform: platform.trim() || undefined,
         transport,
         command: command.trim() || undefined,
-        port: transport !== 'stdio' && port ? Number(port) : undefined,
+        port: port ? Number(port) : undefined,
         env,
         secretKeys: secretKeys.length > 0 ? secretKeys : undefined,
         runtime,
@@ -318,6 +318,19 @@ export default function DeployForm({
                   value={port}
                   onChange={(event) => setPort(event.target.value)}
                   placeholder="8931"
+                  className="input"
+                />
+              </Field>
+            )}
+            {transport === 'stdio' && (
+              <Field label="Host Port (optional, for graph or additional services)">
+                <input
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={port}
+                  onChange={(event) => setPort(event.target.value)}
+                  placeholder="8765"
                   className="input"
                 />
               </Field>

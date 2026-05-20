@@ -103,7 +103,7 @@ export function buildContainerOptions(input: BuildContainerOptionsInput): Docker
   }
   const entrypoint = splitCommand(runtime?.entrypoint)
   const portStr = input.port ? String(input.port) : undefined
-  const exposePort = input.transport !== 'stdio' && !!portStr
+  const exposePort = !!portStr
   const exposedPorts: Record<string, Record<string, never>> = exposePort
     ? { [`${portStr}/tcp`]: {} }
     : {}
