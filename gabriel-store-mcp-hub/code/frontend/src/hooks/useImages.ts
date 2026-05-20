@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { listImages, removeImage } from '../services/api';
+import { listImages, removeImage, removeImageTag } from '../services/api';
 import type {
   ImageRecord,
   PullPayload,
@@ -53,6 +53,25 @@ export function useImages() {
         await fetchImages();
       } catch (err) {
         setImagesError(toErrorMessage(err, 'Failed to remove image'));
+      } finally {
+        setRemovingImageId(null);
+      }
+    },
+    [fetchImages]
+  );
+
+  const handleRemoveTag = useCallback(
+    async (imageId: string, tag: string) => {
+      const confirmed = window.confirm(`Remove tag ${tag}?`);
+      if (!confirmed) return;
+
+      setRemovingImageId(imageId);
+      setImagesError(null);
+      try {
+        await removeImageTag(imageId, tag);
+        await fetchImages();
+      } catch (err) {
+        setImagesError(toErrorMessage(err, 'Failed to remove tag'));
       } finally {
         setRemovingImageId(null);
       }
@@ -154,6 +173,7 @@ export function useImages() {
     openImages,
     closeImages,
     handleRemoveImage,
+    handleRemoveTag,
     handlePullImage,
   };
 }

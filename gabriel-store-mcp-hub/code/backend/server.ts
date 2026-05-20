@@ -232,7 +232,7 @@ fastify.get('/api/mcps', async () => {
   })
 })
 
-registerImageRoutes(fastify, { docker, pullImage, loadImagePlatforms, recordImagePlatform })
+registerImageRoutes(fastify, { docker, pullImage, loadImagePlatforms, recordImagePlatform, dataDir: DATA_DIR })
 registerBuildImageRoutes(fastify, { docker })
 registerVolumeRoutes(fastify, { docker })
 registerStdioRoutes(fastify, {
@@ -450,6 +450,83 @@ fastify.post<{ Params: { id: string }; Body: ActionBody }>(
     }
 
     return { ok: true }
+  },
+)
+
+// ─── GET /api/dockerfiles (list saved dockerfiles) ────────────────────────────
+
+fastify.get('/api/dockerfiles', async () => {
+  try {
+    const dockerfilesDir = path.join(DATA_DIR, 'dockerfiles')
+    if (!fs.existsSync(dockerfilesDir)) {
+      return []
+    }
+
+    const files = fs.readdirSync(dockerfilesDir).filter((f) => f.endsWith('.dockerfile'))
+    return files.map((f) => ({
+      name: f.replace('.dockerfile', ''),
+      file: f,
+    }))
+  } catch (err) {
+    console.error('[dockerfiles] error listing:', err instanceof Error ? err.message : String(err))
+    return []
+  }
+})
+
+// ─── GET /api/dockerfiles/:name (get saved dockerfile content) ────────────────
+
+fastify.get<{ Params: { name: string } }>('/api/dockerfiles/:name', async (req, reply) => {
+  try {
+    const dockerfilesDir = path.join(DATA_DIR, 'dockerfiles')
+    const filename = `${req.params.name}.dockerfile`
+    const filepath = path.join(dockerfilesDir, filename)
+
+    // Prevent directory traversal
+    if (!filepath.startsWith(dockerfilesDir)) {
+      return reply.code(403).send({ error: 'Access denied' })
+    }
+
+    if (!fs.existsSync(filepath)) {
+      return reply.code(404).send({ error: 'Dockerfile not found' })
+    }
+
+    const content = fs.readFileSync(filepath, 'utf8')
+    return { name: req.params.name, content }
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    console.error('[dockerfiles] error reading:', errorMessage)
+    return reply.code(500).send({ error: errorMessage })
+  }
+})
+
+// ─── POST /api/dockerfiles (save dockerfile) ──────────────────────────────────
+
+fastify.post<{ Body: { imageName: string; dockerfile: string } }>(
+  '/api/dockerfiles',
+  async (req, reply) => {
+    const { imageName, dockerfile } = req.body ?? {}
+
+    if (!imageName?.trim() || !dockerfile?.trim()) {
+      return reply.code(400).send({ error: 'imageName and dockerfile are required' })
+    }
+
+    try {
+      const dockerfilesDir = path.join(DATA_DIR, 'dockerfiles')
+      if (!fs.existsSync(dockerfilesDir)) {
+        fs.mkdirSync(dockerfilesDir, { recursive: true })
+      }
+
+      const sanitizedName = imageName.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-')
+      const dockerfilePath = path.join(dockerfilesDir, `${sanitizedName}.dockerfile`)
+      fs.writeFileSync(dockerfilePath, dockerfile.trim())
+      console.error(`[dockerfiles] saved dockerfile: ${sanitizedName}`)
+
+      return { success: true, path: path.basename(dockerfilePath) }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      console.error(`[dockerfiles] error saving dockerfile: ${errorMessage}`)
+      return reply.code(500).send({ error: errorMessage })
+    }
   },
 )
 

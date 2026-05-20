@@ -53,6 +53,7 @@ export type ImagesModalProps = {
   onClose: () => void;
   onRefresh: () => void | Promise<void>;
   onRemove: (image: ImageRecord) => void | Promise<void>;
+  onRemoveTag?: (imageId: string, tag: string) => void | Promise<void>;
   removingId: string | null;
   onPull: (imageRef: string, platform?: string, onSuccess?: () => void) => void | Promise<void>;
   pulling: boolean;

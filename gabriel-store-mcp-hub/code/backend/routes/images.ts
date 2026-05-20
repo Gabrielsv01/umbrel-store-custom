@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { Readable } from 'node:stream'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 import type {
   DockerImageSummary,
   ImageRoutesDeps,
@@ -8,7 +10,7 @@ import type {
 } from '../types/resources.js'
 
 export function registerImageRoutes(fastify: FastifyInstance, deps: ImageRoutesDeps): void {
-  const { docker, pullImage, loadImagePlatforms, recordImagePlatform } = deps
+  const { docker, pullImage, loadImagePlatforms, recordImagePlatform, dataDir } = deps
 
   fastify.get('/api/images', async () => {
     const [images, containers] = await Promise.all([
@@ -162,36 +164,69 @@ export function registerImageRoutes(fastify: FastifyInstance, deps: ImageRoutesD
     },
   )
 
-  fastify.delete<{ Params: { id: string } }>('/api/images/:id', async (req, reply) => {
-    const idParam = req.params.id.trim()
-    if (!idParam) {
-      return reply.code(400).send({ error: 'image id is required' })
-    }
+  fastify.delete<{ Params: { id: string }; Querystring: { tag?: string } }>(
+    '/api/images/:id',
+    async (req, reply) => {
+      const idParam = req.params.id.trim()
+      const tagParam = (req.query?.tag as string | undefined)?.trim()
 
-    const [images, containers] = await Promise.all([
-      docker.listImages({ all: true }),
-      docker.listContainers({ all: true }),
-    ])
+      if (!idParam) {
+        return reply.code(400).send({ error: 'image id is required' })
+      }
 
-    const match = images.find((image) => {
-      const full = image.Id
-      const noPrefix = full.replace(/^sha256:/, '')
-      return full === idParam || noPrefix === idParam || noPrefix.startsWith(idParam)
-    })
+      const [images, containers] = await Promise.all([
+        docker.listImages({ all: true }),
+        docker.listContainers({ all: true }),
+      ])
 
-    if (!match) {
-      return reply.code(404).send({ error: 'image not found' })
-    }
-
-    const containersUsing = containers.filter((container) => container.ImageID === match.Id)
-    if (containersUsing.length > 0) {
-      return reply.code(409).send({
-        error: 'image is in use by containers',
-        containersUsing: containersUsing.length,
+      const match = images.find((image) => {
+        const full = image.Id
+        const noPrefix = full.replace(/^sha256:/, '')
+        return full === idParam || noPrefix === idParam || noPrefix.startsWith(idParam)
       })
-    }
 
-    await docker.getImage(match.Id).remove()
-    return { ok: true }
-  })
+      if (!match) {
+        return reply.code(404).send({ error: 'image not found' })
+      }
+
+      // If a specific tag is provided, remove only that tag
+      if (tagParam) {
+        try {
+          await docker.getImage(tagParam).remove({ noprune: false })
+          console.error(`[images] Removed tag: ${tagParam}`)
+
+          // Extract image name from tag and delete corresponding dockerfile
+          const imageName = tagParam.split(':')[0]
+          const dockerfilesDir = path.join(dataDir, 'dockerfiles')
+          const dockerfilePath = path.join(dockerfilesDir, `${imageName}.dockerfile`)
+          if (fs.existsSync(dockerfilePath)) {
+            try {
+              fs.unlinkSync(dockerfilePath)
+              console.error(`[images] Deleted dockerfile: ${imageName}.dockerfile`)
+            } catch (err) {
+              console.error(`[images] Error deleting dockerfile: ${err instanceof Error ? err.message : String(err)}`)
+            }
+          }
+
+          return { ok: true, removed: tagParam }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'failed to remove tag'
+          console.error(`[images] Error removing tag: ${message}`)
+          return reply.code(500).send({ error: message })
+        }
+      }
+
+      // Otherwise remove the entire image
+      const containersUsing = containers.filter((container) => container.ImageID === match.Id)
+      if (containersUsing.length > 0) {
+        return reply.code(409).send({
+          error: 'image is in use by containers',
+          containersUsing: containersUsing.length,
+        })
+      }
+
+      await docker.getImage(match.Id).remove()
+      return { ok: true }
+    }
+  )
 }

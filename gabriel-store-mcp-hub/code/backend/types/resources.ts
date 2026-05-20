@@ -27,6 +27,7 @@ export interface ImageRoutesDeps {
   pullImage: (image: string, platform?: string) => Promise<void>
   loadImagePlatforms: () => Record<string, string>
   recordImagePlatform: (imageRef: string, platform?: string) => void
+  dataDir: string
 }
 
 export interface DockerVolumeSummary {

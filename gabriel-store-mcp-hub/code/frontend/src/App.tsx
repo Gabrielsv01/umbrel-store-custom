@@ -69,6 +69,7 @@ export default function App() {
     openImages,
     closeImages,
     handleRemoveImage,
+    handleRemoveTag,
     handlePullImage,
   } = useImages();
 
@@ -442,6 +443,7 @@ export default function App() {
           onClose={closeImages}
           onRefresh={fetchImages}
           onRemove={handleRemoveImage}
+          onRemoveTag={handleRemoveTag}
           removingId={removingImageId}
           onPull={handlePullImage}
           pulling={pullingImage}

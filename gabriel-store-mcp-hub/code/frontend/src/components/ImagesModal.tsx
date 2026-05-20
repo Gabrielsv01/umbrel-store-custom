@@ -27,6 +27,7 @@ export default function ImagesModal({
   onClose,
   onRefresh,
   onRemove,
+  onRemoveTag,
   removingId,
   onPull,
   pulling,
@@ -36,6 +37,8 @@ export default function ImagesModal({
   const [pullRef, setPullRef] = useState('');
   const [platform, setPlatform] = useState('');
   const [showDangling, setShowDangling] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; tags: string[] } | null>(null);
+  const [removingTag, setRemovingTag] = useState<string | null>(null);
 
   const filteredImages = useMemo(() => {
     let result = images;
@@ -57,6 +60,16 @@ export default function ImagesModal({
 
     return result;
   }, [images, query, showDangling]);
+
+  const handleRemoveTag = async (imageId: string, tag: string) => {
+    if (!onRemoveTag) return;
+    setRemovingTag(tag);
+    try {
+      await onRemoveTag(imageId, tag);
+    } finally {
+      setRemovingTag(null);
+    }
+  };
 
   const hasPercent = Number.isFinite(pullProgress?.percent);
 
@@ -198,11 +211,28 @@ export default function ImagesModal({
                     <tr key={image.id}>
                       <td className="px-3 py-2 text-xs text-gray-200">
                         <div className="flex flex-col gap-1">
-                          <div>
-                            {image.tags.length > 0
-                              ? image.tags.join(', ')
-                              : '<none>'}
-                          </div>
+                          {image.tags.length > 0 ? (
+                            image.tags.map((tag) => (
+                              <div
+                                key={tag}
+                                className="inline-flex items-center gap-2 rounded bg-gray-800 px-2 py-1 text-xs text-gray-100"
+                              >
+                                <span>{tag}</span>
+                                {onRemoveTag && image.tags.length > 1 && (
+                                  <button
+                                    onClick={() => void handleRemoveTag(image.id, tag)}
+                                    disabled={removingTag === tag}
+                                    className="ml-1 text-gray-400 hover:text-red-400 disabled:text-gray-600"
+                                    title="Delete this tag"
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            <span className="text-gray-500">&lt;none&gt;</span>
+                          )}
                           {image.platform && (
                             <span className="inline-flex w-fit rounded-full bg-purple-500/20 px-2 py-0.5 text-xs text-purple-300">
                               🔷 {image.platform}
@@ -236,7 +266,13 @@ export default function ImagesModal({
                       </td>
                       <td className="px-3 py-2 text-right">
                         <button
-                          onClick={() => void onRemove(image)}
+                          onClick={() => {
+                            if (image.tags.length > 1) {
+                              setConfirmDelete({ id: image.id, tags: image.tags });
+                            } else {
+                              void onRemove(image);
+                            }
+                          }}
                           disabled={image.inUse || removingId === image.id}
                           className={`rounded-lg px-3 py-1.5 text-xs transition-colors disabled:cursor-not-allowed ${
                             image.inUse
@@ -263,6 +299,50 @@ export default function ImagesModal({
             </div>
           )}
         </div>
+
+        {/* Confirm Delete Modal */}
+        {confirmDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+            <div className="rounded-lg border border-red-700 bg-red-950 p-6 max-w-sm">
+              <h3 className="mb-4 text-sm font-semibold text-red-300">
+                Remove Image with Multiple Tags?
+              </h3>
+              <p className="mb-4 text-xs text-red-200">
+                This will remove the image and all of these tags:
+              </p>
+              <div className="mb-4 space-y-2">
+                {confirmDelete.tags.map((tag) => (
+                  <div
+                    key={tag}
+                    className="rounded bg-red-900/50 px-2 py-1 text-xs font-mono text-red-100"
+                  >
+                    {tag}
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setConfirmDelete(null)}
+                  className="flex-1 rounded bg-gray-700 px-3 py-2 text-xs hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const image = filteredImages.find((img) => img.id === confirmDelete.id);
+                    if (image) {
+                      void onRemove(image);
+                      setConfirmDelete(null);
+                    }
+                  }}
+                  className="flex-1 rounded bg-red-600 px-3 py-2 text-xs hover:bg-red-700"
+                >
+                  Remove All
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

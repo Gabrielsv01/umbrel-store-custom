@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDockerBuilder } from '../hooks/useDockerBuilder';
 import BuildLog from './dockerBuilder/BuildLog';
+import { listSavedDockerfiles, getSavedDockerfile, saveDockerfile } from '../services/api';
 
 interface DockerBuilderProps {
   onClose: () => void;
@@ -20,6 +21,9 @@ export default function DockerBuilder({ onClose }: DockerBuilderProps) {
   const [dockerfile, setDockerfile] = useState(DEFAULT_DOCKERFILE);
   const [platform, setPlatform] = useState('');
   const [buildArgs, setBuildArgs] = useState<BuildArg[]>([]);
+  const [savedDockerfiles, setSavedDockerfiles] = useState<Array<{ name: string; file: string }>>([]);
+  const [selectedDockerfile, setSelectedDockerfile] = useState('');
+  const [loadingDockerfiles, setLoadingDockerfiles] = useState(true);
 
   const {
     building,
@@ -48,6 +52,41 @@ export default function DockerBuilder({ onClose }: DockerBuilderProps) {
     const updated = [...buildArgs];
     updated[idx] = { ...updated[idx], [field]: value };
     setBuildArgs(updated);
+  };
+
+  // Load saved dockerfiles on mount
+  useEffect(() => {
+    const loadDockerfiles = async () => {
+      try {
+        const files = await listSavedDockerfiles();
+        setSavedDockerfiles(files);
+      } catch {
+        // Silently fail if unable to load
+      } finally {
+        setLoadingDockerfiles(false);
+      }
+    };
+    loadDockerfiles();
+  }, []);
+
+  // Auto-save dockerfile after successful build
+  useEffect(() => {
+    if (lastBuiltImage) {
+      saveDockerfile(imageName, dockerfile).catch(() => {
+        // Silently fail if unable to save
+      });
+    }
+  }, [lastBuiltImage, imageName, dockerfile]);
+
+  const handleSelectDockerfile = async (name: string) => {
+    setSelectedDockerfile(name);
+    if (!name) return;
+    try {
+      const { content } = await getSavedDockerfile(name);
+      setDockerfile(content);
+    } catch {
+      // Silently fail if unable to load
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -84,8 +123,11 @@ export default function DockerBuilder({ onClose }: DockerBuilderProps) {
               <p className="mb-4 text-sm text-green-200">
                 Image successfully built: {lastBuiltImage}
               </p>
+              <p className="text-xs text-green-300">
+                Dockerfile automatically saved to .appdata/dockerfiles/
+              </p>
 
-              <div className="flex gap-2">
+              <div className="mt-4 flex gap-2">
                 <button
                   onClick={() => {
                     setImageName('my-mcp');
@@ -93,6 +135,7 @@ export default function DockerBuilder({ onClose }: DockerBuilderProps) {
                     setDockerfile(DEFAULT_DOCKERFILE);
                     setPlatform('');
                     setBuildArgs([]);
+                    setSelectedDockerfile('');
                     resetBuild();
                   }}
                   className="rounded bg-gray-700 px-3 py-1 text-xs hover:bg-gray-600"
@@ -223,6 +266,28 @@ export default function DockerBuilder({ onClose }: DockerBuilderProps) {
                 </div>
               )}
             </div>
+
+            {/* Load Saved Dockerfile */}
+            {savedDockerfiles.length > 0 && (
+              <div className="mb-6">
+                <label className="mb-1.5 block text-xs text-gray-400">
+                  Load Saved Dockerfile
+                </label>
+                <select
+                  value={selectedDockerfile}
+                  onChange={(e) => handleSelectDockerfile(e.target.value)}
+                  disabled={building}
+                  className="w-full rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white disabled:bg-gray-900 disabled:text-gray-600"
+                >
+                  <option value="">-- Select a saved Dockerfile --</option>
+                  {savedDockerfiles.map((df) => (
+                    <option key={df.name} value={df.name}>
+                      {df.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Dockerfile */}
             <div className="mb-6">

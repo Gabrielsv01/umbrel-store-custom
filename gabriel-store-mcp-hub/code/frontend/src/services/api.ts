@@ -129,6 +129,14 @@ export async function removeImage(shortId: string): Promise<unknown> {
   );
 }
 
+export async function removeImageTag(imageId: string, tag: string): Promise<unknown> {
+  return requestJson(
+    `/api/images/${imageId}?tag=${encodeURIComponent(tag)}`,
+    { method: 'DELETE' },
+    'Failed to remove tag'
+  );
+}
+
 export async function listVolumes(): Promise<VolumeRecord[]> {
   const payload = await requestJson(
     '/api/volumes',
@@ -344,4 +352,38 @@ export function buildDockerImageStream(
       source.close();
     },
   };
+}
+
+export async function listSavedDockerfiles(): Promise<
+  Array<{ name: string; file: string }>
+> {
+  const payload = await requestJson('/api/dockerfiles', undefined, 'Failed to list Dockerfiles');
+  return Array.isArray(payload)
+    ? (payload as Array<{ name: string; file: string }>)
+    : [];
+}
+
+export async function getSavedDockerfile(
+  name: string
+): Promise<{ name: string; content: string }> {
+  return requestJson(
+    `/api/dockerfiles/${name}`,
+    undefined,
+    'Failed to load Dockerfile'
+  ) as Promise<{ name: string; content: string }>;
+}
+
+export async function saveDockerfile(
+  imageName: string,
+  dockerfile: string
+): Promise<{ success: boolean; path: string }> {
+  return requestJson(
+    '/api/dockerfiles',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageName, dockerfile }),
+    },
+    'Failed to save Dockerfile'
+  ) as Promise<{ success: boolean; path: string }>;
 }
