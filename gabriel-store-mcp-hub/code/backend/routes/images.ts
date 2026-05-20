@@ -226,6 +226,26 @@ export function registerImageRoutes(fastify: FastifyInstance, deps: ImageRoutesD
       }
 
       await docker.getImage(match.Id).remove()
+
+      // Delete dockerfiles for all tags of this image
+      const dockerfilesDir = path.join(dataDir, 'dockerfiles')
+      if (match.RepoTags) {
+        for (const tag of match.RepoTags) {
+          if (tag !== '<none>:<none>') {
+            const imageName = tag.split(':')[0]
+            const dockerfilePath = path.join(dockerfilesDir, `${imageName}.dockerfile`)
+            if (fs.existsSync(dockerfilePath)) {
+              try {
+                fs.unlinkSync(dockerfilePath)
+                console.error(`[images] Deleted dockerfile: ${imageName}.dockerfile`)
+              } catch (err) {
+                console.error(`[images] Error deleting dockerfile: ${err instanceof Error ? err.message : String(err)}`)
+              }
+            }
+          }
+        }
+      }
+
       return { ok: true }
     }
   )
