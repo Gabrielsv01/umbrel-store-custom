@@ -20,6 +20,7 @@ const IMAGE_SUGGESTIONS = [
   'node:20-bookworm-slim',
   'python:3.13-slim',
   'python:3.12-slim',
+  'ghcr.io/astral-sh/uv:python3.12-bookworm-slim',
   'golang:1.24-bookworm',
   'golang:1.23-bookworm',
   'rust:1-bookworm',
@@ -67,7 +68,8 @@ export default function DeployForm({
       : [{ key: '', value: '', secret: false }];
 
   const initialHeaderPairs: HeaderPair[] =
-    initialValues?.httpHeaders && Object.keys(initialValues.httpHeaders).length > 0
+    initialValues?.httpHeaders &&
+    Object.keys(initialValues.httpHeaders).length > 0
       ? Object.entries(initialValues.httpHeaders).map(([key, value]) => ({
           key,
           value: String(value ?? ''),
@@ -119,7 +121,8 @@ export default function DeployForm({
     initialValues?.runtime?.shmSize ? String(initialValues.runtime.shmSize) : ''
   );
   const [envPairs, setEnvPairs] = useState<EnvPair[]>(initialEnvPairs);
-  const [headerPairs, setHeaderPairs] = useState<HeaderPair[]>(initialHeaderPairs);
+  const [headerPairs, setHeaderPairs] =
+    useState<HeaderPair[]>(initialHeaderPairs);
   const [deploying, setDeploying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -146,7 +149,9 @@ export default function DeployForm({
   const addHeader = () =>
     setHeaderPairs((pairs) => [...pairs, { key: '', value: '' }]);
   const removeHeader = (index: number) =>
-    setHeaderPairs((pairs) => pairs.filter((_, pairIndex) => pairIndex !== index));
+    setHeaderPairs((pairs) =>
+      pairs.filter((_, pairIndex) => pairIndex !== index)
+    );
   const updateHeader = (
     index: number,
     field: keyof HeaderPair,
@@ -206,7 +211,8 @@ export default function DeployForm({
         env,
         secretKeys: secretKeys.length > 0 ? secretKeys : undefined,
         runtime,
-        httpHeaders: Object.keys(httpHeaders).length > 0 ? httpHeaders : undefined,
+        httpHeaders:
+          Object.keys(httpHeaders).length > 0 ? httpHeaders : undefined,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Deploy failed';
@@ -366,7 +372,11 @@ export default function DeployForm({
                     onChange={(event) =>
                       updateEnv(index, 'value', event.target.value)
                     }
-                    placeholder={pair.secret && !pair.value ? '[Secret stored - not displayed]' : 'value'}
+                    placeholder={
+                      pair.secret && !pair.value
+                        ? '[Secret stored - not displayed]'
+                        : 'value'
+                    }
                     type={pair.secret ? 'password' : 'text'}
                     className="input flex-1 font-mono text-xs"
                   />
