@@ -27,6 +27,21 @@ async function execInContainer(docker: any, containerId: string, cmd: string[]):
   })
 }
 
+function findBestContainerForVolume(containers: any[], volumeName: string) {
+  const containersWithVolume = containers.filter(c =>
+    (c.Mounts ?? []).some((m: any) => m.Type === 'volume' && m.Name === volumeName),
+  )
+
+  if (containersWithVolume.length === 0) return null
+
+  // Priorizar containers com permissões de escrita (RW: true)
+  const rwContainer = containersWithVolume.find(c =>
+    (c.Mounts ?? []).some((m: any) => m.Type === 'volume' && m.Name === volumeName && m.RW === true),
+  )
+
+  return rwContainer || containersWithVolume[0]
+}
+
 export function registerVolumeRoutes(fastify: FastifyInstance, deps: VolumeRoutesDeps): void {
   const { docker } = deps
 
@@ -116,17 +131,15 @@ export function registerVolumeRoutes(fastify: FastifyInstance, deps: VolumeRoute
           return reply.code(404).send({ error: 'Volume not found' })
         }
 
-        const containers = await docker.listContainers({ all: true })
-        const containerWithVolume = containers.find(c =>
-          (c.Mounts ?? []).some(m => m.Type === 'volume' && m.Name === volumeName),
-        )
+        const containers = await docker.listContainers()
+        const containerWithVolume = findBestContainerForVolume(containers, volumeName)
 
         if (!containerWithVolume) {
           return reply.code(404).send({ error: 'No running container has this volume mounted' })
         }
 
         const containerMountPath = (containerWithVolume.Mounts ?? []).find(
-          m => m.Type === 'volume' && m.Name === volumeName,
+          (m: any) => m.Type === 'volume' && m.Name === volumeName,
         )?.Destination
 
         if (!containerMountPath) {
@@ -150,11 +163,25 @@ export function registerVolumeRoutes(fastify: FastifyInstance, deps: VolumeRoute
             if (!trimmedLine) return null
             const parts = trimmedLine.split(/\s+/)
             if (parts.length < 9) return null
-            const isDir = trimmedLine.startsWith('d')
+
+            // First character indicates file type:
+            // 'd' = directory, 'l' = symlink, '-' = regular file, etc.
+            const fileType = trimmedLine.charAt(0)
             const name = parts.slice(8).join(' ')
+
             if (!name) return null
-            const size = isDir ? undefined : Number.parseInt(parts[4])
-            return { name, isDirectory: isDir, size } as FileInfo | null
+
+            // For symlinks, check if they point to a directory
+            let isDir = fileType === 'd'
+            if (fileType === 'l') {
+              // Try to determine if symlink points to directory
+              // ls already follows symlinks, so we trust the output
+              const linkTarget = parts.slice(10).join(' ')
+              isDir = linkTarget.endsWith('/') || false
+            }
+
+            const size = isDir ? undefined : Number.parseInt(parts[4]) || 0
+            return { name, isDirectory: isDir, size: size || undefined } as FileInfo | null
           })
           .filter((f): f is FileInfo => f !== null)
           .sort((a, b) => {
@@ -194,17 +221,15 @@ export function registerVolumeRoutes(fastify: FastifyInstance, deps: VolumeRoute
           return reply.code(404).send({ error: 'Volume not found' })
         }
 
-        const containers = await docker.listContainers({ all: true })
-        const containerWithVolume = containers.find(c =>
-          (c.Mounts ?? []).some(m => m.Type === 'volume' && m.Name === volumeName),
-        )
+        const containers = await docker.listContainers()
+        const containerWithVolume = findBestContainerForVolume(containers, volumeName)
 
         if (!containerWithVolume) {
           return reply.code(404).send({ error: 'No running container has this volume mounted' })
         }
 
         const containerMountPath = (containerWithVolume.Mounts ?? []).find(
-          m => m.Type === 'volume' && m.Name === volumeName,
+          (m: any) => m.Type === 'volume' && m.Name === volumeName,
         )?.Destination
 
         if (!containerMountPath) {
@@ -250,17 +275,15 @@ export function registerVolumeRoutes(fastify: FastifyInstance, deps: VolumeRoute
           return reply.code(404).send({ error: 'Volume not found' })
         }
 
-        const containers = await docker.listContainers({ all: true })
-        const containerWithVolume = containers.find(c =>
-          (c.Mounts ?? []).some(m => m.Type === 'volume' && m.Name === volumeName),
-        )
+        const containers = await docker.listContainers()
+        const containerWithVolume = findBestContainerForVolume(containers, volumeName)
 
         if (!containerWithVolume) {
           return reply.code(404).send({ error: 'No running container has this volume mounted' })
         }
 
         const containerMountPath = (containerWithVolume.Mounts ?? []).find(
-          m => m.Type === 'volume' && m.Name === volumeName,
+          (m: any) => m.Type === 'volume' && m.Name === volumeName,
         )?.Destination
 
         if (!containerMountPath) {

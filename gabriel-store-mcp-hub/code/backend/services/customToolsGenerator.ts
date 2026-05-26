@@ -25,12 +25,24 @@ export interface SharedVolumeAccess {
   canDelete: boolean;
 }
 
+export interface DockerContainerCliCommand {
+  toolName: string;
+  command: string;
+  description: string;
+}
+
+export interface DockerContainerToolsAccess {
+  containerName: string;
+  commands: DockerContainerCliCommand[];
+}
+
 export interface CustomToolDefinition {
   name: string;
   description?: string;
   methods: CustomToolMethod[];
   port?: number;
   sharedVolumeAccess?: SharedVolumeAccess[];
+  dockerContainerTools?: DockerContainerToolsAccess;
 }
 
 /**
@@ -48,9 +60,10 @@ export function validateCustomToolDefinition(def: CustomToolDefinition): {
 
   const hasCustomMethods = Array.isArray(def.methods) && def.methods.length > 0;
   const hasSharedVolumeMethods = Array.isArray(def.sharedVolumeAccess) && def.sharedVolumeAccess.length > 0;
+  const hasDockerContainerTools = def.dockerContainerTools && def.dockerContainerTools.commands.length > 0;
 
-  if (!hasCustomMethods && !hasSharedVolumeMethods) {
-    errors.push('At least one custom method or shared volume access is required');
+  if (!hasCustomMethods && !hasSharedVolumeMethods && !hasDockerContainerTools) {
+    errors.push('At least one custom method, shared volume access, or docker container tool is required');
   }
 
   def.methods?.forEach((method, idx) => {
@@ -101,6 +114,32 @@ export function validateCustomToolDefinition(def: CustomToolDefinition): {
     }
   }
 
+  // Validate docker container tools
+  if (def.dockerContainerTools !== undefined) {
+    if (typeof def.dockerContainerTools !== 'object') {
+      errors.push('Docker container tools must be an object');
+    } else {
+      if (!def.dockerContainerTools.containerName || typeof def.dockerContainerTools.containerName !== 'string') {
+        errors.push('Docker container tools: containerName is required and must be a string');
+      }
+      if (!Array.isArray(def.dockerContainerTools.commands)) {
+        errors.push('Docker container tools: commands must be an array');
+      } else {
+        def.dockerContainerTools.commands.forEach((cmd, idx) => {
+          if (!cmd.toolName || typeof cmd.toolName !== 'string') {
+            errors.push(`Docker container tool ${idx}: toolName is required and must be a string`);
+          }
+          if (!cmd.command || typeof cmd.command !== 'string') {
+            errors.push(`Docker container tool ${idx}: command is required and must be a string`);
+          }
+          if (typeof cmd.description !== 'string') {
+            errors.push(`Docker container tool ${idx}: description must be a string`);
+          }
+        });
+      }
+    }
+  }
+
   // Validate JavaScript code syntax
   def.methods?.forEach((method, idx) => {
     if (method.code) {
@@ -132,6 +171,90 @@ function generateSharedVolumeTools(sharedVolumeAccess?: SharedVolumeAccess[]): C
   }
 
   const methods: CustomToolMethod[] = [];
+
+  // Import directory from tar stream
+  const tarWritableAccess = sharedVolumeAccess.filter(a => a.canWrite);
+  if (tarWritableAccess.length > 0) {
+    methods.push({
+      name: 'import_directory_tar',
+      description: 'Import a directory from a tar stream (uncompressed). Send as base64-encoded tar data.',
+      parameters: {
+        destination_folder: {
+          type: 'string',
+          description: 'Destination folder in shared volume',
+          required: true,
+          enum: tarWritableAccess.map(a => a.folder),
+        },
+        tar_data_base64: {
+          type: 'string',
+          description: 'Base64-encoded tar stream data',
+          required: true,
+        },
+      },
+      code: `const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+const writableFolders = ${JSON.stringify(tarWritableAccess.map(a => a.folder))};
+if (!writableFolders.includes(destination_folder)) {
+  return JSON.stringify({ error: 'Write access denied' });
+}
+const basePath = '/shared-data';
+const destPath = path.join(basePath, destination_folder);
+if (!destPath.startsWith(basePath)) {
+  return JSON.stringify({ error: 'Path traversal denied' });
+}
+try {
+  fs.mkdirSync(destPath, { recursive: true });
+  const tarBuffer = Buffer.from(tar_data_base64, 'base64');
+  const tarFile = path.join('/tmp', \`import-\${Date.now()}.tar\`);
+  fs.writeFileSync(tarFile, tarBuffer);
+  execSync(\`cd \${destPath} && tar -xf \${tarFile}\`);
+  fs.unlinkSync(tarFile);
+  return JSON.stringify({ success: true, message: 'Directory imported successfully', folder: destination_folder });
+} catch (err) {
+  return JSON.stringify({ error: err.message });
+}`,
+    });
+  }
+
+  // Export directory to tar stream
+  const tarReadableAccess = sharedVolumeAccess.filter(a => a.canRead);
+  if (tarReadableAccess.length > 0) {
+    methods.push({
+      name: 'export_directory_tar',
+      description: 'Export a directory as a tar stream (uncompressed). Returns base64-encoded tar data.',
+      parameters: {
+        source_folder: {
+          type: 'string',
+          description: 'Source folder in shared volume',
+          required: true,
+          enum: tarReadableAccess.map(a => a.folder),
+        },
+      },
+      code: `const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+const readableFolders = ${JSON.stringify(tarReadableAccess.map(a => a.folder))};
+if (!readableFolders.includes(source_folder)) {
+  return JSON.stringify({ error: 'Read access denied' });
+}
+const basePath = '/shared-data';
+const srcPath = path.join(basePath, source_folder);
+if (!srcPath.startsWith(basePath)) {
+  return JSON.stringify({ error: 'Path traversal denied' });
+}
+try {
+  const tarFile = path.join('/tmp', \`export-\${Date.now()}.tar\`);
+  execSync(\`cd \${basePath} && tar -cf \${tarFile} \${source_folder}\`);
+  const tarBuffer = fs.readFileSync(tarFile);
+  const tarData = tarBuffer.toString('base64');
+  fs.unlinkSync(tarFile);
+  return JSON.stringify({ success: true, tar_data: tarData, folder: source_folder, size: tarBuffer.length });
+} catch (err) {
+  return JSON.stringify({ error: err.message });
+}`,
+    });
+  }
 
   // List files method
   methods.push({
@@ -280,7 +403,7 @@ if (!filePath.startsWith(basePath)) {
   return JSON.stringify({ error: 'Path traversal denied' });
 }
 try {
-  fs.mkdirSync(folderPath, { recursive: true });
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, content, 'utf-8');
   return JSON.stringify({ success: true, message: 'File written', fileName: file_name, folder: folder_name });
 } catch (err) {
@@ -328,6 +451,46 @@ try {
     });
   }
 
+
+  return methods;
+}
+
+/**
+ * Generate docker container CLI tools based on configuration
+ */
+function generateDockerContainerTools(dockerContainerTools?: DockerContainerToolsAccess): CustomToolMethod[] {
+  if (!dockerContainerTools || dockerContainerTools.commands.length === 0) {
+    return [];
+  }
+
+  const methods: CustomToolMethod[] = [];
+
+  dockerContainerTools.commands.forEach((cmd) => {
+    methods.push({
+      name: cmd.toolName,
+      description: cmd.description || `Execute ${cmd.command} in container ${dockerContainerTools.containerName}`,
+      parameters: {},
+      code: `const { execSync } = require('child_process');
+const containerName = '${dockerContainerTools.containerName}';
+const baseCommand = '${cmd.command}';
+try {
+  const output = execSync(\`docker exec \${containerName} sh -c "\${baseCommand}"\`, { encoding: 'utf-8' });
+  return JSON.stringify({
+    success: true,
+    output: output.trim(),
+    command: baseCommand,
+    container: containerName
+  });
+} catch (err) {
+  return JSON.stringify({
+    error: err.message,
+    command: baseCommand,
+    container: containerName
+  });
+}`,
+    });
+  });
+
   return methods;
 }
 
@@ -337,7 +500,8 @@ try {
 export function generateCustomMcpCode(definition: CustomToolDefinition): string {
   const { name, description = 'Custom MCP', methods: userMethods } = definition;
   const sharedVolumeMethods = generateSharedVolumeTools(definition.sharedVolumeAccess);
-  const methods = [...sharedVolumeMethods, ...userMethods];;
+  const dockerContainerMethods = generateDockerContainerTools(definition.dockerContainerTools);
+  const methods = [...sharedVolumeMethods, ...dockerContainerMethods, ...userMethods];;
 
   // Build CUSTOM_TOOLS array
   const toolsArray = methods
@@ -595,6 +759,8 @@ COPY server.js .
 
 ENV PORT=${port}
 EXPOSE ${port}
+
+RUN apk add --no-cache docker-cli
 
 CMD ["node", "server.js"]
 `;

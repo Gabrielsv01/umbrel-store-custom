@@ -20,12 +20,24 @@ export interface SharedVolumeAccess {
   canDelete: boolean;
 }
 
+export interface DockerContainerCliCommand {
+  toolName: string;
+  command: string;
+  description: string;
+}
+
+export interface DockerContainerToolsAccess {
+  containerName: string;
+  commands: DockerContainerCliCommand[];
+}
+
 export interface CustomToolDefinition {
   name: string;
   description?: string;
   methods: CustomToolMethod[];
   port?: number;
   sharedVolumeAccess?: SharedVolumeAccess[];
+  dockerContainerTools?: DockerContainerToolsAccess;
 }
 
 export interface ValidateResponse {

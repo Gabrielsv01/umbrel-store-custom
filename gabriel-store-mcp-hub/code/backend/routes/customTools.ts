@@ -176,7 +176,10 @@ export function registerCustomToolsRoutes(
             PortBindings: {
               [portStr]: [{ HostPort: String(port) }],
             },
-            Binds: ['shared-data:/shared-data'],
+            Binds: [
+              'shared-data:/shared-data',
+              '/var/run/docker.sock:/var/run/docker.sock',
+            ],
           },
           Labels: {
             [mcpLabel]: 'true',
@@ -193,6 +196,28 @@ export function registerCustomToolsRoutes(
         // Start container
         await container.start();
         console.error(`[customTools] Container started: ${containerId}`);
+
+        // Create shared volume directories if they don't exist
+        if (definition.sharedVolumeAccess && definition.sharedVolumeAccess.length > 0) {
+          try {
+            for (const access of definition.sharedVolumeAccess) {
+              const folderPath = access.folder;
+              if (folderPath) {
+                // Execute mkdir command inside the container
+                const exec = await container.exec({
+                  Cmd: ['mkdir', '-p', folderPath],
+                  AttachStdout: true,
+                  AttachStderr: true,
+                });
+                await exec.start({ Detach: false });
+                console.error(`[customTools] Created shared volume directory: ${folderPath}`);
+              }
+            }
+          } catch (err) {
+            console.error(`[customTools] Warning: Failed to create shared volume directories:`, err instanceof Error ? err.message : String(err));
+            // Don't fail the deployment if directory creation fails
+          }
+        }
 
         // Connect to network if it exists
         try {
@@ -375,7 +400,10 @@ export function registerCustomToolsRoutes(
             PortBindings: {
               [portStr]: [{ HostPort: String(port) }],
             },
-            Binds: ['shared-data:/shared-data'],
+            Binds: [
+              'shared-data:/shared-data',
+              '/var/run/docker.sock:/var/run/docker.sock',
+            ],
           },
           Labels: {
             [mcpLabel]: 'true',
@@ -392,6 +420,28 @@ export function registerCustomToolsRoutes(
         // Start container
         await newContainer.start();
         console.error(`[customTools] Container started: ${newContainerId}`);
+
+        // Create shared volume directories if they don't exist
+        if (definition.sharedVolumeAccess && definition.sharedVolumeAccess.length > 0) {
+          try {
+            for (const access of definition.sharedVolumeAccess) {
+              const folderPath = access.folder;
+              if (folderPath) {
+                // Execute mkdir command inside the container
+                const exec = await newContainer.exec({
+                  Cmd: ['mkdir', '-p', folderPath],
+                  AttachStdout: true,
+                  AttachStderr: true,
+                });
+                await exec.start({ Detach: false });
+                console.error(`[customTools] Created shared volume directory: ${folderPath}`);
+              }
+            }
+          } catch (err) {
+            console.error(`[customTools] Warning: Failed to create shared volume directories:`, err instanceof Error ? err.message : String(err));
+            // Don't fail the deployment if directory creation fails
+          }
+        }
 
         // Connect to network if it exists
         try {
@@ -523,6 +573,36 @@ export function registerCustomToolsRoutes(
         } catch (err) {
           console.error(`[customTools] Failed to cleanup temp dir:`, err instanceof Error ? err.message : String(err));
         }
+      }
+    }
+  );
+
+  /**
+   * GET /api/containers
+   * Lists all running Docker containers
+   */
+  fastify.get(
+    '/api/containers',
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const containers = await docker.listContainers({ all: false });
+        const containerList = containers.map((container) => ({
+          id: container.Id.slice(0, 12),
+          name: container.Names[0]?.replace(/^\//, '') || 'unknown',
+          status: container.Status,
+          state: container.State,
+        }));
+
+        return reply.send({
+          containers: containerList,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('[customTools] Failed to list containers:', message);
+        return reply.code(500).send({
+          error: 'Failed to list containers',
+          message,
+        });
       }
     }
   );

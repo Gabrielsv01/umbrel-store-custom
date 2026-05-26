@@ -32,6 +32,23 @@ const IMAGE_SUGGESTIONS = [
   'mcr.microsoft.com/playwright:latest',
 ];
 
+const ENTRYPOINT_SUGGESTIONS = [
+  'sh',
+  'bash',
+  'python',
+  'python3',
+  'uv',
+  'uvx',
+  'node',
+  'ruby',
+  'php',
+  'java',
+  'deno',
+  '/bin/sh',
+  '/bin/bash',
+  '/usr/bin/python',
+];
+
 function linesToArray(value: string): string[] {
   return value
     .split('\n')
@@ -464,9 +481,15 @@ export default function DeployForm({
                 <input
                   value={entrypoint}
                   onChange={(event) => setEntrypoint(event.target.value)}
-                  placeholder="python"
+                  placeholder="/bin/sh"
+                  list="entrypoint-suggestions"
                   className="input"
                 />
+                <datalist id="entrypoint-suggestions">
+                  {ENTRYPOINT_SUGGESTIONS.map((suggestion) => (
+                    <option key={suggestion} value={suggestion} />
+                  ))}
+                </datalist>
               </Field>
 
               <Field label="Working Directory">
