@@ -2,7 +2,7 @@ version: "3.7"
 
 services:
   freecad:
-    image: linuxserver/freecad
+    image: linuxserver/freecad:1.1.1
     container_name: freecad
     ports:
       - "5133:3001"
@@ -11,9 +11,9 @@ services:
       - PGID=1000
       - TZ=Etc/UTC
     volumes:
-      - kdenlive_config:/config
+      - freecad_config:/config
     shm_size: "1gb"
     restart: unless-stopped
 
 volumes:
-  kdenlive_config:
+  freecad_config:
