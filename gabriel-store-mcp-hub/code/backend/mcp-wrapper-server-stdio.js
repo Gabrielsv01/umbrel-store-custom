@@ -65,6 +65,8 @@ rl.on('line', async (line) => {
   try {
     const payload = JSON.parse(line);
     const response = await handleMcpRequest(payload);
+    // Notifications return null — must not write anything to stdout
+    if (response === null) return;
     process.stdout.write(JSON.stringify(response) + '\n');
   } catch (error) {
     console.error('[MCP STDIO] Error:', error.message);
@@ -361,6 +363,14 @@ async function handleMcpRequest(payload, requestHeaders = {}) {
         },
       };
 
+    case 'ping':
+      console.error('[MCP STDIO] ping received — responding ok');
+      return {
+        jsonrpc,
+        id,
+        result: {},
+      };
+
     case 'prompts/list':
       return {
         jsonrpc,
@@ -370,7 +380,53 @@ async function handleMcpRequest(payload, requestHeaders = {}) {
         },
       };
 
+    case 'prompts/get':
+      console.error(`[MCP STDIO] prompts/get called (name: ${params?.name}) — no prompts implemented`);
+      return {
+        jsonrpc,
+        id,
+        error: { code: -32602, message: 'Prompt not found' },
+      };
+
+    case 'resources/read':
+      console.error(`[MCP STDIO] resources/read called (uri: ${params?.uri}) — no resources implemented`);
+      return {
+        jsonrpc,
+        id,
+        error: { code: -32602, message: 'Resource not found' },
+      };
+
+    case 'logging/setLevel':
+      console.error(`[MCP STDIO] logging/setLevel called (level: ${params?.level}) — not implemented, ignoring`);
+      return {
+        jsonrpc,
+        id,
+        result: {},
+      };
+
+    case 'completion/complete':
+      console.error('[MCP STDIO] completion/complete called — not implemented, returning empty');
+      return {
+        jsonrpc,
+        id,
+        result: { completion: { values: [], hasMore: false } },
+      };
+
+    // Notifications: no id, must not write anything to stdout
+    case 'notifications/initialized':
+      console.error('[MCP STDIO] notifications/initialized received — client ready');
+      return null;
+
+    case 'notifications/cancelled':
+      console.error(`[MCP STDIO] notifications/cancelled received (id: ${params?.requestId}, reason: ${params?.reason})`);
+      return null;
+
     default:
+      if (id === undefined || id === null) {
+        console.error(`[MCP STDIO] Unknown notification received: ${method} — ignoring`);
+        return null;
+      }
+      console.error(`[MCP STDIO] Unknown method called: ${method}`);
       return {
         jsonrpc,
         id,

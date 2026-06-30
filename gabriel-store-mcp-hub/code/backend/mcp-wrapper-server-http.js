@@ -284,8 +284,14 @@ const server = http.createServer(async (req, res) => {
       try {
         const payload = JSON.parse(body);
         const response = await handleMcpRequest(payload, req.headers);
-        res.writeHead(200);
-        res.end(JSON.stringify(response));
+        // Notifications return null — respond with 204 No Content (no body)
+        if (response === null) {
+          res.writeHead(204);
+          res.end();
+        } else {
+          res.writeHead(200);
+          res.end(JSON.stringify(response));
+        }
       } catch (error) {
         console.error('[MCP HTTP] Error:', error.message);
         res.writeHead(500);
@@ -368,6 +374,14 @@ async function handleMcpRequest(payload, requestHeaders = {}) {
         },
       };
 
+    case 'ping':
+      console.log('[MCP HTTP] ping received — responding ok');
+      return {
+        jsonrpc,
+        id,
+        result: {},
+      };
+
     case 'prompts/list':
       return {
         jsonrpc,
@@ -377,7 +391,53 @@ async function handleMcpRequest(payload, requestHeaders = {}) {
         },
       };
 
+    case 'prompts/get':
+      console.log(`[MCP HTTP] prompts/get called (name: ${params?.name}) — no prompts implemented`);
+      return {
+        jsonrpc,
+        id,
+        error: { code: -32602, message: 'Prompt not found' },
+      };
+
+    case 'resources/read':
+      console.log(`[MCP HTTP] resources/read called (uri: ${params?.uri}) — no resources implemented`);
+      return {
+        jsonrpc,
+        id,
+        error: { code: -32602, message: 'Resource not found' },
+      };
+
+    case 'logging/setLevel':
+      console.log(`[MCP HTTP] logging/setLevel called (level: ${params?.level}) — not implemented, ignoring`);
+      return {
+        jsonrpc,
+        id,
+        result: {},
+      };
+
+    case 'completion/complete':
+      console.log('[MCP HTTP] completion/complete called — not implemented, returning empty');
+      return {
+        jsonrpc,
+        id,
+        result: { completion: { values: [], hasMore: false } },
+      };
+
+    // Notifications: no id, must not send a response
+    case 'notifications/initialized':
+      console.log('[MCP HTTP] notifications/initialized received — client ready');
+      return null;
+
+    case 'notifications/cancelled':
+      console.log(`[MCP HTTP] notifications/cancelled received (id: ${params?.requestId}, reason: ${params?.reason})`);
+      return null;
+
     default:
+      if (id === undefined || id === null) {
+        console.log(`[MCP HTTP] Unknown notification received: ${method} — ignoring`);
+        return null;
+      }
+      console.log(`[MCP HTTP] Unknown method called: ${method}`);
       return {
         jsonrpc,
         id,
@@ -391,22 +451,6 @@ async function handleMcpRequest(payload, requestHeaders = {}) {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`[MCP HTTP] Server listening on port ${PORT}`);
-});
-
-process.on('SIGTERM', () => {
-  console.log('[MCP HTTP] Received SIGTERM, shutting down');
-  server.close(() => {
-    console.log('[MCP HTTP] Server closed');
-    process.exit(0);
-  });
-});
-
-process.on('SIGINT', () => {
-  console.log('[MCP HTTP] Received SIGINT, shutting down');
-  server.close(() => {
-    console.log('[MCP HTTP] Server closed');
-    process.exit(0);
-  });
 });
 
 // Handle graceful shutdown

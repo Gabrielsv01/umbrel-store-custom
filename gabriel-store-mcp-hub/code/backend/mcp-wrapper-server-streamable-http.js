@@ -147,13 +147,21 @@ const server = http.createServer(async (req, res) => {
 
           // Simulate streaming response - in real implementation would stream tool output
           const response = await handleMcpRequest(payload, req.headers);
-          res.write(JSON.stringify(response) + '\n');
+          if (response !== null) {
+            res.write(JSON.stringify(response) + '\n');
+          }
           res.end();
         } else {
           // Regular non-streaming response
           const response = await handleMcpRequest(payload, req.headers);
-          res.writeHead(200);
-          res.end(JSON.stringify(response));
+          // Notifications return null — respond with 204 No Content (no body)
+          if (response === null) {
+            res.writeHead(204);
+            res.end();
+          } else {
+            res.writeHead(200);
+            res.end(JSON.stringify(response));
+          }
         }
       } catch (error) {
         console.error('[MCP Streamable HTTP] Error:', error.message);
@@ -346,6 +354,14 @@ async function handleMcpRequest(payload, requestHeaders = {}) {
 
   // Handle different MCP methods
   switch (method) {
+    case 'ping':
+      console.log('[MCP Streamable HTTP] ping received — responding ok');
+      return {
+        jsonrpc,
+        id,
+        result: {},
+      };
+
     case 'initialize':
       return {
         jsonrpc,
@@ -412,7 +428,54 @@ async function handleMcpRequest(payload, requestHeaders = {}) {
         },
       };
 
+    case 'prompts/get':
+      console.log(`[MCP Streamable HTTP] prompts/get called (name: ${params?.name}) — no prompts implemented`);
+      return {
+        jsonrpc,
+        id,
+        error: { code: -32602, message: 'Prompt not found' },
+      };
+
+    case 'resources/read':
+      console.log(`[MCP Streamable HTTP] resources/read called (uri: ${params?.uri}) — no resources implemented`);
+      return {
+        jsonrpc,
+        id,
+        error: { code: -32602, message: 'Resource not found' },
+      };
+
+    case 'logging/setLevel':
+      console.log(`[MCP Streamable HTTP] logging/setLevel called (level: ${params?.level}) — not implemented, ignoring`);
+      return {
+        jsonrpc,
+        id,
+        result: {},
+      };
+
+    case 'completion/complete':
+      console.log(`[MCP Streamable HTTP] completion/complete called — not implemented, returning empty`);
+      return {
+        jsonrpc,
+        id,
+        result: { completion: { values: [], hasMore: false } },
+      };
+
+    // Notifications: no id, must not send a response
+    case 'notifications/initialized':
+      console.log('[MCP Streamable HTTP] notifications/initialized received — client ready');
+      return null;
+
+    case 'notifications/cancelled':
+      console.log(`[MCP Streamable HTTP] notifications/cancelled received (id: ${params?.requestId}, reason: ${params?.reason})`);
+      return null;
+
     default:
+      // Unknown notification (no id) — log and ignore silently
+      if (id === undefined || id === null) {
+        console.log(`[MCP Streamable HTTP] Unknown notification received: ${method} — ignoring`);
+        return null;
+      }
+      console.log(`[MCP Streamable HTTP] Unknown method called: ${method}`);
       return {
         jsonrpc,
         id,
