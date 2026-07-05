@@ -141,9 +141,6 @@ Opção por serviço:
   - Padrão, quando não informado: apenas `POST`.
   - Exemplo: `methods: [POST, GET]`.
   - O gateway encaminha para o destino usando o mesmo método recebido.
-- `allowGet`: legado para compatibilidade.
-  - Se `methods` não for informado e `allowGet: true`, o serviço permite `POST` e `GET`.
-  - Recomenda-se migrar para `methods`.
 - `subdomain`: lista opcional de subcaminhos aceitos para o mesmo serviço (`*` como curinga).
   - Formato simples: `- rest/ping.view`
   - Formato com filtro por subcaminho: `- path: rest/ping.view` + `filter: noFilter`
@@ -162,8 +159,7 @@ Opção por serviço:
       - `"*"` funciona como atalho para `true`
       - `HEADERS: "*"` repassa todos os headers do destino (exceto hop-by-hop bloqueados)
     - Campos ausentes na lista ficam bloqueados
-    - `defaultStatus` e `defaultBody` seguem válidos quando `STATUS`/`BODY` não estiverem em `fields`
-    - `fields` continua aceito como alias legado.
+    - `defaultStatus` e `defaultBody` seguem válidos quando `STATUS`/`BODY` não estiverem em `forward`
   - Formato recomendado (dinâmico por método):
     - `default`: política base para todos os métodos
     - `methods.GET`, `methods.POST`, etc: sobrescrevem a política base por método

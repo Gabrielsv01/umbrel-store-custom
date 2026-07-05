@@ -2,24 +2,26 @@
 import * as yaml from 'js-yaml';
 import * as fs from 'fs';
 import * as path from 'path';
-import { ResponseField, ResponsePolicy, ResponsePolicyConfig, WebhookConfig, WebhookMethod } from './types';
+import {
+    FilterFunctionName,
+    LoadedServiceConfig,
+    ParsedForwardConfig,
+    ResponseField,
+    ResponsePolicy,
+    ResponsePolicyConfig,
+    ServiceYamlConfig,
+    SubdomainRule,
+    SubdomainYamlEntry,
+    WebhookConfig,
+    WebhookMethod,
+} from './types';
 import { telegramFilter, alexaskillFilter, noFilter } from './filters';
-
-interface ParsedSubdomainRule {
-    pattern: string;
-    filter?: (payload: any, headers?: any) => boolean;
-}
-
-type SubdomainYamlEntry = string | {
-    path: string;
-    filter?: keyof typeof filterFunctions;
-};
 
 const SUPPORTED_METHODS: WebhookMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const SUPPORTED_METHODS_SET = new Set<WebhookMethod>(SUPPORTED_METHODS);
 const SUPPORTED_RESPONSE_FIELDS_SET = new Set<ResponseField>(['STATUS', 'BODY', 'HEADERS']);
 
-const filterFunctions = {
+const filterFunctions: Record<FilterFunctionName, (payload: any, config: any, headers?: any) => boolean> = {
     telegramFilter,
     alexaskillFilter,
     noFilter,
@@ -27,41 +29,47 @@ const filterFunctions = {
 
 const webhookConfig: WebhookConfig = {};
 
-function normalizeSingleResponsePolicy(response: any): ResponsePolicy | undefined {
-    if (!response || typeof response !== 'object') {
-        return undefined;
+function toStringArray(value: unknown): string[] {
+    if (Array.isArray(value)) {
+        return value.map((item) => String(item));
     }
 
-    const allowedHeadersRaw = response.allowedHeaders;
-    const allowedHeaders = Array.isArray(allowedHeadersRaw)
-        ? allowedHeadersRaw
-        : (typeof allowedHeadersRaw === 'string' ? [allowedHeadersRaw] : []);
+    if (typeof value === 'string') {
+        return [value];
+    }
 
-    const forwardRaw = response.forward ?? response.fields;
+    return [];
+}
 
+function splitCsv(value: string | undefined): string[] {
+    return value
+        ? value.split(',').map((item) => item.trim()).filter(Boolean)
+        : [];
+}
+
+function parseForwardToggle(value: unknown): boolean | undefined {
+    if (typeof value === 'boolean') {
+        return value;
+    }
+
+    if (typeof value === 'string' && value.trim() === '*') {
+        return true;
+    }
+
+    return undefined;
+}
+
+function parseForwardConfig(forwardRaw: unknown): ParsedForwardConfig {
     const hasExplicitForward = forwardRaw !== undefined;
-    const fieldsInput = Array.isArray(forwardRaw)
-        ? forwardRaw
-        : (typeof forwardRaw === 'string' ? [forwardRaw] : []);
+    const fieldsInput = toStringArray(forwardRaw);
     const normalizedFields = fieldsInput
-        .map((field) => String(field).toUpperCase().trim())
+        .map((field) => field.toUpperCase().trim())
         .filter((field): field is ResponseField => SUPPORTED_RESPONSE_FIELDS_SET.has(field as ResponseField));
-
-    const fields = hasExplicitForward ? Array.from(new Set(normalizedFields)) : undefined;
+    const forwardFields = hasExplicitForward ? Array.from(new Set(normalizedFields)) : undefined;
 
     const forwardMap = (!Array.isArray(forwardRaw) && forwardRaw && typeof forwardRaw === 'object')
         ? forwardRaw as Record<string, unknown>
         : undefined;
-
-    const parseForwardToggle = (value: unknown): boolean | undefined => {
-        if (typeof value === 'boolean') {
-            return value;
-        }
-        if (typeof value === 'string' && value.trim() === '*') {
-            return true;
-        }
-        return undefined;
-    };
 
     const passStatusFromForwardMap = parseForwardToggle(forwardMap?.STATUS);
     const passBodyFromForwardMap = parseForwardToggle(forwardMap?.BODY);
@@ -69,35 +77,61 @@ function normalizeSingleResponsePolicy(response: any): ResponsePolicy | undefine
     const headersWildcardAll = typeof headersForwardValue === 'string' && headersForwardValue.trim() === '*';
     const passHeadersFromForwardMap = parseForwardToggle(headersForwardValue)
         ?? (Array.isArray(headersForwardValue) ? true : undefined);
-    const headersFromForwardMapRaw = Array.isArray(headersForwardValue)
-        ? headersForwardValue
-        : (typeof headersForwardValue === 'string' ? [headersForwardValue] : []);
-    const headersFromForwardMap = headersFromForwardMapRaw
-        .map((header) => String(header).toLowerCase().trim())
+
+    const headersFromForwardMap = toStringArray(headersForwardValue)
+        .map((header) => header.toLowerCase().trim())
         .filter((header) => header !== '*')
         .filter(Boolean);
 
-    const passStatusFromFields = fields ? fields.includes('STATUS') : undefined;
-    const passBodyFromFields = fields ? fields.includes('BODY') : undefined;
-    const passHeadersFromFields = fields ? fields.includes('HEADERS') : undefined;
+    return {
+        forwardFields,
+        passStatusFromForwardMap,
+        passBodyFromForwardMap,
+        passHeadersFromForwardMap,
+        headersWildcardAll,
+        headersFromForwardMap,
+    };
+}
+
+function normalizeSingleResponsePolicy(response: any): ResponsePolicy | undefined {
+    if (!response || typeof response !== 'object') {
+        return undefined;
+    }
+
+    const allowedHeaders = toStringArray(response.allowedHeaders)
+        .map((header) => header.toLowerCase().trim())
+        .filter(Boolean);
+
+    const forwardRaw = response.forward;
+    const {
+        forwardFields,
+        passStatusFromForwardMap,
+        passBodyFromForwardMap,
+        passHeadersFromForwardMap,
+        headersWildcardAll,
+        headersFromForwardMap,
+    } = parseForwardConfig(forwardRaw);
+
+    const passStatusFromForwardList = forwardFields ? forwardFields.includes('STATUS') : undefined;
+    const passBodyFromForwardList = forwardFields ? forwardFields.includes('BODY') : undefined;
+    const passHeadersFromForwardList = forwardFields ? forwardFields.includes('HEADERS') : undefined;
 
     return {
-        forward: fields,
-        fields,
+        forward: forwardFields,
         passStatus: response.passStatus !== undefined
             ? Boolean(response.passStatus)
-            : (passStatusFromForwardMap ?? passStatusFromFields),
+            : (passStatusFromForwardMap ?? passStatusFromForwardList),
         passBody: response.passBody !== undefined
             ? Boolean(response.passBody)
-            : (passBodyFromForwardMap ?? passBodyFromFields),
+            : (passBodyFromForwardMap ?? passBodyFromForwardList),
         passHeaders: response.passHeaders !== undefined
             ? Boolean(response.passHeaders)
-            : (passHeadersFromForwardMap ?? passHeadersFromFields),
+            : (passHeadersFromForwardMap ?? passHeadersFromForwardList),
         allowedHeaders: headersWildcardAll
             ? undefined
             : headersFromForwardMap.length > 0
             ? headersFromForwardMap
-            : allowedHeaders.map((header) => header.toLowerCase().trim()).filter(Boolean),
+            : allowedHeaders,
         defaultStatus: typeof response.defaultStatus === 'number' ? response.defaultStatus : undefined,
         defaultBody: typeof response.defaultBody === 'string' ? response.defaultBody : undefined,
     };
@@ -142,12 +176,12 @@ function normalizeSubdomainEntries(
     serviceName: string,
     serviceSubdomain: SubdomainYamlEntry | SubdomainYamlEntry[] | undefined,
     loadedConfig: WebhookConfig,
-): ParsedSubdomainRule[] {
+): SubdomainRule[] {
     const entries = Array.isArray(serviceSubdomain)
         ? serviceSubdomain
         : (serviceSubdomain ? [serviceSubdomain] : []);
 
-    const parsedRules: ParsedSubdomainRule[] = [];
+    const parsedRules: SubdomainRule[] = [];
 
     for (const entry of entries) {
         if (typeof entry === 'string') {
@@ -163,8 +197,9 @@ function normalizeSubdomainEntries(
             continue;
         }
 
-        const filterFunction = entry.filter
-            ? (payload: any, headers: any) => filterFunctions[entry.filter as keyof typeof filterFunctions](payload, loadedConfig[serviceName], headers)
+        const entryFilter = entry.filter;
+        const filterFunction = entryFilter
+            ? (payload: any, headers: any) => filterFunctions[entryFilter](payload, loadedConfig[serviceName], headers)
             : undefined;
 
         parsedRules.push({
@@ -178,11 +213,8 @@ function normalizeSubdomainEntries(
 
 function normalizeMethods(
     serviceMethods: string | string[] | undefined,
-    allowGet: boolean | undefined,
 ): WebhookMethod[] {
-    const methodsFromConfig = Array.isArray(serviceMethods)
-        ? serviceMethods
-        : (typeof serviceMethods === 'string' ? [serviceMethods] : []);
+    const methodsFromConfig = toStringArray(serviceMethods);
 
     const normalized = methodsFromConfig
         .map((method) => method.toUpperCase().trim())
@@ -192,25 +224,32 @@ function normalizeMethods(
         return Array.from(new Set(normalized));
     }
 
-    return allowGet ? ['POST', 'GET'] : ['POST'];
+    return ['POST'];
 }
 
-const substituteEnvVars = (obj: any) => {
-    if (typeof obj !== 'object' || obj === null) {
-        return obj;
-    }
-    for (const key in obj) {
-        const value = obj[key];
-        if (typeof value === 'string') {
-            const match = value.match(/\${(.*?)}/);
-            if (match) {
-                const varName = match[1];
-                obj[key] = process.env[varName] || '';
-            }
-        } else if (typeof value === 'object') {
-            substituteEnvVars(value);
+const substituteEnvVars = (value: unknown): unknown => {
+    if (typeof value === 'string') {
+        const match = value.match(/\${(.*?)}/);
+        if (!match) {
+            return value;
         }
+
+        return process.env[match[1]] || '';
     }
+
+    if (Array.isArray(value)) {
+        return value.map((item) => substituteEnvVars(item));
+    }
+
+    if (typeof value === 'object' && value !== null) {
+        const transformed: Record<string, unknown> = {};
+        for (const [key, childValue] of Object.entries(value as Record<string, unknown>)) {
+            transformed[key] = substituteEnvVars(childValue);
+        }
+        return transformed;
+    }
+
+    return value;
 };
 
 const loadConfig = () => {
@@ -231,65 +270,33 @@ const loadConfig = () => {
         }
 
         const fileContents = fs.readFileSync(configPath, 'utf8');
-        const parsedYaml: any = yaml.load(fileContents);
-
-        substituteEnvVars(parsedYaml);
+        const parsedYaml = substituteEnvVars(yaml.load(fileContents)) as Record<string, unknown>;
 
         const loadedConfig: WebhookConfig = {};
 
         for (const serviceName in parsedYaml) {
             const service = parsedYaml[serviceName];
-            interface ServiceYamlConfig {
-                destination: string;
-                allowGet?: boolean;
-                methods?: string | string[];
-                response?: ResponsePolicyConfig | ResponsePolicy;
-                subdomain?: SubdomainYamlEntry | SubdomainYamlEntry[];
-                authorizedChatIds?: string;
-                authorizedUsernames?: string;
-                applicationId?: string;
-                signatureSecret?: string;
-                signatureHeader?: string;
-                signaturePrefix?: string;
-                hmacAlgorithm?: string;
-                filter?: keyof typeof filterFunctions;
-            }
-
-            interface LoadedServiceConfig {
-                destination: string;
-                allowGet?: boolean;
-                methods?: WebhookMethod[];
-                response?: ResponsePolicyConfig;
-                subdomain?: ParsedSubdomainRule[];
-                authorizedChatIds: string[];
-                authorizedUsernames: string[];
-                applicationId?: string;
-                signatureSecret?: string;
-                signatureHeader?: string;
-                signaturePrefix?: string;
-                hmacAlgorithm?: string;
-                filter?: (payload: any, headers?: any) => boolean;
-            }
 
             const serviceTyped = service as ServiceYamlConfig;
             const subdomainRules = normalizeSubdomainEntries(serviceName, serviceTyped.subdomain, loadedConfig);
-            const methods = normalizeMethods(serviceTyped.methods, serviceTyped.allowGet);
+            const methods = normalizeMethods(serviceTyped.methods);
             const responsePolicy = normalizeResponsePolicy(serviceTyped.response);
+
+            const serviceFilter = serviceTyped.filter;
 
             loadedConfig[serviceName] = {
                 destination: serviceTyped.destination!,
-                allowGet: Boolean(serviceTyped.allowGet),
                 methods,
                 response: responsePolicy,
                 subdomain: subdomainRules,
-                authorizedChatIds: serviceTyped.authorizedChatIds ? serviceTyped.authorizedChatIds.split(',').map((id: string) => id.trim()) : [],
-                authorizedUsernames: serviceTyped.authorizedUsernames ? serviceTyped.authorizedUsernames.split(',').map((username: string) => username.trim()) : [],
+                authorizedChatIds: splitCsv(serviceTyped.authorizedChatIds),
+                authorizedUsernames: splitCsv(serviceTyped.authorizedUsernames),
                 applicationId: serviceTyped.applicationId!,
                 signatureSecret: serviceTyped.signatureSecret || undefined,
                 signatureHeader: serviceTyped.signatureHeader?.toLowerCase() || undefined,
                 signaturePrefix: serviceTyped.signaturePrefix || undefined,
                 hmacAlgorithm: serviceTyped.hmacAlgorithm || 'sha256',
-                filter: serviceTyped.filter ? (payload: any, headers: any) => filterFunctions[serviceTyped.filter as keyof typeof filterFunctions](payload, loadedConfig[serviceName], headers) : undefined,
+                filter: serviceFilter ? (payload: any, headers: any) => filterFunctions[serviceFilter](payload, loadedConfig[serviceName], headers) : undefined,
             } as LoadedServiceConfig;
         }
         Object.assign(webhookConfig, loadedConfig);
