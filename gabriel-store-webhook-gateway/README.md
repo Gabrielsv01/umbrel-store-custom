@@ -164,6 +164,11 @@ Opção por serviço:
     - `default`: política base para todos os métodos
     - `methods.GET`, `methods.POST`, etc: sobrescrevem a política base por método
   - Exemplo: permitir body no `POST` e ocultar body no `GET` usando `default` + `methods.GET`.
+- `upstream`: define como o gateway encaminha a requisição para o destino.
+  - `timeoutMs`: timeout padrão (em ms) para todos os métodos.
+  - `timeoutMsByMethod`: timeout por método (ex.: `GET: 0`, `POST: 5000`).
+  - `forwardRequestHeaders`: lista de headers de entrada que devem ser repassados ao destino.
+    - Exemplo para streaming: `range`, `accept`, `if-none-match`, `if-modified-since`.
 
 ## Como rodar
 

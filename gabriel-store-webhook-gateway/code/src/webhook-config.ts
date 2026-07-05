@@ -12,6 +12,7 @@ import {
     ServiceYamlConfig,
     SubdomainRule,
     SubdomainYamlEntry,
+    UpstreamProxyConfig,
     WebhookConfig,
     WebhookMethod,
 } from './types';
@@ -227,6 +228,76 @@ function normalizeMethods(
     return ['POST'];
 }
 
+function normalizeUpstreamConfig(upstream: unknown): UpstreamProxyConfig | undefined {
+    if (!upstream || typeof upstream !== 'object') {
+        return undefined;
+    }
+
+    const upstreamConfig = upstream as Record<string, unknown>;
+
+    const timeoutMsRaw = upstreamConfig.timeoutMs;
+    const timeoutMs = typeof timeoutMsRaw === 'number' && Number.isFinite(timeoutMsRaw) && timeoutMsRaw >= 0
+        ? timeoutMsRaw
+        : undefined;
+
+    const timeoutMsByMethodRaw = upstreamConfig.timeoutMsByMethod;
+    const timeoutMsByMethod: Partial<Record<WebhookMethod, number>> = {};
+    if (timeoutMsByMethodRaw && typeof timeoutMsByMethodRaw === 'object' && !Array.isArray(timeoutMsByMethodRaw)) {
+        for (const [rawMethod, rawTimeout] of Object.entries(timeoutMsByMethodRaw as Record<string, unknown>)) {
+            const method = rawMethod.toUpperCase().trim() as WebhookMethod;
+            if (!SUPPORTED_METHODS_SET.has(method)) {
+                continue;
+            }
+
+            if (typeof rawTimeout === 'number' && Number.isFinite(rawTimeout) && rawTimeout >= 0) {
+                timeoutMsByMethod[method] = rawTimeout;
+            }
+        }
+    }
+
+    const forwardRequestRaw = upstreamConfig.forwardRequest;
+    const forwardRequestObject = (
+        forwardRequestRaw
+        && typeof forwardRequestRaw === 'object'
+        && !Array.isArray(forwardRequestRaw)
+    ) ? forwardRequestRaw as Record<string, unknown> : undefined;
+
+    const forwardRequestHeadersFromNewShape = toStringArray(forwardRequestObject?.HEADERS)
+        .map((header) => header.toLowerCase().trim())
+        .filter(Boolean);
+
+    const forwardRequestHeaders = toStringArray(upstreamConfig.forwardRequestHeaders)
+        .map((header) => header.toLowerCase().trim())
+        .filter(Boolean);
+
+    const normalizedForwardHeaders = forwardRequestHeadersFromNewShape.length > 0
+        ? forwardRequestHeadersFromNewShape
+        : forwardRequestHeaders;
+
+    const forwardRequestBody = typeof forwardRequestObject?.BODY === 'boolean'
+        ? forwardRequestObject.BODY
+        : undefined;
+
+    if (
+        timeoutMs === undefined
+        && Object.keys(timeoutMsByMethod).length === 0
+        && normalizedForwardHeaders.length === 0
+        && forwardRequestBody === undefined
+    ) {
+        return undefined;
+    }
+
+    return {
+        timeoutMs,
+        timeoutMsByMethod: Object.keys(timeoutMsByMethod).length > 0 ? timeoutMsByMethod : undefined,
+        forwardRequest: {
+            HEADERS: normalizedForwardHeaders.length > 0 ? Array.from(new Set(normalizedForwardHeaders)) : undefined,
+            BODY: forwardRequestBody,
+        },
+        forwardRequestHeaders: forwardRequestHeaders.length > 0 ? Array.from(new Set(forwardRequestHeaders)) : undefined,
+    };
+}
+
 const substituteEnvVars = (value: unknown): unknown => {
     if (typeof value === 'string') {
         const match = value.match(/\${(.*?)}/);
@@ -280,6 +351,7 @@ const loadConfig = () => {
             const serviceTyped = service as ServiceYamlConfig;
             const subdomainRules = normalizeSubdomainEntries(serviceName, serviceTyped.subdomain, loadedConfig);
             const methods = normalizeMethods(serviceTyped.methods);
+            const upstream = normalizeUpstreamConfig(serviceTyped.upstream);
             const responsePolicy = normalizeResponsePolicy(serviceTyped.response);
 
             const serviceFilter = serviceTyped.filter;
@@ -287,6 +359,7 @@ const loadConfig = () => {
             loadedConfig[serviceName] = {
                 destination: serviceTyped.destination!,
                 methods,
+                upstream,
                 response: responsePolicy,
                 subdomain: subdomainRules,
                 authorizedChatIds: splitCsv(serviceTyped.authorizedChatIds),

@@ -34,6 +34,17 @@ substream:
   methods:
     - POST
     - GET
+  upstream:
+    timeoutMsByMethod:
+      GET: 0
+      POST: 5000
+    forwardRequest:
+      HEADERS:
+        - range
+        - accept
+        - user-agent
+        - if-none-match
+        - if-modified-since
   response:
     default:
       forward: []
@@ -46,6 +57,5 @@ substream:
           BODY: "*"
           HEADERS: "*"
   subdomain:
-    - path: rest/ping.view
-      filter: noFilter
+    - path: rest/*
   filter: noFilter

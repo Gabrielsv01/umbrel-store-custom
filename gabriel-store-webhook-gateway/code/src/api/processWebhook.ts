@@ -270,6 +270,7 @@ function applyRequestFilter(
 async function forwardToDestination(
     req: Request,
     args: {
+        config: any;
         requestMethod: WebhookMethod;
         destination: string;
     },
@@ -277,13 +278,40 @@ async function forwardToDestination(
     const methodsWithBody: WebhookMethod[] = ['POST', 'PUT', 'PATCH', 'DELETE'];
     const shouldSendBody = methodsWithBody.includes(args.requestMethod);
 
+    const configuredForwardHeaders = (
+        args.config?.upstream?.forwardRequest?.HEADERS
+        || args.config?.upstream?.forwardRequestHeaders
+    ) as string[] | undefined;
+    const passThroughHeaderNames = configuredForwardHeaders && configuredForwardHeaders.length > 0
+        ? configuredForwardHeaders
+        : ['range', 'accept', 'user-agent', 'if-none-match', 'if-modified-since'];
+
+    const upstreamHeaders: Record<string, string> = {};
+    for (const headerName of passThroughHeaderNames) {
+        const headerValue = normalizeHeaderValue(req.headers[headerName]);
+        if (headerValue) {
+            upstreamHeaders[headerName.toLowerCase()] = headerValue;
+        }
+    }
+
+    if (shouldSendBody) {
+        upstreamHeaders['content-type'] = 'application/json';
+    }
+
+    const configuredTimeoutByMethod = args.config?.upstream?.timeoutMsByMethod?.[args.requestMethod];
+    const configuredTimeoutDefault = args.config?.upstream?.timeoutMs;
+    const timeoutMs = configuredTimeoutByMethod
+        ?? configuredTimeoutDefault
+        ?? (args.requestMethod === 'GET' ? 0 : 5000);
+
     return axios.request({
         method: args.requestMethod,
         url: args.destination,
         params: !shouldSendBody ? req.query : undefined,
         data: shouldSendBody ? req.body : undefined,
-        headers: shouldSendBody ? { 'Content-Type': 'application/json' } : undefined,
-        timeout: 5000,
+        headers: Object.keys(upstreamHeaders).length > 0 ? upstreamHeaders : undefined,
+        responseType: args.requestMethod === 'GET' ? 'stream' : 'arraybuffer',
+        timeout: timeoutMs,
         validateStatus: () => true,
     });
 }
@@ -306,13 +334,40 @@ function respondWithUpstream(
     const passStatus = effectiveResponsePolicy.passStatus ?? true;
     const passBody = effectiveResponsePolicy.passBody ?? true;
     const passHeaders = effectiveResponsePolicy.passHeaders ?? true;
+    const statusToSend = passStatus ? upstreamResponse.status : (effectiveResponsePolicy.defaultStatus ?? 200);
 
     if (passHeaders) {
         copyUpstreamHeaders(res, upstreamResponse.headers, effectiveResponsePolicy.allowedHeaders);
     }
 
-    const statusToSend = passStatus ? upstreamResponse.status : (effectiveResponsePolicy.defaultStatus ?? 200);
-    const bodyToSend = passBody ? upstreamResponse.data : (effectiveResponsePolicy.defaultBody ?? 'OK');
+    const upstreamData = upstreamResponse.data;
+    const isStream = upstreamData && typeof upstreamData.pipe === 'function';
+
+    if (!passBody) {
+        if (isStream && typeof upstreamData.destroy === 'function') {
+            upstreamData.destroy();
+        }
+
+        const bodyToSend = effectiveResponsePolicy.defaultBody ?? 'OK';
+        return res.status(statusToSend).send(bodyToSend);
+    }
+
+    if (isStream) {
+        res.status(statusToSend);
+        upstreamData.on('error', (error: Error) => {
+            console.error('Erro ao transmitir resposta do destino:', error.message);
+            if (!res.headersSent) {
+                res.status(502).send('Erro ao transmitir resposta do destino.');
+                return;
+            }
+
+            res.end();
+        });
+        upstreamData.pipe(res);
+        return;
+    }
+
+    const bodyToSend = upstreamResponse.data;
     return res.status(statusToSend).send(bodyToSend);
 }
 
@@ -378,7 +433,7 @@ async function processWebhook(req: Request, res: Response) {
             console.log(`[${serviceName}] - Payload da requisição:`, payload);
             console.log(`[${serviceName}] - Body da headers:`, req.headers);
         }
-        const upstreamResponse = await forwardToDestination(req, { requestMethod, destination });
+        const upstreamResponse = await forwardToDestination(req, { config, requestMethod, destination });
         const effectiveResponsePolicy = getEffectiveResponsePolicy(config, requestMethod);
 
         const isSuccess = upstreamResponse.status >= 200 && upstreamResponse.status < 300;

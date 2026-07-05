@@ -328,8 +328,8 @@ input[type='search'] {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-height: 58vh;
-    overflow-y: auto;
+    max-height: none;
+    overflow: visible;
     padding-right: 4px;
 }
 
