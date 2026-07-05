@@ -3,13 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Webhook Gateway</title>
+    <title>Webhook Gateway Observability</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Webhook Gateway</h1>
-    <div id="services-container">
+    <div class="bg-grid" aria-hidden="true"></div>
+    <div class="bg-glow" aria-hidden="true"></div>
+
+    <header class="topbar">
+        <div>
+            <p class="eyebrow">Ops Dashboard</p>
+            <h1>Webhook Gateway</h1>
+            <p class="subtitle">Monitoramento por endpoint com foco em status, bloqueios e tráfego recente.</p>
         </div>
+        <div class="top-controls">
+            <label class="control">
+                <span>Logs por endpoint</span>
+                <select id="global-log-limit">
+                    <option value="20">20</option>
+                    <option value="50" selected>50</option>
+                    <option value="100">100</option>
+                </select>
+            </label>
+            <label class="control checkbox-control" for="auto-refresh">
+                <input type="checkbox" id="auto-refresh">
+                <span>Auto refresh (10s)</span>
+            </label>
+            <button id="refresh-button" type="button">Atualizar agora</button>
+        </div>
+    </header>
+
+    <section class="kpi-grid" id="kpi-grid">
+        <article class="kpi-card">
+            <p class="kpi-label">Endpoints monitorados</p>
+            <p class="kpi-value" id="kpi-services">0</p>
+        </article>
+        <article class="kpi-card">
+            <p class="kpi-label">Eventos carregados</p>
+            <p class="kpi-value" id="kpi-events">0</p>
+        </article>
+        <article class="kpi-card">
+            <p class="kpi-label">Taxa de sucesso</p>
+            <p class="kpi-value" id="kpi-success-rate">0%</p>
+        </article>
+        <article class="kpi-card">
+            <p class="kpi-label">Bloqueios / falhas</p>
+            <p class="kpi-value" id="kpi-risk-rate">0%</p>
+        </article>
+    </section>
+
+    <main class="dashboard-layout">
+        <aside class="panel panel-left">
+            <div class="panel-header">
+                <h2>Endpoints</h2>
+                <input id="service-search" type="search" placeholder="Filtrar endpoint..." />
+            </div>
+            <div id="services-container" class="services-list"></div>
+        </aside>
+
+        <section class="panel panel-right">
+            <div class="panel-header panel-header-detail">
+                <div>
+                    <h2 id="selected-endpoint-title">Selecione um endpoint</h2>
+                    <p id="selected-endpoint-subtitle" class="muted">Clique em um endpoint para abrir a timeline.</p>
+                </div>
+                <div class="inline-filters">
+                    <select id="status-filter">
+                        <option value="all">Todos status</option>
+                        <option value="forwarded">forwarded</option>
+                        <option value="filtered">filtered</option>
+                        <option value="unauthorized">unauthorized</option>
+                        <option value="method_not_allowed">method_not_allowed</option>
+                        <option value="subpath_not_allowed">subpath_not_allowed</option>
+                        <option value="failed">failed</option>
+                    </select>
+                    <input id="log-search" type="search" placeholder="Buscar em summary/details..." />
+                </div>
+            </div>
+
+            <div class="endpoint-stats" id="endpoint-stats"></div>
+            <div id="logs-container" class="timeline"></div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <span id="last-updated">Ainda sem atualização.</span>
+    </footer>
+
     <script type="module" src="app.ts"></script>
 </body>
 </html>

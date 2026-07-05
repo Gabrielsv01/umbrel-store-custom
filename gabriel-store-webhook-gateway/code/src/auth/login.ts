@@ -3,9 +3,11 @@ import { PASSWORD_HASH, SESSION_COOKIE, SESSION_COOKIE_OPTIONS, SESSION_EXPIRE_M
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 
+const AUTH_FAILURE_MESSAGE = 'Credenciais inválidas';
+
 async function auth(req: Request, res: Response) {
     const { password } = req.body;
-    if (!password) return res.status(400).send('Senha obrigatória');
+    if (!password) return res.status(401).send(AUTH_FAILURE_MESSAGE);
     
     const isValid = await bcrypt.compare(password, PASSWORD_HASH);
     if (isValid) {
@@ -14,7 +16,7 @@ async function auth(req: Request, res: Response) {
         res.cookie(SESSION_COOKIE, sessionToken, SESSION_COOKIE_OPTIONS);
         return res.redirect('/dashboard');
     } else {
-        return res.status(401).send('Senha incorreta');
+        return res.status(401).send(AUTH_FAILURE_MESSAGE);
     }
 }
 
