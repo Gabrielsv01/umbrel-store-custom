@@ -87,6 +87,43 @@ function normalizeHeaderValue(value: string | string[] | undefined): string | un
     return Array.isArray(value) ? value[0] : value;
 }
 
+function copyUpstreamHeaders(
+    res: Response,
+    headers: Record<string, unknown>,
+    allowedHeaders?: string[],
+) {
+    const blockedHeaders = new Set([
+        'connection',
+        'keep-alive',
+        'proxy-authenticate',
+        'proxy-authorization',
+        'te',
+        'trailer',
+        'transfer-encoding',
+        'upgrade',
+        'content-length',
+    ]);
+
+    for (const [key, value] of Object.entries(headers)) {
+        if (allowedHeaders && allowedHeaders.length > 0 && !allowedHeaders.includes(key.toLowerCase())) {
+            continue;
+        }
+
+        if (blockedHeaders.has(key.toLowerCase())) {
+            continue;
+        }
+
+        if (Array.isArray(value)) {
+            res.setHeader(key, value.map((item) => String(item)));
+            continue;
+        }
+
+        if (value !== undefined && value !== null) {
+            res.setHeader(key, String(value));
+        }
+    }
+}
+
 function signatureMatches(
     rawBody: Buffer,
     receivedSignature: string,
@@ -247,22 +284,50 @@ async function processWebhook(req: Request, res: Response) {
         const methodsWithBody: WebhookMethod[] = ['POST', 'PUT', 'PATCH', 'DELETE'];
         const shouldSendBody = methodsWithBody.includes(requestMethod);
 
-        await axios.request({
+        const upstreamResponse = await axios.request({
             method: requestMethod,
             url: destination,
             params: !shouldSendBody ? req.query : undefined,
             data: shouldSendBody ? req.body : undefined,
             headers: shouldSendBody ? { 'Content-Type': 'application/json' } : undefined,
             timeout: 5000,
+            validateStatus: () => true,
         });
-        console.log(`[${serviceName}] - Webhook repassado com sucesso.`);
+
+        const responseDefaultPolicy = config.response?.default;
+        const responseMethodPolicy = config.response?.methods?.[requestMethod];
+        const effectiveResponsePolicy = {
+            ...responseDefaultPolicy,
+            ...responseMethodPolicy,
+        };
+
+        const passStatus = effectiveResponsePolicy.passStatus ?? true;
+        const passBody = effectiveResponsePolicy.passBody ?? true;
+        const passHeaders = effectiveResponsePolicy.passHeaders ?? true;
+
+        if (passHeaders) {
+            copyUpstreamHeaders(res, upstreamResponse.headers as Record<string, unknown>, effectiveResponsePolicy.allowedHeaders);
+        }
+
+        const isSuccess = upstreamResponse.status >= 200 && upstreamResponse.status < 300;
+        if (isSuccess) {
+            console.log(`[${serviceName}] - Webhook repassado com sucesso.`);
+        } else {
+            console.warn(`[${serviceName}] - Destino respondeu com status ${upstreamResponse.status}.`);
+        }
+
         pushLog({
             service: serviceName,
-            status: 'forwarded',
-            summary: 'Webhook repassado com sucesso',
+            status: isSuccess ? 'forwarded' : 'failed',
+            summary: isSuccess ? 'Webhook repassado com sucesso' : `Destino respondeu HTTP ${upstreamResponse.status}`,
             payload,
+            details: isSuccess ? undefined : `Destino respondeu HTTP ${upstreamResponse.status}`,
         });
-        return res.status(200).send('OK');
+
+        const statusToSend = passStatus ? upstreamResponse.status : (effectiveResponsePolicy.defaultStatus ?? 200);
+        const bodyToSend = passBody ? upstreamResponse.data : (effectiveResponsePolicy.defaultBody ?? 'OK');
+
+        return res.status(statusToSend).send(bodyToSend);
 
     } catch (error) {
         const err = error as any;

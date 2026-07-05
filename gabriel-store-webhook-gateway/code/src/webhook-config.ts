@@ -2,7 +2,7 @@
 import * as yaml from 'js-yaml';
 import * as fs from 'fs';
 import * as path from 'path';
-import { WebhookConfig, WebhookMethod } from './types';
+import { ResponseField, ResponsePolicy, ResponsePolicyConfig, WebhookConfig, WebhookMethod } from './types';
 import { telegramFilter, alexaskillFilter, noFilter } from './filters';
 
 interface ParsedSubdomainRule {
@@ -16,6 +16,8 @@ type SubdomainYamlEntry = string | {
 };
 
 const SUPPORTED_METHODS: WebhookMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+const SUPPORTED_METHODS_SET = new Set<WebhookMethod>(SUPPORTED_METHODS);
+const SUPPORTED_RESPONSE_FIELDS_SET = new Set<ResponseField>(['STATUS', 'BODY', 'HEADERS']);
 
 const filterFunctions = {
     telegramFilter,
@@ -24,6 +26,117 @@ const filterFunctions = {
 };
 
 const webhookConfig: WebhookConfig = {};
+
+function normalizeSingleResponsePolicy(response: any): ResponsePolicy | undefined {
+    if (!response || typeof response !== 'object') {
+        return undefined;
+    }
+
+    const allowedHeadersRaw = response.allowedHeaders;
+    const allowedHeaders = Array.isArray(allowedHeadersRaw)
+        ? allowedHeadersRaw
+        : (typeof allowedHeadersRaw === 'string' ? [allowedHeadersRaw] : []);
+
+    const forwardRaw = response.forward ?? response.fields;
+
+    const hasExplicitForward = forwardRaw !== undefined;
+    const fieldsInput = Array.isArray(forwardRaw)
+        ? forwardRaw
+        : (typeof forwardRaw === 'string' ? [forwardRaw] : []);
+    const normalizedFields = fieldsInput
+        .map((field) => String(field).toUpperCase().trim())
+        .filter((field): field is ResponseField => SUPPORTED_RESPONSE_FIELDS_SET.has(field as ResponseField));
+
+    const fields = hasExplicitForward ? Array.from(new Set(normalizedFields)) : undefined;
+
+    const forwardMap = (!Array.isArray(forwardRaw) && forwardRaw && typeof forwardRaw === 'object')
+        ? forwardRaw as Record<string, unknown>
+        : undefined;
+
+    const parseForwardToggle = (value: unknown): boolean | undefined => {
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        if (typeof value === 'string' && value.trim() === '*') {
+            return true;
+        }
+        return undefined;
+    };
+
+    const passStatusFromForwardMap = parseForwardToggle(forwardMap?.STATUS);
+    const passBodyFromForwardMap = parseForwardToggle(forwardMap?.BODY);
+    const headersForwardValue = forwardMap?.HEADERS;
+    const headersWildcardAll = typeof headersForwardValue === 'string' && headersForwardValue.trim() === '*';
+    const passHeadersFromForwardMap = parseForwardToggle(headersForwardValue)
+        ?? (Array.isArray(headersForwardValue) ? true : undefined);
+    const headersFromForwardMapRaw = Array.isArray(headersForwardValue)
+        ? headersForwardValue
+        : (typeof headersForwardValue === 'string' ? [headersForwardValue] : []);
+    const headersFromForwardMap = headersFromForwardMapRaw
+        .map((header) => String(header).toLowerCase().trim())
+        .filter((header) => header !== '*')
+        .filter(Boolean);
+
+    const passStatusFromFields = fields ? fields.includes('STATUS') : undefined;
+    const passBodyFromFields = fields ? fields.includes('BODY') : undefined;
+    const passHeadersFromFields = fields ? fields.includes('HEADERS') : undefined;
+
+    return {
+        forward: fields,
+        fields,
+        passStatus: response.passStatus !== undefined
+            ? Boolean(response.passStatus)
+            : (passStatusFromForwardMap ?? passStatusFromFields),
+        passBody: response.passBody !== undefined
+            ? Boolean(response.passBody)
+            : (passBodyFromForwardMap ?? passBodyFromFields),
+        passHeaders: response.passHeaders !== undefined
+            ? Boolean(response.passHeaders)
+            : (passHeadersFromForwardMap ?? passHeadersFromFields),
+        allowedHeaders: headersWildcardAll
+            ? undefined
+            : headersFromForwardMap.length > 0
+            ? headersFromForwardMap
+            : allowedHeaders.map((header) => header.toLowerCase().trim()).filter(Boolean),
+        defaultStatus: typeof response.defaultStatus === 'number' ? response.defaultStatus : undefined,
+        defaultBody: typeof response.defaultBody === 'string' ? response.defaultBody : undefined,
+    };
+}
+
+function normalizeResponsePolicy(response: any): ResponsePolicyConfig | undefined {
+    if (!response || typeof response !== 'object') {
+        return undefined;
+    }
+
+    const hasStructuredConfig = Object.prototype.hasOwnProperty.call(response, 'default')
+        || Object.prototype.hasOwnProperty.call(response, 'methods');
+
+    if (!hasStructuredConfig) {
+        const legacyPolicy = normalizeSingleResponsePolicy(response);
+        return legacyPolicy ? { default: legacyPolicy } : undefined;
+    }
+
+    const defaultPolicy = normalizeSingleResponsePolicy(response.default);
+    const methodsRaw = response.methods && typeof response.methods === 'object' ? response.methods : {};
+    const methods: Partial<Record<WebhookMethod, ResponsePolicy>> = {};
+
+    for (const [rawMethod, rawPolicy] of Object.entries(methodsRaw as Record<string, unknown>)) {
+        const method = rawMethod.toUpperCase().trim() as WebhookMethod;
+        if (!SUPPORTED_METHODS_SET.has(method)) {
+            continue;
+        }
+
+        const parsedPolicy = normalizeSingleResponsePolicy(rawPolicy);
+        if (parsedPolicy) {
+            methods[method] = parsedPolicy;
+        }
+    }
+
+    return {
+        default: defaultPolicy,
+        methods: Object.keys(methods).length > 0 ? methods : undefined,
+    };
+}
 
 function normalizeSubdomainEntries(
     serviceName: string,
@@ -130,6 +243,7 @@ const loadConfig = () => {
                 destination: string;
                 allowGet?: boolean;
                 methods?: string | string[];
+                response?: ResponsePolicyConfig | ResponsePolicy;
                 subdomain?: SubdomainYamlEntry | SubdomainYamlEntry[];
                 authorizedChatIds?: string;
                 authorizedUsernames?: string;
@@ -145,6 +259,7 @@ const loadConfig = () => {
                 destination: string;
                 allowGet?: boolean;
                 methods?: WebhookMethod[];
+                response?: ResponsePolicyConfig;
                 subdomain?: ParsedSubdomainRule[];
                 authorizedChatIds: string[];
                 authorizedUsernames: string[];
@@ -159,11 +274,13 @@ const loadConfig = () => {
             const serviceTyped = service as ServiceYamlConfig;
             const subdomainRules = normalizeSubdomainEntries(serviceName, serviceTyped.subdomain, loadedConfig);
             const methods = normalizeMethods(serviceTyped.methods, serviceTyped.allowGet);
+            const responsePolicy = normalizeResponsePolicy(serviceTyped.response);
 
             loadedConfig[serviceName] = {
                 destination: serviceTyped.destination!,
                 allowGet: Boolean(serviceTyped.allowGet),
                 methods,
+                response: responsePolicy,
                 subdomain: subdomainRules,
                 authorizedChatIds: serviceTyped.authorizedChatIds ? serviceTyped.authorizedChatIds.split(',').map((id: string) => id.trim()) : [],
                 authorizedUsernames: serviceTyped.authorizedUsernames ? serviceTyped.authorizedUsernames.split(',').map((username: string) => username.trim()) : [],

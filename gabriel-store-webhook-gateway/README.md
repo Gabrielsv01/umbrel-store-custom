@@ -97,6 +97,21 @@ webhook:
   destination: ${N8N_WEBHOOK_URL}
   methods:
     - POST
+  response:
+    default:
+      forward:
+        - STATUS
+        - BODY
+        - HEADERS
+      allowedHeaders:
+        - content-type
+    methods:
+      GET:
+        forward:
+          STATUS: "*"
+          BODY: false
+          HEADERS:
+            - content-type
   subdomain:
     - path: rest/ping.view
       filter: noFilter
@@ -136,6 +151,23 @@ Opção por serviço:
   - Exemplo: `rest/*` aceita qualquer rota abaixo de `rest/`.
   - Quando um subcaminho é aceito, ele é anexado ao `destination` no encaminhamento.
   - Se um subcaminho tiver filtro próprio, ele sobrescreve o `filter` global do serviço para aquela rota.
+- `response`: define como a resposta do destino deve ser repassada.
+  - Formato legado (ainda suportado):
+    - `passStatus` (padrão `true`), `passBody` (padrão `true`), `passHeaders` (padrão `true`)
+    - `allowedHeaders`, `defaultStatus`, `defaultBody`
+  - Formato recomendado:
+    - `forward` pode ser lista ou objeto:
+      - Lista: `forward: [STATUS, HEADERS]`
+      - Objeto: `forward: { STATUS: "*", BODY: false, HEADERS: [content-type] }`
+      - `"*"` funciona como atalho para `true`
+      - `HEADERS: "*"` repassa todos os headers do destino (exceto hop-by-hop bloqueados)
+    - Campos ausentes na lista ficam bloqueados
+    - `defaultStatus` e `defaultBody` seguem válidos quando `STATUS`/`BODY` não estiverem em `fields`
+    - `fields` continua aceito como alias legado.
+  - Formato recomendado (dinâmico por método):
+    - `default`: política base para todos os métodos
+    - `methods.GET`, `methods.POST`, etc: sobrescrevem a política base por método
+  - Exemplo: permitir body no `POST` e ocultar body no `GET` usando `default` + `methods.GET`.
 
 ## Como rodar
 
