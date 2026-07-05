@@ -13,10 +13,10 @@ API em Node.js/Express para receber webhooks de diferentes serviços, aplicar fi
 
 ## Arquitetura rápida
 
-1. O webhook chega em `POST /api/:serviceName` (ou variações compatíveis).
+1. O webhook chega em `/api/:serviceName` (ou variações compatíveis) no método permitido (`POST`, `GET`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`).
 2. A aplicação carrega a configuração do serviço em `config/webhooks.yml`.
 3. Se houver filtro e o evento não passar, retorna `200` com mensagem de filtrado.
-4. Se passar, encaminha via `POST` para o `destination` configurado.
+4. Se passar, encaminha para o `destination` configurado usando o mesmo método recebido.
 5. Registra log em memória (máximo de 500 itens).
 
 ## Endpoints
@@ -167,8 +167,31 @@ Opção por serviço:
 - `upstream`: define como o gateway encaminha a requisição para o destino.
   - `timeoutMs`: timeout padrão (em ms) para todos os métodos.
   - `timeoutMsByMethod`: timeout por método (ex.: `GET: 0`, `POST: 5000`).
-  - `forwardRequestHeaders`: lista de headers de entrada que devem ser repassados ao destino.
-    - Exemplo para streaming: `range`, `accept`, `if-none-match`, `if-modified-since`.
+  - `forwardRequest.HEADERS`: lista de headers de entrada que devem ser repassados ao destino.
+    - Exemplo para streaming: `range`, `accept`, `user-agent`, `if-none-match`, `if-modified-since`.
+  - `forwardRequest.BODY` (opcional): reservado para controle explícito de encaminhamento de body por serviço.
+  - `forwardRequestHeaders`: alias legado ainda aceito para compatibilidade, mas recomenda-se migrar para `forwardRequest.HEADERS`.
+
+Exemplo de `upstream` para streaming:
+
+```yml
+upstream:
+  timeoutMsByMethod:
+    GET: 0
+    POST: 5000
+  forwardRequest:
+    HEADERS:
+      - range
+      - accept
+      - user-agent
+      - if-none-match
+      - if-modified-since
+```
+
+Notas de comportamento em `GET`:
+
+- O gateway encaminha `GET` com suporte a streaming da resposta do destino.
+- Com `response.methods.GET.forward.HEADERS: "*"`, os headers de resposta do destino são repassados (exceto hop-by-hop bloqueados).
 
 ## Como rodar
 
@@ -246,6 +269,7 @@ Após autenticar no dashboard:
 - Webhooks limitados a 100 requisições por 15 minutos.
 - Sessão expira em 2 minutos (`SESSION_EXPIRE_MS`).
 - Sessão é renovada por atividade (sliding expiration).
+- Erro de autenticação no login usa mensagem genérica (`Credenciais inválidas`) para evitar vazamento de informação.
 - Logs são mantidos apenas em memória e não persistem após reinício.
 
 ## Limitações conhecidas
