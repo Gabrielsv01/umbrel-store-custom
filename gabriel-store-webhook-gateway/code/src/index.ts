@@ -33,15 +33,39 @@ app.use(express.json({
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.post('/api/:serviceName', webhookLimiter, processWebhook);
-app.post('/api/:serviceName/webhook/:id/webhook', webhookLimiter, processWebhook);
-app.post('/api/:serviceName/webhook-test/:id/webhook', webhookLimiter, processWebhook);
-
-// Auth
 app.get('/api/webhooks', webhooks);
 app.get('/api/logs/:serviceName', logs);
 app.get('/dashboard', dashboard);
 app.post('/', loginLimiter, express.urlencoded({ extended: false, limit: URLENCODED_BODY_LIMIT }), auth);
+
+app.post('/api/:serviceName', webhookLimiter, processWebhook);
+app.post('/api/:serviceName/*subPath', webhookLimiter, processWebhook);
+app.post('/api/:serviceName/webhook/:id/webhook', webhookLimiter, processWebhook);
+app.post('/api/:serviceName/webhook-test/:id/webhook', webhookLimiter, processWebhook);
+app.get('/api/:serviceName', webhookLimiter, processWebhook);
+app.get('/api/:serviceName/*subPath', webhookLimiter, processWebhook);
+app.get('/api/:serviceName/webhook/:id/webhook', webhookLimiter, processWebhook);
+app.get('/api/:serviceName/webhook-test/:id/webhook', webhookLimiter, processWebhook);
+app.put('/api/:serviceName', webhookLimiter, processWebhook);
+app.put('/api/:serviceName/*subPath', webhookLimiter, processWebhook);
+app.put('/api/:serviceName/webhook/:id/webhook', webhookLimiter, processWebhook);
+app.put('/api/:serviceName/webhook-test/:id/webhook', webhookLimiter, processWebhook);
+app.patch('/api/:serviceName', webhookLimiter, processWebhook);
+app.patch('/api/:serviceName/*subPath', webhookLimiter, processWebhook);
+app.patch('/api/:serviceName/webhook/:id/webhook', webhookLimiter, processWebhook);
+app.patch('/api/:serviceName/webhook-test/:id/webhook', webhookLimiter, processWebhook);
+app.delete('/api/:serviceName', webhookLimiter, processWebhook);
+app.delete('/api/:serviceName/*subPath', webhookLimiter, processWebhook);
+app.delete('/api/:serviceName/webhook/:id/webhook', webhookLimiter, processWebhook);
+app.delete('/api/:serviceName/webhook-test/:id/webhook', webhookLimiter, processWebhook);
+app.head('/api/:serviceName', webhookLimiter, processWebhook);
+app.head('/api/:serviceName/*subPath', webhookLimiter, processWebhook);
+app.head('/api/:serviceName/webhook/:id/webhook', webhookLimiter, processWebhook);
+app.head('/api/:serviceName/webhook-test/:id/webhook', webhookLimiter, processWebhook);
+app.options('/api/:serviceName', webhookLimiter, processWebhook);
+app.options('/api/:serviceName/*subPath', webhookLimiter, processWebhook);
+app.options('/api/:serviceName/webhook/:id/webhook', webhookLimiter, processWebhook);
+app.options('/api/:serviceName/webhook-test/:id/webhook', webhookLimiter, processWebhook);
 
 app.listen(PORT, () => {
     console.log(`API de Guarda de Webhooks rodando na porta ${PORT}`);

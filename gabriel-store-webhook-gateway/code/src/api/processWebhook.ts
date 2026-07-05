@@ -4,8 +4,66 @@ import { webhookLogs } from "../logs";
 import webhookConfig from "../webhook-config";
 import { Request, Response } from 'express';
 import crypto from 'crypto';
+import { WebhookMethod } from "../types";
 
 type RequestWithRawBody = Request & { rawBody?: Buffer };
+
+function normalizeSubPathParam(value: unknown): string {
+    if (Array.isArray(value)) {
+        return value.join('/');
+    }
+
+    return typeof value === 'string' ? value : '';
+}
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function matchSubdomainPattern(pathValue: string, pattern: string): boolean {
+    const normalizedPath = pathValue.replace(/^\/+|\/+$/g, '');
+    const normalizedPattern = pattern.replace(/^\/+|\/+$/g, '');
+    const wildcardRegex = `^${escapeRegExp(normalizedPattern).replace(/\\\*/g, '.*')}$`;
+    return new RegExp(wildcardRegex).test(normalizedPath);
+}
+
+function findMatchingSubdomainRule(
+    pathValue: string,
+    rules: Array<{ pattern: string; filter?: (payload: any, headers?: any) => boolean }>,
+) {
+    return rules.find((rule) => matchSubdomainPattern(pathValue, rule.pattern));
+}
+
+function resolveDestination(baseDestination: string, subPath: string): string {
+    if (!subPath) {
+        return baseDestination;
+    }
+
+    const normalizedSubPath = subPath.replace(/^\/+/, '');
+
+    try {
+        const destinationUrl = new URL(baseDestination);
+        const basePath = destinationUrl.pathname.replace(/\/+$/, '');
+        const mergedPath = `${basePath}/${normalizedSubPath}`.replace(/\/+/g, '/');
+        destinationUrl.pathname = mergedPath.startsWith('/') ? mergedPath : `/${mergedPath}`;
+        return destinationUrl.toString();
+    } catch {
+        return `${baseDestination.replace(/\/+$/, '')}/${normalizedSubPath}`;
+    }
+}
+
+function isMethodAllowed(
+    method: string,
+    methods: WebhookMethod[] | undefined,
+    legacyAllowGet: boolean | undefined,
+): boolean {
+    const normalizedMethod = method.toUpperCase() as WebhookMethod;
+    const allowedMethods = methods && methods.length > 0
+        ? methods
+        : (legacyAllowGet ? ['POST', 'GET'] : ['POST']);
+
+    return allowedMethods.includes(normalizedMethod);
+}
 
 function pushLog(log: {
     service: string;
@@ -54,6 +112,12 @@ function signatureMatches(
 async function processWebhook(req: Request, res: Response) {
     const { serviceName } = req.params;
     const config = webhookConfig[serviceName];
+    const requestSubPath = normalizeSubPathParam((req.params as Record<string, unknown>).subPath);
+    const normalizedSubPath = requestSubPath.replace(/^\/+|\/+$/g, '');
+    const requestMethod = req.method.toUpperCase() as WebhookMethod;
+    const isGetRequest = requestMethod === 'GET';
+    const payload = isGetRequest ? req.query : req.body;
+    let matchedSubdomainRule: { pattern: string; filter?: (payload: any, headers?: any) => boolean } | undefined;
 
     if (!config) {
         console.warn(`[${serviceName}] - Serviço desconhecido. Requisição rejeitada.`);
@@ -61,9 +125,35 @@ async function processWebhook(req: Request, res: Response) {
             service: serviceName,
             status: 'unknown_service',
             summary: 'Serviço desconhecido',
-            payload: req.body,
+            payload,
         });
         return res.status(404).send('Serviço de webhook não encontrado.');
+    }
+
+    if (!isMethodAllowed(requestMethod, config.methods, config.allowGet)) {
+        pushLog({
+            service: serviceName,
+            status: 'method_not_allowed',
+            summary: `Método ${requestMethod} não permitido para este serviço`,
+            payload,
+        });
+        return res.status(405).send('Método não permitido para este serviço.');
+    }
+
+    if (normalizedSubPath) {
+        const allowedRules = config.subdomain || [];
+        matchedSubdomainRule = findMatchingSubdomainRule(normalizedSubPath, allowedRules);
+
+        if (!matchedSubdomainRule) {
+            pushLog({
+                service: serviceName,
+                status: 'subpath_not_allowed',
+                summary: 'Subcaminho não permitido para este serviço',
+                payload,
+                details: normalizedSubPath,
+            });
+            return res.status(404).send('Subcaminho não permitido para este serviço.');
+        }
     }
 
     if (!config.destination) {
@@ -71,13 +161,13 @@ async function processWebhook(req: Request, res: Response) {
             service: serviceName,
             status: 'failed',
             summary: 'Destino não configurado',
-            payload: req.body,
+            payload,
         });
         return res.status(500).send('Destino do webhook não configurado.');
     }
 
     if (process.env.DEBUG === "true"){
-        console.log(`[${serviceName}] - Requisição recebida:`, req.body);
+        console.log(`[${serviceName}] - Requisição recebida (${req.method}):`, payload);
     }
 
     if (process.env.DEBUG === "true"){
@@ -88,7 +178,7 @@ async function processWebhook(req: Request, res: Response) {
         }
     }
 
-    if (config.signatureSecret) {
+    if (config.signatureSecret && !isGetRequest) {
         const headerName = config.signatureHeader || 'x-webhook-signature';
         const signature = normalizeHeaderValue(req.headers[headerName] as string | string[] | undefined);
 
@@ -97,7 +187,7 @@ async function processWebhook(req: Request, res: Response) {
                 service: serviceName,
                 status: 'unauthorized',
                 summary: 'Assinatura ausente',
-                payload: req.body,
+                payload,
                 details: `Header esperado: ${headerName}`,
             });
             return res.status(401).send('Assinatura do webhook ausente.');
@@ -109,7 +199,7 @@ async function processWebhook(req: Request, res: Response) {
                 service: serviceName,
                 status: 'failed',
                 summary: 'Corpo bruto ausente para validação',
-                payload: req.body,
+                payload,
             });
             return res.status(400).send('Não foi possível validar a assinatura.');
         }
@@ -127,41 +217,50 @@ async function processWebhook(req: Request, res: Response) {
                 service: serviceName,
                 status: 'unauthorized',
                 summary: 'Assinatura inválida',
-                payload: req.body,
+                payload,
             });
             return res.status(401).send('Assinatura do webhook inválida.');
         }
     }
 
-    if (config.filter && !config.filter(req.body, req.headers)) {
+    const requestFilter = matchedSubdomainRule?.filter || config.filter;
+
+    if (requestFilter && !requestFilter(payload, req.headers)) {
         console.log(`[${serviceName}] - Requisição filtrada e ignorada com base no conteúdo.`);
         pushLog({
             service: serviceName,
             status: 'filtered',
             summary: 'Requisição filtrada',
-            payload: req.body,
+            payload,
         });
         return res.status(200).send('OK, mas a requisição foi filtrada.');
     }
 
     try {
+        const destination = resolveDestination(config.destination, normalizedSubPath);
+
         if (process.env.DEBUG === "true"){
-            console.log(`[${serviceName}] - Enviando requisição para:`, config.destination);
-            console.log(`[${serviceName}] - Body da requisição:`, req.body);
+            console.log(`[${serviceName}] - Enviando requisição para:`, destination);
+            console.log(`[${serviceName}] - Payload da requisição:`, payload);
             console.log(`[${serviceName}] - Body da headers:`, req.headers);
         }
-        await axios.post(config.destination, req.body, {
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            timeout: 5000
+        const methodsWithBody: WebhookMethod[] = ['POST', 'PUT', 'PATCH', 'DELETE'];
+        const shouldSendBody = methodsWithBody.includes(requestMethod);
+
+        await axios.request({
+            method: requestMethod,
+            url: destination,
+            params: !shouldSendBody ? req.query : undefined,
+            data: shouldSendBody ? req.body : undefined,
+            headers: shouldSendBody ? { 'Content-Type': 'application/json' } : undefined,
+            timeout: 5000,
         });
         console.log(`[${serviceName}] - Webhook repassado com sucesso.`);
         pushLog({
             service: serviceName,
             status: 'forwarded',
             summary: 'Webhook repassado com sucesso',
-            payload: req.body,
+            payload,
         });
         return res.status(200).send('OK');
 
@@ -173,7 +272,7 @@ async function processWebhook(req: Request, res: Response) {
             service: serviceName,
             status: 'failed',
             summary: 'Falha ao repassar webhook',
-            payload: req.body,
+            payload,
             details: destinationStatus ? `Destino respondeu HTTP ${destinationStatus}` : err?.message,
         });
         return res.status(500).send('Erro interno ao processar o webhook.');

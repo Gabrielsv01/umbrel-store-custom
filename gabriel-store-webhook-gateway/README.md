@@ -14,7 +14,7 @@ API em Node.js/Express para receber webhooks de diferentes serviços, aplicar fi
 ## Arquitetura rápida
 
 1. O webhook chega em `POST /api/:serviceName` (ou variações compatíveis).
-2. A aplicação carrega a configuração do serviço em `code/webhooks.yml`.
+2. A aplicação carrega a configuração do serviço em `config/webhooks.yml`.
 3. Se houver filtro e o evento não passar, retorna `200` com mensagem de filtrado.
 4. Se passar, encaminha via `POST` para o `destination` configurado.
 5. Registra log em memória (máximo de 500 itens).
@@ -24,8 +24,14 @@ API em Node.js/Express para receber webhooks de diferentes serviços, aplicar fi
 ### Webhooks (entrada)
 
 - `POST /api/:serviceName`
+- `POST /api/:serviceName/*subPath` (somente se `subdomain` permitir o caminho)
 - `POST /api/:serviceName/webhook/:id/webhook`
 - `POST /api/:serviceName/webhook-test/:id/webhook`
+- `GET /api/:serviceName` (somente se `methods` incluir `GET`)
+- `GET /api/:serviceName/*subPath` (somente se `methods` incluir `GET` e `subdomain` permitir)
+- `GET /api/:serviceName/webhook/:id/webhook` (somente se `methods` incluir `GET`)
+- `GET /api/:serviceName/webhook-test/:id/webhook` (somente se `methods` incluir `GET`)
+- `PUT/PATCH/DELETE/HEAD/OPTIONS` seguem a mesma regra: precisam estar em `methods`.
 
 ### Dashboard e autenticação
 
@@ -55,7 +61,7 @@ Principais variáveis:
   - `COOKIE_SECURE` (recomendado `true` em produção)
   - `COOKIE_SAME_SITE` (`lax`, `strict` ou `none`)
 - Configuração de arquivo:
-  - `WEBHOOK_CONFIG_PATH` (opcional, caminho absoluto para `webhooks.yml`)
+  - `WEBHOOK_CONFIG_PATH` (opcional, caminho absoluto para `webhooks.yml`; padrão: `config/webhooks.yml`)
 - Hardening (`helmet`):
   - `ENABLE_HELMET`
   - `ENABLE_CSP`
@@ -73,7 +79,7 @@ Principais variáveis:
 
 ### 2) Configuração dos serviços de webhook
 
-Edite `code/webhooks.yml` para mapear cada serviço:
+Edite `config/webhooks.yml` para mapear cada serviço:
 
 ```yml
 telegram:
@@ -89,6 +95,13 @@ alexa:
 
 webhook:
   destination: ${N8N_WEBHOOK_URL}
+  methods:
+    - POST
+  subdomain:
+    - path: rest/ping.view
+      filter: noFilter
+    - path: rest/*
+      filter: telegramFilter
   signatureSecret: ${WEBHOOK_SIGNATURE_SECRET}
   signatureHeader: x-webhook-signature
   signaturePrefix: sha256=
@@ -106,6 +119,23 @@ Filtros disponíveis:
 - `telegramFilter`: aceita evento se `chat.id` OU `from.username` estiver autorizado.
 - `alexaskillFilter`: aceita somente quando `applicationId` confere.
 - `noFilter`: aceita tudo.
+
+Opção por serviço:
+
+- `methods`: lista de métodos permitidos no serviço (ex.: `POST`, `GET`, `PATCH`, `DELETE`).
+  - Padrão, quando não informado: apenas `POST`.
+  - Exemplo: `methods: [POST, GET]`.
+  - O gateway encaminha para o destino usando o mesmo método recebido.
+- `allowGet`: legado para compatibilidade.
+  - Se `methods` não for informado e `allowGet: true`, o serviço permite `POST` e `GET`.
+  - Recomenda-se migrar para `methods`.
+- `subdomain`: lista opcional de subcaminhos aceitos para o mesmo serviço (`*` como curinga).
+  - Formato simples: `- rest/ping.view`
+  - Formato com filtro por subcaminho: `- path: rest/ping.view` + `filter: noFilter`
+  - Exemplo: `rest/ping.view` aceita somente esse caminho.
+  - Exemplo: `rest/*` aceita qualquer rota abaixo de `rest/`.
+  - Quando um subcaminho é aceito, ele é anexado ao `destination` no encaminhamento.
+  - Se um subcaminho tiver filtro próprio, ele sobrescreve o `filter` global do serviço para aquela rota.
 
 ## Como rodar
 
@@ -143,7 +173,7 @@ docker compose up -d
 
 O container expõe a porta `5124` e monta:
 
-- `${APP_DATA_DIR}/code/webhooks.yml:/app/webhooks.yml`
+- `${APP_DATA_DIR}/config/webhooks.yml:/app/config/webhooks.yml`
 
 ## Como usar na prática
 
