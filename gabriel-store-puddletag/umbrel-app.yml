@@ -2,26 +2,21 @@ manifestVersion: 1
 id: gabriel-store-puddletag
 name: puddletag
 tagline: A powerful MP3 tagging solution
-icon: https://getumbrel.github.io/umbrel-apps-gallery/mp3tag/icon.svg
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-puddletag/icon.svg
 category: media
 version: "0.0.1"
 port: 5147
 description: >-
-  puddletag is a versatile and user-friendly application designed for managing and editing metadata of your audio files. It supports a wide range of audio formats and provides an intuitive interface for organizing your music library efficiently. With MP3Tag, you can easily update song information, album art, and other metadata, ensuring your music collection is well-organized and accurately labeled.
+  Puddletag is a versatile and user-friendly application designed for managing and editing metadata of your audio files. It supports a wide range of audio formats and provides an intuitive interface for organizing your music library efficiently. With Puddletag, you can easily update song information, album art, and other metadata, ensuring your music collection is well-organized and accurately labeled.
 
-  Its robust features make puddletag suitable for both casual users and professional music enthusiasts. You can batch edit tags, import metadata from online databases, and customize tag fields to match your preferences. MP3Tag also offers advanced scripting capabilities for automating repetitive tasks, saving you time and effort in managing large music libraries.
-  ⚠️ This app only works in Chromium-based browsers (e.g., Chrome, Edge, Brave) and is available at "umbrel.local:5142/web/". Please note that the app is approximately 4GB in size, so the loading process may take a few moments.
-
-developer: puddletag
+developer: Puddletag
 website: https://docs.puddletag.net/
 submitter: Gabriel Vieira
 submission: https://github.com/getumbrel/umbrel-apps/pull/2498
 repo: https://docs.puddletag.net/
 support: https://docs.puddletag.net/
 releaseNotes: >-
-  This release includes numerous improvements and fixes:
-
-
+  First version of the Puddletag app for Umbrel.
 dependencies: []
 permissions:
   - STORAGE_DOWNLOADS
