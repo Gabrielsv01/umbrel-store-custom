@@ -18,16 +18,54 @@ import {
 
 type RequestWithRawBody = Request & { rawBody?: Buffer };
 
+// Metadados operacionais e não sensíveis anexados a cada log.
+// NUNCA inclui valores de allowlist, tokens, assinaturas ou headers de auth.
+interface LogMeta {
+    method?: string;
+    subPath?: string;
+    payloadSize?: number;
+    contentType?: string;
+    userAgent?: string;
+    durationMs?: number;
+    upstreamStatus?: number;
+    filterReason?: string;
+}
+
+function buildBaseMeta(
+    req: Request,
+    method: WebhookMethod,
+    subPath: string,
+    payload: unknown,
+): LogMeta {
+    const rawBody = (req as RequestWithRawBody).rawBody;
+    const payloadSize = rawBody && rawBody.length > 0
+        ? rawBody.length
+        : Buffer.byteLength(JSON.stringify(payload ?? {}));
+
+    return {
+        method,
+        subPath: subPath || undefined,
+        payloadSize,
+        contentType: normalizeHeaderValue(req.headers['content-type']),
+        userAgent: normalizeHeaderValue(req.headers['user-agent']),
+    };
+}
+
 function pushLog(log: {
     service: string;
     status: string;
     summary: string;
     payload: any;
     details?: string;
+    meta?: LogMeta;
 }) {
     webhookLogs.push({
         timestamp: new Date().toISOString(),
-        ...log,
+        service: log.service,
+        status: log.status,
+        summary: log.summary,
+        details: log.details,
+        ...log.meta,
         payload: LOG_PAYLOADS ? redactSecrets(log.payload) : undefined,
     });
 
@@ -45,6 +83,7 @@ function createRequestContext(req: Request) {
     const requestMethod = req.method.toUpperCase() as WebhookMethod;
     const isGetRequest = requestMethod === 'GET';
     const payload = isGetRequest ? req.query : req.body;
+    const meta = buildBaseMeta(req, requestMethod, normalizedSubPath, payload);
 
     return {
         serviceName,
@@ -53,6 +92,7 @@ function createRequestContext(req: Request) {
         requestMethod,
         isGetRequest,
         payload,
+        meta,
     };
 }
 
@@ -67,6 +107,7 @@ function logAndRespond(
         httpStatus: number;
         body: string;
         warning?: string;
+        meta?: LogMeta;
     },
 ) {
     if (args.warning) {
@@ -79,6 +120,7 @@ function logAndRespond(
         summary: args.summary,
         payload: args.payload,
         details: args.details,
+        meta: args.meta,
     });
 
     return res.status(args.httpStatus).send(args.body);
@@ -89,6 +131,7 @@ function ensureServiceConfig(
     serviceName: string,
     config: any,
     payload: any,
+    meta: LogMeta,
 ) {
     if (config) {
         return true;
@@ -102,6 +145,7 @@ function ensureServiceConfig(
         httpStatus: 404,
         body: 'Serviço de webhook não encontrado.',
         warning: `[${serviceName}] - Serviço desconhecido. Requisição rejeitada.`,
+        meta,
     });
     return false;
 }
@@ -112,6 +156,7 @@ function ensureMethodAllowed(
     config: any,
     requestMethod: WebhookMethod,
     payload: any,
+    meta: LogMeta,
 ) {
     if (isMethodAllowed(requestMethod, config.methods)) {
         return true;
@@ -124,6 +169,7 @@ function ensureMethodAllowed(
         payload,
         httpStatus: 405,
         body: 'Método não permitido para este serviço.',
+        meta,
     });
     return false;
 }
@@ -134,6 +180,7 @@ function resolveMatchedSubdomainRule(
     config: any,
     normalizedSubPath: string,
     payload: any,
+    meta: LogMeta,
 ) {
     if (!normalizedSubPath) {
         return { ok: true, matchedSubdomainRule: undefined as { pattern: string; filter?: (payload: any, headers?: any) => boolean } | undefined };
@@ -152,6 +199,7 @@ function resolveMatchedSubdomainRule(
         details: normalizedSubPath,
         httpStatus: 404,
         body: 'Subcaminho não permitido para este serviço.',
+        meta,
     });
     return { ok: false, matchedSubdomainRule: undefined };
 }
@@ -161,6 +209,7 @@ function ensureDestinationConfigured(
     serviceName: string,
     config: any,
     payload: any,
+    meta: LogMeta,
 ) {
     if (config.destination) {
         return true;
@@ -173,6 +222,7 @@ function ensureDestinationConfigured(
         payload,
         httpStatus: 500,
         body: 'Destino do webhook não configurado.',
+        meta,
     });
     return false;
 }
@@ -184,9 +234,10 @@ function validateGetTokenIfNeeded(
         serviceName: string;
         config: any;
         payload: any;
+        meta: LogMeta;
     },
 ) {
-    const { serviceName, config, payload } = args;
+    const { serviceName, config, payload, meta } = args;
 
     // Opcional: sem token configurado, o GET segue sem exigência (comportamento legado).
     if (!config.getTokenSecret) {
@@ -208,6 +259,7 @@ function validateGetTokenIfNeeded(
         details: `Header esperado: ${headerName}`,
         httpStatus: 401,
         body: 'Token de acesso do webhook inválido ou ausente.',
+        meta,
     });
     return false;
 }
@@ -220,13 +272,14 @@ function validateSignatureIfNeeded(
         config: any;
         isGetRequest: boolean;
         payload: any;
+        meta: LogMeta;
     },
 ) {
-    const { serviceName, config, isGetRequest, payload } = args;
+    const { serviceName, config, isGetRequest, payload, meta } = args;
 
     // GET não tem corpo para assinar via HMAC; autentica por token de header (opcional).
     if (isGetRequest) {
-        return validateGetTokenIfNeeded(req, res, { serviceName, config, payload });
+        return validateGetTokenIfNeeded(req, res, { serviceName, config, payload, meta });
     }
 
     if (!config.signatureSecret) {
@@ -245,6 +298,7 @@ function validateSignatureIfNeeded(
             details: `Header esperado: ${headerName}`,
             httpStatus: 401,
             body: 'Assinatura do webhook ausente.',
+            meta,
         });
         return false;
     }
@@ -258,6 +312,7 @@ function validateSignatureIfNeeded(
             payload,
             httpStatus: 400,
             body: 'Não foi possível validar a assinatura.',
+            meta,
         });
         return false;
     }
@@ -281,6 +336,7 @@ function validateSignatureIfNeeded(
         payload,
         httpStatus: 401,
         body: 'Assinatura do webhook inválida.',
+        meta,
     });
     return false;
 }
@@ -293,12 +349,17 @@ function applyRequestFilter(
         headers: any;
         query: any;
         requestFilter?: (payload: any, headers?: any, query?: any) => boolean;
+        meta: LogMeta;
     },
 ) {
-    const { serviceName, payload, headers, query, requestFilter } = args;
+    const { serviceName, payload, headers, query, requestFilter, meta } = args;
     if (!requestFilter || requestFilter(payload, headers, query)) {
         return true;
     }
+
+    // Apenas o(s) tipo(s) de filtro configurado(s), nunca os valores da allowlist.
+    const filterTypes = (requestFilter as { filterTypes?: string[] }).filterTypes;
+    const filterReason = filterTypes && filterTypes.length > 0 ? filterTypes.join('+') : undefined;
 
     console.log(`[${serviceName}] - Requisição filtrada e ignorada com base no conteúdo.`);
     logAndRespond(res, {
@@ -308,6 +369,7 @@ function applyRequestFilter(
         payload,
         httpStatus: 200,
         body: 'OK, mas a requisição foi filtrada.',
+        meta: { ...meta, filterReason },
     });
     return false;
 }
@@ -425,16 +487,17 @@ function prepareWebhookRequest(req: Request, res: Response) {
         requestMethod,
         isGetRequest,
         payload,
+        meta,
     } = context;
 
-    if (!ensureServiceConfig(res, serviceName, config, payload)) return null;
-    if (!ensureMethodAllowed(res, serviceName, config, requestMethod, payload)) return null;
+    if (!ensureServiceConfig(res, serviceName, config, payload, meta)) return null;
+    if (!ensureMethodAllowed(res, serviceName, config, requestMethod, payload, meta)) return null;
 
-    const subpathResult = resolveMatchedSubdomainRule(res, serviceName, config, normalizedSubPath, payload);
+    const subpathResult = resolveMatchedSubdomainRule(res, serviceName, config, normalizedSubPath, payload, meta);
     if (!subpathResult.ok) return null;
     const matchedSubdomainRule = subpathResult.matchedSubdomainRule;
 
-    if (!ensureDestinationConfigured(res, serviceName, config, payload)) return null;
+    if (!ensureDestinationConfigured(res, serviceName, config, payload, meta)) return null;
 
     if (process.env.DEBUG === "true"){
         console.log(`[${serviceName}] - Requisição recebida (${req.method}):`, payload);
@@ -445,10 +508,10 @@ function prepareWebhookRequest(req: Request, res: Response) {
         }
     }
 
-    if (!validateSignatureIfNeeded(req, res, { serviceName, config, isGetRequest, payload })) return null;
+    if (!validateSignatureIfNeeded(req, res, { serviceName, config, isGetRequest, payload, meta })) return null;
 
     const requestFilter = matchedSubdomainRule?.filter || config.filter;
-    if (!applyRequestFilter(res, { serviceName, payload, headers: req.headers, query: req.query, requestFilter })) return null;
+    if (!applyRequestFilter(res, { serviceName, payload, headers: req.headers, query: req.query, requestFilter, meta })) return null;
 
     const destination = resolveDestination(config.destination, normalizedSubPath);
     return {
@@ -457,6 +520,7 @@ function prepareWebhookRequest(req: Request, res: Response) {
         payload,
         requestMethod,
         destination,
+        meta,
     };
 }
 
@@ -470,8 +534,10 @@ async function processWebhook(req: Request, res: Response) {
         payload,
         requestMethod,
         destination,
+        meta,
     } = prepared;
 
+    const startedAt = Date.now();
     try {
         if (process.env.DEBUG === "true"){
             console.log(`[${serviceName}] - Enviando requisição para:`, destination);
@@ -479,6 +545,7 @@ async function processWebhook(req: Request, res: Response) {
             console.log(`[${serviceName}] - Body da headers:`, req.headers);
         }
         const upstreamResponse = await forwardToDestination(req, { config, requestMethod, destination });
+        const durationMs = Date.now() - startedAt;
         const effectiveResponsePolicy = getEffectiveResponsePolicy(config, requestMethod);
 
         const isSuccess = upstreamResponse.status >= 200 && upstreamResponse.status < 300;
@@ -494,10 +561,12 @@ async function processWebhook(req: Request, res: Response) {
             summary: isSuccess ? 'Webhook repassado com sucesso' : `Destino respondeu HTTP ${upstreamResponse.status}`,
             payload,
             details: isSuccess ? undefined : `Destino respondeu HTTP ${upstreamResponse.status}`,
+            meta: { ...meta, durationMs, upstreamStatus: upstreamResponse.status },
         });
         return respondWithUpstream(res, { upstreamResponse, effectiveResponsePolicy });
 
     } catch (error) {
+        const durationMs = Date.now() - startedAt;
         const err = error as any;
         const destinationStatus = err?.response?.status;
         console.error(`[${serviceName}] - Erro ao repassar o webhook.`, err?.message);
@@ -507,6 +576,7 @@ async function processWebhook(req: Request, res: Response) {
             summary: 'Falha ao repassar webhook',
             payload,
             details: destinationStatus ? `Destino respondeu HTTP ${destinationStatus}` : err?.message,
+            meta: { ...meta, durationMs, upstreamStatus: destinationStatus },
         });
         return res.status(500).send('Erro interno ao processar o webhook.');
     }

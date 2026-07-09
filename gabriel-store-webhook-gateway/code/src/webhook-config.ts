@@ -282,22 +282,26 @@ function buildFilter(serviceName: string, filterField: unknown): CompiledFilter 
 
     const f = filterField as Record<string, unknown>;
     const matchers: CompiledFilter[] = [];
+    // Tipos de filtro configurados, expostos no filtro compilado para fins de log
+    // (apenas o nome do tipo, nunca os valores da allowlist).
+    const filterTypes: string[] = [];
 
-    if ('queryParams' in f) matchers.push(buildQueryParamsMatcher(f.queryParams));
-    if ('telegram' in f) matchers.push(buildTelegramMatcher(f.telegram));
-    if ('alexa' in f) matchers.push(buildAlexaMatcher(f.alexa));
+    if ('queryParams' in f) { matchers.push(buildQueryParamsMatcher(f.queryParams)); filterTypes.push('queryParams'); }
+    if ('telegram' in f) { matchers.push(buildTelegramMatcher(f.telegram)); filterTypes.push('telegram'); }
+    if ('alexa' in f) { matchers.push(buildAlexaMatcher(f.alexa)); filterTypes.push('alexa'); }
 
     if (matchers.length === 0) {
         console.warn(`[${serviceName}] - Bloco "filter" sem nenhum tipo conhecido (queryParams/telegram/alexa). Filtro ignorado.`);
         return undefined;
     }
 
-    if (matchers.length === 1) {
-        return matchers[0];
-    }
+    const compiled: CompiledFilter = matchers.length === 1
+        ? matchers[0]
+        // Múltiplos filtros: todos precisam passar (AND).
+        : (payload, headers, query) => matchers.every((matcher) => matcher(payload, headers, query));
 
-    // Múltiplos filtros: todos precisam passar (AND).
-    return (payload, headers, query) => matchers.every((matcher) => matcher(payload, headers, query));
+    (compiled as CompiledFilter & { filterTypes?: string[] }).filterTypes = filterTypes;
+    return compiled;
 }
 
 function normalizeRateLimit(rateLimit: unknown): RateLimitConfig | undefined {

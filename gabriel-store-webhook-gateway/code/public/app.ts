@@ -10,6 +10,14 @@ type WebhookLog = {
     summary: string;
     payload: unknown;
     details?: string;
+    method?: string;
+    subPath?: string;
+    payloadSize?: number;
+    contentType?: string;
+    userAgent?: string;
+    durationMs?: number;
+    upstreamStatus?: number;
+    filterReason?: string;
 };
 
 type StatusTone = 'forwarded' | 'warn' | 'failed';
@@ -103,6 +111,26 @@ function createElement<K extends keyof HTMLElementTagNameMap>(
 
 function formatPercent(value: number): string {
     return `${Math.round(value)}%`;
+}
+
+function formatBytes(bytes: number): string {
+    if (!Number.isFinite(bytes) || bytes < 0) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Chips de metadados operacionais (não sensíveis) exibidos em cada evento.
+function buildLogMetaChips(log: WebhookLog): string[] {
+    const chips: string[] = [];
+    if (log.method) chips.push(log.method);
+    if (typeof log.upstreamStatus === 'number') chips.push(`→ ${log.upstreamStatus}`);
+    if (typeof log.durationMs === 'number') chips.push(`${log.durationMs} ms`);
+    if (typeof log.payloadSize === 'number') chips.push(formatBytes(log.payloadSize));
+    if (log.subPath) chips.push(`/${log.subPath}`);
+    if (log.filterReason) chips.push(`filtro: ${log.filterReason}`);
+    if (log.contentType) chips.push(log.contentType.split(';')[0]);
+    return chips.filter(Boolean);
 }
 
 function getAllLogs(): WebhookLog[] {
@@ -220,6 +248,13 @@ function renderTimeline(logs: WebhookLog[]) {
             main.appendChild(createElement('span', 'muted', log.details));
         }
 
+        const metaChips = buildLogMetaChips(log);
+        if (metaChips.length > 0) {
+            const metaRow = createElement('div', 'log-meta');
+            metaChips.forEach((chipText) => metaRow.appendChild(createElement('span', 'chip', chipText)));
+            main.appendChild(metaRow);
+        }
+
         const timestamp = createElement('span', 'timestamp', new Date(log.timestamp).toLocaleString());
         summary.appendChild(dot);
         summary.appendChild(main);
@@ -229,6 +264,9 @@ function renderTimeline(logs: WebhookLog[]) {
         payload.textContent = JSON.stringify(log.payload, null, 2);
 
         item.appendChild(summary);
+        if (log.userAgent) {
+            item.appendChild(createElement('p', 'muted log-user-agent', `User-Agent: ${log.userAgent}`));
+        }
         item.appendChild(payload);
         logsContainer.appendChild(item);
     });

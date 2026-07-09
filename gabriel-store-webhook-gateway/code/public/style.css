@@ -183,6 +183,9 @@ input[type='search'] {
     background: var(--panel);
     backdrop-filter: blur(8px);
     padding: 14px;
+    /* Permite que a coluna 1fr do grid encolha em telas estreitas em vez de
+       esticar horizontalmente por causa de conteúdo largo (payload/User-Agent). */
+    min-width: 0;
 }
 
 .panel-header {
@@ -358,10 +361,40 @@ input[type='search'] {
     display: flex;
     flex-direction: column;
     gap: 3px;
+    /* Sem isto, a coluna 1fr do summary não encolhe e um texto longo
+       (ex: User-Agent, detalhes) empurra a largura para fora da tela. */
+    min-width: 0;
 }
 
 .log-summary-text {
     font-size: 0.91rem;
+    overflow-wrap: anywhere;
+}
+
+.log-main .muted {
+    overflow-wrap: anywhere;
+}
+
+.log-meta {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+
+.log-meta .chip {
+    font-size: 0.68rem;
+    padding: 2px 7px;
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+.log-user-agent {
+    margin: 0;
+    padding: 8px 12px;
+    border-top: 1px solid rgba(120, 228, 255, 0.1);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    overflow-wrap: anywhere;
 }
 
 .timestamp {
@@ -432,5 +465,22 @@ input[type='search'] {
     .panel-header-detail {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    /* No mobile o badge (ex: METHOD_NOT_ALLOWED) + timestamp estouravam a
+       largura pois ambas as colunas eram `auto`. Reflui: badge + resumo na
+       1ª linha, timestamp numa linha própria abaixo. */
+    .log-item summary {
+        grid-template-columns: auto minmax(0, 1fr);
+        row-gap: 6px;
+    }
+
+    .log-item summary .timestamp {
+        grid-column: 1 / -1;
+    }
+
+    .badge {
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
 }
