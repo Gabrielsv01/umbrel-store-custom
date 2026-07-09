@@ -1,5 +1,5 @@
 import telegramFilter from './telegramFilter';
 import { alexaskillFilter } from './alexaskillFilter';
-import { noFilter } from './noFilter';
+import { queryParamsFilter } from './queryParamsFilter';
 
-export { telegramFilter, alexaskillFilter, noFilter };
+export { telegramFilter, alexaskillFilter, queryParamsFilter };

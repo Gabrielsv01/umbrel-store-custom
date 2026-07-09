@@ -291,11 +291,12 @@ function applyRequestFilter(
         serviceName: string;
         payload: any;
         headers: any;
-        requestFilter?: (payload: any, headers?: any) => boolean;
+        query: any;
+        requestFilter?: (payload: any, headers?: any, query?: any) => boolean;
     },
 ) {
-    const { serviceName, payload, headers, requestFilter } = args;
-    if (!requestFilter || requestFilter(payload, headers)) {
+    const { serviceName, payload, headers, query, requestFilter } = args;
+    if (!requestFilter || requestFilter(payload, headers, query)) {
         return true;
     }
 
@@ -438,7 +439,7 @@ function prepareWebhookRequest(req: Request, res: Response) {
     if (process.env.DEBUG === "true"){
         console.log(`[${serviceName}] - Requisição recebida (${req.method}):`, payload);
         if (config.filter) {
-            console.log(`[${serviceName}] - Requisição recebida, filtrada:`, !config.filter(req.body, req.headers));
+            console.log(`[${serviceName}] - Requisição recebida, filtrada:`, !config.filter(req.body, req.headers, req.query));
         } else {
             console.log(`[${serviceName}] - Requisição recebida, filter is undefined:`, config.filter);
         }
@@ -447,7 +448,7 @@ function prepareWebhookRequest(req: Request, res: Response) {
     if (!validateSignatureIfNeeded(req, res, { serviceName, config, isGetRequest, payload })) return null;
 
     const requestFilter = matchedSubdomainRule?.filter || config.filter;
-    if (!applyRequestFilter(res, { serviceName, payload, headers: req.headers, requestFilter })) return null;
+    if (!applyRequestFilter(res, { serviceName, payload, headers: req.headers, query: req.query, requestFilter })) return null;
 
     const destination = resolveDestination(config.destination, normalizedSubPath);
     return {

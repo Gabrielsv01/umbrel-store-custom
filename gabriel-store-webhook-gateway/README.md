@@ -5,7 +5,7 @@ API em Node.js/Express para receber webhooks de diferentes serviços, aplicar fi
 ## O que esta aplicação faz
 
 - Recebe webhooks em endpoints dinâmicos por serviço.
-- Valida/filtra eventos por regras configuradas (`telegramFilter`, `alexaskillFilter`, `noFilter`).
+- Valida/filtra eventos por regras configuradas (filtros `telegram`, `alexa`, `queryParams`).
 - Repassa o payload para o destino definido em `webhooks.yml`.
 - Mantém logs em memória para consulta no dashboard.
 - Protege o dashboard com login por senha (hash bcrypt) e cookie de sessão.
@@ -88,19 +88,25 @@ Edite `config/webhooks.yml` para mapear cada serviço:
 ```yml
 telegram:
   destination: ${TELEGRAM_WEBHOOK_URL}
-  authorizedChatIds: ${TELEGRAM_AUTHORIZED_CHAT_IDS}
-  authorizedUsernames: ${TELEGRAM_AUTHORIZED_USERNAMES}
-  filter: telegramFilter
+  filter:
+    telegram:
+      chatIds: ${TELEGRAM_AUTHORIZED_CHAT_IDS}
+      usernames: ${TELEGRAM_AUTHORIZED_USERNAMES}
 
 alexa:
   destination: ${ALEXA_WEBHOOK_URL}
-  applicationId: ${ALEXA_APPLICATION_ID}
-  filter: alexaskillFilter
+  filter:
+    alexa:
+      applicationId: ${ALEXA_APPLICATION_ID}
 
 webhook:
   destination: ${N8N_WEBHOOK_URL}
   methods:
     - POST
+  filter:
+    queryParams:
+      u:
+        - 1234
   response:
     default:
       forward:
@@ -118,9 +124,11 @@ webhook:
             - content-type
   subdomain:
     - path: rest/ping.view
-      filter: noFilter
+      # sem `filter` => sem filtragem nesta rota
     - path: rest/*
-      filter: telegramFilter
+      filter:
+        telegram:
+          chatIds: ${TELEGRAM_AUTHORIZED_CHAT_IDS}
   signatureSecret: ${WEBHOOK_SIGNATURE_SECRET}
   signatureHeader: x-webhook-signature
   signaturePrefix: sha256=
@@ -141,11 +149,32 @@ Token de acesso para GET (opcional por serviço):
 - Se definido, todo `GET` precisa enviar o header (default `x-webhook-token`, customizável via `getTokenHeader`) com o valor exato; caso contrário retorna `401`. A comparação é feita em tempo constante.
 - Prefira injetar o segredo por env (ex: `getTokenSecret: ${SUBSTREAM_GET_TOKEN}`) para não versioná-lo.
 
-Filtros disponíveis:
+Filtros (`filter` é um **objeto** cujas chaves são os tipos de filtro):
 
-- `telegramFilter`: aceita evento se `chat.id` OU `from.username` estiver em uma allowlist configurada. Sem nenhuma allowlist definida, **nega** a requisição (fail-closed).
-- `alexaskillFilter`: aceita somente quando `applicationId` confere.
-- `noFilter`: aceita tudo.
+- Se houver **mais de um** tipo no bloco `filter`, **todos** precisam passar (AND).
+- **Omitir** o bloco `filter` = sem filtragem (aceita tudo).
+- Tipos disponíveis:
+  - `telegram`: aceita se `chat.id` OU `from.username` estiver em uma allowlist. Config: `chatIds` e/ou `usernames` (lista ou CSV). Sem nenhuma allowlist definida, **nega** (fail-closed).
+    ```yml
+    filter:
+      telegram:
+        chatIds: [123456789]
+        usernames: [joaosilva]
+    ```
+  - `alexa`: aceita somente quando `applicationId` confere. Config: `applicationId`.
+    ```yml
+    filter:
+      alexa:
+        applicationId: ${ALEXA_APPLICATION_ID}
+    ```
+  - `queryParams`: aceita conforme a query string. Cada chave é um parâmetro (nome livre) com a lista de valores permitidos. Precisa bater em **todos** os parâmetros; em cada um, **qualquer** valor da lista serve. Sem parâmetros definidos, **nega** (fail-closed).
+    ```yml
+    filter:
+      queryParams:
+        u:
+          - 1234
+          - 5678
+    ```
 
 Opção por serviço:
 
@@ -155,7 +184,7 @@ Opção por serviço:
   - O gateway encaminha para o destino usando o mesmo método recebido.
 - `subdomain`: lista opcional de subcaminhos aceitos para o mesmo serviço (`*` como curinga).
   - Formato simples: `- rest/ping.view`
-  - Formato com filtro por subcaminho: `- path: rest/ping.view` + `filter: noFilter`
+  - Formato com filtro por subcaminho: `- path: rest/ping.view` + um bloco `filter:` (ex.: `filter: { queryParams: { u: [1234] } }`)
   - Exemplo: `rest/ping.view` aceita somente esse caminho.
   - Exemplo: `rest/*` aceita qualquer rota abaixo de `rest/`.
   - Quando um subcaminho é aceito, ele é anexado ao `destination` no encaminhamento.

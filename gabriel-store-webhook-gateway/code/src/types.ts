@@ -1,13 +1,26 @@
 export interface SubdomainRule {
     pattern: string;
-    filter?: (payload: any, headers?: any) => boolean;
+    filter?: (payload: any, headers?: any, query?: any) => boolean;
 }
 
-export type FilterFunctionName = 'telegramFilter' | 'alexaskillFilter' | 'noFilter';
+// Proposta A: o filtro é um objeto cujas chaves são os tipos de filtro.
+// Vários tipos presentes => todos precisam passar (AND). Omitido => sem filtragem.
+export type CompiledFilter = (payload: any, headers?: any, query?: any) => boolean;
+
+export interface FilterObjectConfig {
+    queryParams?: Record<string, string | string[]>;
+    telegram?: {
+        chatIds?: string | string[];
+        usernames?: string | string[];
+    };
+    alexa?: {
+        applicationId?: string;
+    };
+}
 
 export type SubdomainYamlEntry = string | {
     path: string;
-    filter?: FilterFunctionName;
+    filter?: FilterObjectConfig;
 };
 
 export type WebhookMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
@@ -66,16 +79,13 @@ export interface ServiceYamlConfig {
     upstream?: UpstreamProxyConfig;
     response?: ResponsePolicyConfig | ResponsePolicy;
     subdomain?: SubdomainYamlEntry | SubdomainYamlEntry[];
-    authorizedChatIds?: string;
-    authorizedUsernames?: string;
-    applicationId?: string;
     signatureSecret?: string;
     signatureHeader?: string;
     signaturePrefix?: string;
     hmacAlgorithm?: string;
     getTokenSecret?: string;
     getTokenHeader?: string;
-    filter?: FilterFunctionName;
+    filter?: FilterObjectConfig;
     rateLimit?: RateLimitYamlConfig;
 }
 
@@ -85,16 +95,13 @@ export interface LoadedServiceConfig {
     upstream?: UpstreamProxyConfig;
     response?: ResponsePolicyConfig;
     subdomain?: SubdomainRule[];
-    authorizedChatIds: string[];
-    authorizedUsernames: string[];
-    applicationId?: string;
     signatureSecret?: string;
     signatureHeader?: string;
     signaturePrefix?: string;
     hmacAlgorithm?: string;
     getTokenSecret?: string;
     getTokenHeader?: string;
-    filter?: (payload: any, headers?: any) => boolean;
+    filter?: (payload: any, headers?: any, query?: any) => boolean;
     rateLimit?: RateLimitConfig;
 }
 
@@ -114,16 +121,13 @@ export interface WebhookConfig {
         upstream?: UpstreamProxyConfig;
         response?: ResponsePolicyConfig;
         subdomain?: SubdomainRule[];
-        authorizedChatIds?: string[];
-        authorizedUsernames?: string[];
-        applicationId?: string;
         signatureSecret?: string;
         signatureHeader?: string;
         signaturePrefix?: string;
         hmacAlgorithm?: string;
         getTokenSecret?: string;
         getTokenHeader?: string;
-        filter?: (payload: any, headers?: any) => boolean;
+        filter?: (payload: any, headers?: any, query?: any) => boolean;
         rateLimit?: RateLimitConfig;
     };
 }

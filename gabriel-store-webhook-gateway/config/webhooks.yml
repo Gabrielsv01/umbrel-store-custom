@@ -1,10 +1,21 @@
+# Filtros (Proposta A): `filter` é um objeto cujas chaves são os tipos de filtro.
+# Vários tipos no mesmo bloco => todos precisam passar (AND). Omitir `filter` => sem filtragem.
+# Tipos disponíveis: telegram, alexa, queryParams. Exemplo de query params:
+#   meuservico:
+#     destination: ${MEU_WEBHOOK_URL}
+#     filter:
+#       queryParams:
+#         u:
+#           - 1234
+
 telegram:
   destination: ${TELEGRAM_WEBHOOK_URL}
   methods:
     - POST
-  authorizedChatIds: ${TELEGRAM_AUTHORIZED_CHAT_IDS}
-  authorizedUsernames: ${TELEGRAM_AUTHORIZED_USERNAMES}
-  filter: telegramFilter
+  filter:
+    telegram:
+      chatIds: ${TELEGRAM_AUTHORIZED_CHAT_IDS}
+      usernames: ${TELEGRAM_AUTHORIZED_USERNAMES}
   rateLimit:
     windowMinutes: 15
     max: 100
@@ -13,24 +24,27 @@ webhook-test:
   destination: ${N8N_WEBHOOK_URL}
   methods:
     - POST
-  authorizedChatIds: ${TELEGRAM_AUTHORIZED_CHAT_IDS}
-  authorizedUsernames: ${TELEGRAM_AUTHORIZED_USERNAMES}
-  filter: telegramFilter
+  filter:
+    telegram:
+      chatIds: ${TELEGRAM_AUTHORIZED_CHAT_IDS}
+      usernames: ${TELEGRAM_AUTHORIZED_USERNAMES}
 
 webhook:
   destination: ${N8N_WEBHOOK_URL}
   methods:
     - POST
-  authorizedChatIds: ${TELEGRAM_AUTHORIZED_CHAT_IDS}
-  authorizedUsernames: ${TELEGRAM_AUTHORIZED_USERNAMES}
-  filter: telegramFilter
+  filter:
+    telegram:
+      chatIds: ${TELEGRAM_AUTHORIZED_CHAT_IDS}
+      usernames: ${TELEGRAM_AUTHORIZED_USERNAMES}
 
 alexa:
   destination: ${ALEXA_WEBHOOK_URL}
   methods:
     - POST
-  applicationId: ${ALEXA_APPLICATION_ID}
-  filter: alexaskillFilter
+  filter:
+    alexa:
+      applicationId: ${ALEXA_APPLICATION_ID}
 
 substream:
   destination: ${SUBSTREAM_WEBHOOK_URL}
@@ -61,6 +75,9 @@ substream:
           HEADERS: "*"
   subdomain:
     - path: rest/*
-  filter: noFilter
+      filter:
+        queryParams:
+          u:
+            - 1234
   rateLimit:
     disabled: true

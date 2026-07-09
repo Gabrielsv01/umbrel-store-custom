@@ -3,7 +3,7 @@ import * as yaml from 'js-yaml';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-    FilterFunctionName,
+    CompiledFilter,
     LoadedServiceConfig,
     ParsedForwardConfig,
     RateLimitConfig,
@@ -17,17 +17,11 @@ import {
     WebhookConfig,
     WebhookMethod,
 } from './types';
-import { telegramFilter, alexaskillFilter, noFilter } from './filters';
+import { telegramFilter, alexaskillFilter, queryParamsFilter } from './filters';
 
 const SUPPORTED_METHODS: WebhookMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const SUPPORTED_METHODS_SET = new Set<WebhookMethod>(SUPPORTED_METHODS);
 const SUPPORTED_RESPONSE_FIELDS_SET = new Set<ResponseField>(['STATUS', 'BODY', 'HEADERS']);
-
-const filterFunctions: Record<FilterFunctionName, (payload: any, config: any, headers?: any) => boolean> = {
-    telegramFilter,
-    alexaskillFilter,
-    noFilter,
-};
 
 const webhookConfig: WebhookConfig = {};
 
@@ -177,7 +171,6 @@ function normalizeResponsePolicy(response: any): ResponsePolicyConfig | undefine
 function normalizeSubdomainEntries(
     serviceName: string,
     serviceSubdomain: SubdomainYamlEntry | SubdomainYamlEntry[] | undefined,
-    loadedConfig: WebhookConfig,
 ): SubdomainRule[] {
     const entries = Array.isArray(serviceSubdomain)
         ? serviceSubdomain
@@ -199,14 +192,9 @@ function normalizeSubdomainEntries(
             continue;
         }
 
-        const entryFilter = entry.filter;
-        const filterFunction = entryFilter
-            ? (payload: any, headers: any) => filterFunctions[entryFilter](payload, loadedConfig[serviceName], headers)
-            : undefined;
-
         parsedRules.push({
             pattern: pathPattern,
-            filter: filterFunction,
+            filter: buildFilter(serviceName, entry.filter),
         });
     }
 
@@ -227,6 +215,89 @@ function normalizeMethods(
     }
 
     return ['POST'];
+}
+
+function normalizeQueryParams(queryParams: unknown): Record<string, string[]> | undefined {
+    if (!queryParams || typeof queryParams !== 'object' || Array.isArray(queryParams)) {
+        return undefined;
+    }
+
+    const result: Record<string, string[]> = {};
+    for (const [param, rawValues] of Object.entries(queryParams as Record<string, unknown>)) {
+        const values = toStringArray(rawValues).map((value) => value.trim()).filter(Boolean);
+        if (values.length > 0) {
+            result[param] = Array.from(new Set(values));
+        }
+    }
+
+    return Object.keys(result).length > 0 ? result : undefined;
+}
+
+// Aceita array (YAML) ou string CSV e devolve uma lista de strings limpa.
+function toStringList(value: unknown): string[] {
+    if (Array.isArray(value)) {
+        return value.map((item) => String(item).trim()).filter(Boolean);
+    }
+    if (typeof value === 'string') {
+        return splitCsv(value);
+    }
+    return [];
+}
+
+function buildQueryParamsMatcher(raw: unknown): CompiledFilter {
+    const params = normalizeQueryParams(raw) ?? {};
+    return (payload, headers, query) => queryParamsFilter(payload, params, headers, query);
+}
+
+function buildTelegramMatcher(raw: unknown): CompiledFilter {
+    const cfg = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw as Record<string, unknown> : {};
+    const filterConfig = {
+        chatIds: toStringList(cfg.chatIds),
+        usernames: toStringList(cfg.usernames),
+    };
+    return (payload) => telegramFilter(payload, filterConfig);
+}
+
+function buildAlexaMatcher(raw: unknown): CompiledFilter {
+    const cfg = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw as Record<string, unknown> : {};
+    const filterConfig = {
+        applicationId: cfg.applicationId !== undefined && cfg.applicationId !== null
+            ? String(cfg.applicationId)
+            : undefined,
+    };
+    return (payload) => alexaskillFilter(payload, filterConfig);
+}
+
+// Proposta A: `filter` é um objeto cujas chaves são os tipos de filtro.
+// Vários tipos presentes => todos precisam passar (AND). Omitido/ inválido => sem filtragem.
+function buildFilter(serviceName: string, filterField: unknown): CompiledFilter | undefined {
+    if (filterField === undefined || filterField === null) {
+        return undefined;
+    }
+
+    if (typeof filterField !== 'object' || Array.isArray(filterField)) {
+        console.warn(`[${serviceName}] - Campo "filter" inválido: esperado objeto (ex: filter: { queryParams: { ... } }). Filtro ignorado.`);
+        return undefined;
+    }
+
+    const f = filterField as Record<string, unknown>;
+    const matchers: CompiledFilter[] = [];
+
+    if ('queryParams' in f) matchers.push(buildQueryParamsMatcher(f.queryParams));
+    if ('telegram' in f) matchers.push(buildTelegramMatcher(f.telegram));
+    if ('alexa' in f) matchers.push(buildAlexaMatcher(f.alexa));
+
+    if (matchers.length === 0) {
+        console.warn(`[${serviceName}] - Bloco "filter" sem nenhum tipo conhecido (queryParams/telegram/alexa). Filtro ignorado.`);
+        return undefined;
+    }
+
+    if (matchers.length === 1) {
+        return matchers[0];
+    }
+
+    // Múltiplos filtros: todos precisam passar (AND).
+    return (payload, headers, query) => matchers.every((matcher) => matcher(payload, headers, query));
 }
 
 function normalizeRateLimit(rateLimit: unknown): RateLimitConfig | undefined {
@@ -386,13 +457,11 @@ const loadConfig = () => {
             const service = parsedYaml[serviceName];
 
             const serviceTyped = service as ServiceYamlConfig;
-            const subdomainRules = normalizeSubdomainEntries(serviceName, serviceTyped.subdomain, loadedConfig);
+            const subdomainRules = normalizeSubdomainEntries(serviceName, serviceTyped.subdomain);
             const methods = normalizeMethods(serviceTyped.methods);
             const upstream = normalizeUpstreamConfig(serviceTyped.upstream);
             const responsePolicy = normalizeResponsePolicy(serviceTyped.response);
             const rateLimit = normalizeRateLimit(serviceTyped.rateLimit);
-
-            const serviceFilter = serviceTyped.filter;
 
             loadedConfig[serviceName] = {
                 destination: serviceTyped.destination!,
@@ -400,16 +469,13 @@ const loadConfig = () => {
                 upstream,
                 response: responsePolicy,
                 subdomain: subdomainRules,
-                authorizedChatIds: splitCsv(serviceTyped.authorizedChatIds),
-                authorizedUsernames: splitCsv(serviceTyped.authorizedUsernames),
-                applicationId: serviceTyped.applicationId!,
                 signatureSecret: serviceTyped.signatureSecret || undefined,
                 signatureHeader: serviceTyped.signatureHeader?.toLowerCase() || undefined,
                 signaturePrefix: serviceTyped.signaturePrefix || undefined,
                 hmacAlgorithm: serviceTyped.hmacAlgorithm || 'sha256',
                 getTokenSecret: serviceTyped.getTokenSecret || undefined,
                 getTokenHeader: serviceTyped.getTokenHeader?.toLowerCase() || undefined,
-                filter: serviceFilter ? (payload: any, headers: any) => filterFunctions[serviceFilter](payload, loadedConfig[serviceName], headers) : undefined,
+                filter: buildFilter(serviceName, serviceTyped.filter),
                 rateLimit,
             } as LoadedServiceConfig;
         }
