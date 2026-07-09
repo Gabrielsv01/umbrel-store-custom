@@ -1,5 +1,5 @@
 import axios from "axios";
-import { MAX_LOGS } from "../constants";
+import { MAX_LOGS, LOG_PAYLOADS } from "../constants";
 import { webhookLogs } from "../logs";
 import webhookConfig from "../webhook-config";
 import { Request, Response } from 'express';
@@ -10,6 +10,7 @@ import {
     isMethodAllowed,
     normalizeHeaderValue,
     normalizeSubPathParam,
+    redactSecrets,
     resolveDestination,
     signatureMatches,
     tokensMatch,
@@ -27,6 +28,7 @@ function pushLog(log: {
     webhookLogs.push({
         timestamp: new Date().toISOString(),
         ...log,
+        payload: LOG_PAYLOADS ? redactSecrets(log.payload) : undefined,
     });
 
     if (webhookLogs.length > MAX_LOGS) {

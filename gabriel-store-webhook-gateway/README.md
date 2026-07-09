@@ -57,6 +57,8 @@ Principais variáveis:
 - `URLENCODED_BODY_LIMIT`: limite para form-urlencoded (padrão `100kb`).
 - `WEBHOOK_RATE_LIMIT_MAX`: default de requisições por IP na janela (padrão `100`).
 - `WEBHOOK_RATE_LIMIT_WINDOW_MS`: default da janela do rate limit em ms (padrão `900000` = 15 min).
+- `TRUST_PROXY`: nº de proxies confiáveis para derivar o IP do cliente (padrão `1`, atrás do app-proxy do Umbrel). Exposição direta, sem proxy: use `false`. Aceita número, `true`/`false` ou lista de subnets/preset. Afeta a chave do rate limit — valor errado permite forjar `X-Forwarded-For`.
+- `LOG_PAYLOADS`: `false` guarda apenas metadados nos logs, sem o payload (padrão `true`, com redação de segredos).
 - `LOGIN_PASSWORD_HASH`: hash bcrypt da senha de login.
 - `DEBUG`: `true` para logs detalhados.
 - Sessão/cookie:
@@ -284,7 +286,8 @@ Após autenticar no dashboard:
 - Sessão expira em 2 minutos (`SESSION_EXPIRE_MS`).
 - Sessão é renovada por atividade (sliding expiration).
 - Erro de autenticação no login usa mensagem genérica (`Credenciais inválidas`) para evitar vazamento de informação.
-- Logs são mantidos apenas em memória e não persistem após reinício.
+- Logs são mantidos apenas em memória e não persistem após reinício. Os payloads passam por redação de chaves sensíveis (senha, token, secret, authorization etc.) antes de serem armazenados; use `LOG_PAYLOADS=false` para não guardar payload algum.
+- O IP usado no rate limit depende de `TRUST_PROXY`; ajuste conforme sua topologia de proxy para evitar bypass via `X-Forwarded-For`.
 
 ## Limitações conhecidas
 

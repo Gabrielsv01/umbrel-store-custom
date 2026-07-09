@@ -7,6 +7,7 @@ import {
     PORT,
     JSON_BODY_LIMIT,
     URLENCODED_BODY_LIMIT,
+    TRUST_PROXY,
     loginLimiter,
     webhookLimiter
 } from './constants';
@@ -23,7 +24,7 @@ if (process.env.ENABLE_HELMET === 'true') {
          xssFilter: process.env.ENABLE_XSS_FILTER === 'true'
     }));
 }
-app.set('trust proxy', 1);
+app.set('trust proxy', TRUST_PROXY);
 app.use(express.json({
     limit: JSON_BODY_LIMIT,
     verify: (req, _res, buf) => {

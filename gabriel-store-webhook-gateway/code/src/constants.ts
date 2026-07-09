@@ -7,6 +7,23 @@ const MAX_LOGS = 500;
 const PORT = process.env.PORT || 5124;
 const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '1mb';
 const URLENCODED_BODY_LIMIT = process.env.URLENCODED_BODY_LIMIT || '100kb';
+
+// Nº de proxies confiáveis para derivar o IP do cliente (usado pelo rate limit).
+// Default 1 = atrás do app-proxy do Umbrel. Exposição direta (sem proxy): use `false`.
+// Também aceita `true`, um número, ou lista de subnets/preset (ex: "loopback, 10.0.0.0/8").
+const parseTrustProxy = (value: string | undefined): boolean | number | string => {
+    const trimmed = value?.trim();
+    if (!trimmed) return 1;
+    if (trimmed === 'true') return true;
+    if (trimmed === 'false') return false;
+    const asNumber = Number(trimmed);
+    if (Number.isInteger(asNumber) && asNumber >= 0) return asNumber;
+    return trimmed;
+};
+const TRUST_PROXY = parseTrustProxy(process.env.TRUST_PROXY);
+
+// Quando false, os logs guardam metadados mas não o payload. Default true (com redação de segredos).
+const LOG_PAYLOADS = process.env.LOG_PAYLOADS !== 'false';
 const SESSION_COOKIE = 'webhook_admin';
 const PASSWORD_HASH = process.env.LOGIN_PASSWORD_HASH || '';
 const SESSIONS = new Map<string, number>();
@@ -76,6 +93,8 @@ export {
     PORT,
     JSON_BODY_LIMIT,
     URLENCODED_BODY_LIMIT,
+    TRUST_PROXY,
+    LOG_PAYLOADS,
     SESSION_COOKIE,
     PASSWORD_HASH,
     SESSIONS,

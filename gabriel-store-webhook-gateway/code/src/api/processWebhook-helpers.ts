@@ -100,6 +100,27 @@ export function copyUpstreamHeaders(
     }
 }
 
+const SENSITIVE_KEY_REGEX = /pass(word|wd)?|secret|api[-_]?key|apikey|authorization|access[-_]?token|refresh[-_]?token|token|cookie|credential|signature/i;
+const REDACTED = '[REDACTED]';
+
+// Substitui valores de chaves sensíveis por [REDACTED], recursivamente, em uma cópia.
+// Heurística por nome de chave — não muta o objeto original.
+export function redactSecrets(value: unknown, depth = 0): unknown {
+    if (depth > 6 || value === null || typeof value !== 'object') {
+        return value;
+    }
+
+    if (Array.isArray(value)) {
+        return value.map((item) => redactSecrets(item, depth + 1));
+    }
+
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+        result[key] = SENSITIVE_KEY_REGEX.test(key) ? REDACTED : redactSecrets(val, depth + 1);
+    }
+    return result;
+}
+
 export function tokensMatch(received: string, expected: string): boolean {
     const receivedBuffer = Buffer.from(received, 'utf8');
     const expectedBuffer = Buffer.from(expected, 'utf8');
