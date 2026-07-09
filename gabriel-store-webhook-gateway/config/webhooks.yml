@@ -5,6 +5,9 @@ telegram:
   authorizedChatIds: ${TELEGRAM_AUTHORIZED_CHAT_IDS}
   authorizedUsernames: ${TELEGRAM_AUTHORIZED_USERNAMES}
   filter: telegramFilter
+  rateLimit:
+    windowMinutes: 15
+    max: 100
 
 webhook-test:
   destination: ${N8N_WEBHOOK_URL}
@@ -59,3 +62,5 @@ substream:
   subdomain:
     - path: rest/*
   filter: noFilter
+  rateLimit:
+    disabled: true

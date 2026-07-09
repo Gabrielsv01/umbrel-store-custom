@@ -55,6 +55,8 @@ Principais variáveis:
 - `PORT`: porta da API (padrão `5124`).
 - `JSON_BODY_LIMIT`: limite do body JSON (padrão `1mb`).
 - `URLENCODED_BODY_LIMIT`: limite para form-urlencoded (padrão `100kb`).
+- `WEBHOOK_RATE_LIMIT_MAX`: default de requisições por IP na janela (padrão `100`).
+- `WEBHOOK_RATE_LIMIT_WINDOW_MS`: default da janela do rate limit em ms (padrão `900000` = 15 min).
 - `LOGIN_PASSWORD_HASH`: hash bcrypt da senha de login.
 - `DEBUG`: `true` para logs detalhados.
 - Sessão/cookie:
@@ -266,7 +268,11 @@ Após autenticar no dashboard:
 ## Segurança e limites
 
 - Login limitado a 5 tentativas por 10 minutos.
-- Webhooks limitados a 100 requisições por 15 minutos.
+- Webhooks limitados por IP (default `100` requisições por `15` minutos). O limite é
+  configurável por serviço no `config/webhooks.yml` via bloco `rateLimit`
+  (`windowMinutes`/`windowMs` e `max`; use `rateLimit: false` ou `disabled: true`
+  para desligar) e o default global pode ser ajustado pelas envs
+  `WEBHOOK_RATE_LIMIT_MAX` e `WEBHOOK_RATE_LIMIT_WINDOW_MS`.
 - Sessão expira em 2 minutos (`SESSION_EXPIRE_MS`).
 - Sessão é renovada por atividade (sliding expiration).
 - Erro de autenticação no login usa mensagem genérica (`Credenciais inválidas`) para evitar vazamento de informação.

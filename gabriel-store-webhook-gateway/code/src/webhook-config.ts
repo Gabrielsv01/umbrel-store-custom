@@ -6,6 +6,7 @@ import {
     FilterFunctionName,
     LoadedServiceConfig,
     ParsedForwardConfig,
+    RateLimitConfig,
     ResponseField,
     ResponsePolicy,
     ResponsePolicyConfig,
@@ -228,6 +229,42 @@ function normalizeMethods(
     return ['POST'];
 }
 
+function normalizeRateLimit(rateLimit: unknown): RateLimitConfig | undefined {
+    // `rateLimit: false` desabilita o rate limit do serviço.
+    if (rateLimit === false) {
+        return { disabled: true };
+    }
+
+    if (!rateLimit || typeof rateLimit !== 'object') {
+        return undefined;
+    }
+
+    const raw = rateLimit as Record<string, unknown>;
+
+    if (raw.disabled === true) {
+        return { disabled: true };
+    }
+
+    const windowMsRaw = raw.windowMs;
+    const windowMinutesRaw = raw.windowMinutes;
+    const windowMs = (typeof windowMsRaw === 'number' && Number.isFinite(windowMsRaw) && windowMsRaw > 0)
+        ? windowMsRaw
+        : (typeof windowMinutesRaw === 'number' && Number.isFinite(windowMinutesRaw) && windowMinutesRaw > 0)
+            ? windowMinutesRaw * 60 * 1000
+            : undefined;
+
+    const maxRaw = raw.max;
+    const max = (typeof maxRaw === 'number' && Number.isFinite(maxRaw) && maxRaw >= 0)
+        ? maxRaw
+        : undefined;
+
+    if (windowMs === undefined && max === undefined) {
+        return undefined;
+    }
+
+    return { windowMs, max };
+}
+
 function normalizeUpstreamConfig(upstream: unknown): UpstreamProxyConfig | undefined {
     if (!upstream || typeof upstream !== 'object') {
         return undefined;
@@ -353,6 +390,7 @@ const loadConfig = () => {
             const methods = normalizeMethods(serviceTyped.methods);
             const upstream = normalizeUpstreamConfig(serviceTyped.upstream);
             const responsePolicy = normalizeResponsePolicy(serviceTyped.response);
+            const rateLimit = normalizeRateLimit(serviceTyped.rateLimit);
 
             const serviceFilter = serviceTyped.filter;
 
@@ -370,6 +408,7 @@ const loadConfig = () => {
                 signaturePrefix: serviceTyped.signaturePrefix || undefined,
                 hmacAlgorithm: serviceTyped.hmacAlgorithm || 'sha256',
                 filter: serviceFilter ? (payload: any, headers: any) => filterFunctions[serviceFilter](payload, loadedConfig[serviceName], headers) : undefined,
+                rateLimit,
             } as LoadedServiceConfig;
         }
         Object.assign(webhookConfig, loadedConfig);

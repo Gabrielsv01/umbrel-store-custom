@@ -1,5 +1,7 @@
 import rateLimit from "express-rate-limit";
-import { CookieOptions } from 'express';
+import { CookieOptions, RequestHandler } from 'express';
+import { RateLimitConfig } from './types';
+import webhookConfig from './webhook-config';
 
 const MAX_LOGS = 500;
 const PORT = process.env.PORT || 5124;
@@ -20,16 +22,53 @@ const SESSION_COOKIE_OPTIONS: CookieOptions = {
   path: '/',
   maxAge: SESSION_EXPIRE_MS,
 };
+const parsePositiveInt = (value: string | undefined): number | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+};
+
 const loginLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutos
   max: 5,
   message: 'Muitas tentativas de login. Tente novamente mais tarde.',
 });
-const webhookLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100,
-  message: 'Muitas requisições. Tente novamente mais tarde.',
-});
+
+// Defaults do rate limit de webhooks. Sobrescreve via env ou, por serviço,
+// pelo bloco `rateLimit` no config/webhooks.yml.
+const DEFAULT_WEBHOOK_RATE_LIMIT_WINDOW_MS =
+  parsePositiveInt(process.env.WEBHOOK_RATE_LIMIT_WINDOW_MS) ?? 15 * 60 * 1000; // 15 minutos
+const DEFAULT_WEBHOOK_RATE_LIMIT_MAX =
+  parsePositiveInt(process.env.WEBHOOK_RATE_LIMIT_MAX) ?? 100;
+
+const passthroughMiddleware: RequestHandler = (_req, _res, next) => next();
+
+const buildWebhookLimiter = (config?: RateLimitConfig): RequestHandler =>
+  rateLimit({
+    windowMs: config?.windowMs ?? DEFAULT_WEBHOOK_RATE_LIMIT_WINDOW_MS,
+    max: config?.max ?? DEFAULT_WEBHOOK_RATE_LIMIT_MAX,
+    message: 'Muitas requisições. Tente novamente mais tarde.',
+  });
+
+// Cada serviço tem seu próprio limitador, criado na inicialização (o
+// express-rate-limit não permite instanciar durante o request), permitindo
+// janelas/limites distintos por serviço. Serviços sem `rateLimit` usam o default.
+const buildServiceLimiter = (config?: RateLimitConfig): RequestHandler =>
+  config?.disabled ? passthroughMiddleware : buildWebhookLimiter(config);
+
+const defaultWebhookLimiter = buildServiceLimiter();
+const webhookLimitersByService: Record<string, RequestHandler> = {};
+for (const serviceName of Object.keys(webhookConfig)) {
+  webhookLimitersByService[serviceName] = buildServiceLimiter(webhookConfig[serviceName]?.rateLimit);
+}
+
+const webhookLimiter: RequestHandler = (req, res, next) => {
+  const serviceName = (req.params as { serviceName?: string }).serviceName;
+  const limiter = (serviceName && webhookLimitersByService[serviceName]) || defaultWebhookLimiter;
+  return limiter(req, res, next);
+};
 
 
 export {

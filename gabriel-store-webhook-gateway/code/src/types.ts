@@ -18,6 +18,19 @@ export interface UpstreamForwardRequestConfig {
     BODY?: boolean;
 }
 
+export interface RateLimitConfig {
+    windowMs?: number;
+    max?: number;
+    disabled?: boolean;
+}
+
+export type RateLimitYamlConfig = false | {
+    windowMs?: number;
+    windowMinutes?: number;
+    max?: number;
+    disabled?: boolean;
+};
+
 export interface UpstreamProxyConfig {
     timeoutMs?: number;
     timeoutMsByMethod?: Partial<Record<WebhookMethod, number>>;
@@ -61,6 +74,7 @@ export interface ServiceYamlConfig {
     signaturePrefix?: string;
     hmacAlgorithm?: string;
     filter?: FilterFunctionName;
+    rateLimit?: RateLimitYamlConfig;
 }
 
 export interface LoadedServiceConfig {
@@ -77,6 +91,7 @@ export interface LoadedServiceConfig {
     signaturePrefix?: string;
     hmacAlgorithm?: string;
     filter?: (payload: any, headers?: any) => boolean;
+    rateLimit?: RateLimitConfig;
 }
 
 export interface ParsedForwardConfig {
@@ -103,5 +118,6 @@ export interface WebhookConfig {
         signaturePrefix?: string;
         hmacAlgorithm?: string;
         filter?: (payload: any, headers?: any) => boolean;
+        rateLimit?: RateLimitConfig;
     };
 }
