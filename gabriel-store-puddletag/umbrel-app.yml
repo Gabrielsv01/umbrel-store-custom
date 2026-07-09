@@ -23,6 +23,8 @@ releaseNotes: >-
 
 
 dependencies: []
+permissions:
+  - STORAGE_DOWNLOADS
 path: ""
 defaultUsername: ""
 defaultPassword: ""
