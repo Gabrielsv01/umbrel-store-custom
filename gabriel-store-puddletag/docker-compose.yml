@@ -1,0 +1,12 @@
+services:
+  puddletag:
+    image: jlesage/puddletag
+    container_name: puddletag
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - ${UMBREL_ROOT}/home/Downloads/music:/music
+      - ${UMBREL_ROOT}/home/Downloads/larissa-music:/larissa-music
+    ports:
+      - 5147:5800
