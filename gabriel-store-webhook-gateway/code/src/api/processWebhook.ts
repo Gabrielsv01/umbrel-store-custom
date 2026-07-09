@@ -12,6 +12,7 @@ import {
     normalizeSubPathParam,
     resolveDestination,
     signatureMatches,
+    tokensMatch,
 } from './processWebhook-helpers';
 
 type RequestWithRawBody = Request & { rawBody?: Buffer };
@@ -174,6 +175,41 @@ function ensureDestinationConfigured(
     return false;
 }
 
+function validateGetTokenIfNeeded(
+    req: Request,
+    res: Response,
+    args: {
+        serviceName: string;
+        config: any;
+        payload: any;
+    },
+) {
+    const { serviceName, config, payload } = args;
+
+    // Opcional: sem token configurado, o GET segue sem exigência (comportamento legado).
+    if (!config.getTokenSecret) {
+        return true;
+    }
+
+    const headerName = config.getTokenHeader || 'x-webhook-token';
+    const received = normalizeHeaderValue(req.headers[headerName]);
+
+    if (received && tokensMatch(received, config.getTokenSecret)) {
+        return true;
+    }
+
+    logAndRespond(res, {
+        serviceName,
+        status: 'unauthorized',
+        summary: received ? 'Token de acesso inválido' : 'Token de acesso ausente',
+        payload,
+        details: `Header esperado: ${headerName}`,
+        httpStatus: 401,
+        body: 'Token de acesso do webhook inválido ou ausente.',
+    });
+    return false;
+}
+
 function validateSignatureIfNeeded(
     req: Request,
     res: Response,
@@ -185,7 +221,13 @@ function validateSignatureIfNeeded(
     },
 ) {
     const { serviceName, config, isGetRequest, payload } = args;
-    if (!config.signatureSecret || isGetRequest) {
+
+    // GET não tem corpo para assinar via HMAC; autentica por token de header (opcional).
+    if (isGetRequest) {
+        return validateGetTokenIfNeeded(req, res, { serviceName, config, payload });
+    }
+
+    if (!config.signatureSecret) {
         return true;
     }
 

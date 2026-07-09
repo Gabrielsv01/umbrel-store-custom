@@ -73,6 +73,8 @@ export interface ServiceYamlConfig {
     signatureHeader?: string;
     signaturePrefix?: string;
     hmacAlgorithm?: string;
+    getTokenSecret?: string;
+    getTokenHeader?: string;
     filter?: FilterFunctionName;
     rateLimit?: RateLimitYamlConfig;
 }
@@ -90,6 +92,8 @@ export interface LoadedServiceConfig {
     signatureHeader?: string;
     signaturePrefix?: string;
     hmacAlgorithm?: string;
+    getTokenSecret?: string;
+    getTokenHeader?: string;
     filter?: (payload: any, headers?: any) => boolean;
     rateLimit?: RateLimitConfig;
 }
@@ -117,6 +121,8 @@ export interface WebhookConfig {
         signatureHeader?: string;
         signaturePrefix?: string;
         hmacAlgorithm?: string;
+        getTokenSecret?: string;
+        getTokenHeader?: string;
         filter?: (payload: any, headers?: any) => boolean;
         rateLimit?: RateLimitConfig;
     };

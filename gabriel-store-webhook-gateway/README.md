@@ -130,10 +130,18 @@ Assinatura HMAC (opcional por serviço):
 - Se `signatureSecret` for definido, a requisição precisa conter a assinatura no header configurado.
 - A assinatura esperada é `HMAC(rawBody)` usando o algoritmo configurado (`sha256` por padrão).
 - Se `signaturePrefix` estiver definido (ex: `sha256=`), ele é removido antes da validação.
+- A validação HMAC vale para métodos com corpo (POST/PUT/PATCH/DELETE); requisições `GET` não têm corpo para assinar.
+
+Token de acesso para GET (opcional por serviço):
+
+- Como o `GET` não tem corpo para assinar via HMAC, use `getTokenSecret` para exigir um token em header nas requisições GET.
+- Se `getTokenSecret` **não** for definido, o `GET` segue sem exigência (comportamento padrão).
+- Se definido, todo `GET` precisa enviar o header (default `x-webhook-token`, customizável via `getTokenHeader`) com o valor exato; caso contrário retorna `401`. A comparação é feita em tempo constante.
+- Prefira injetar o segredo por env (ex: `getTokenSecret: ${SUBSTREAM_GET_TOKEN}`) para não versioná-lo.
 
 Filtros disponíveis:
 
-- `telegramFilter`: aceita evento se `chat.id` OU `from.username` estiver autorizado.
+- `telegramFilter`: aceita evento se `chat.id` OU `from.username` estiver em uma allowlist configurada. Sem nenhuma allowlist definida, **nega** a requisição (fail-closed).
 - `alexaskillFilter`: aceita somente quando `applicationId` confere.
 - `noFilter`: aceita tudo.
 

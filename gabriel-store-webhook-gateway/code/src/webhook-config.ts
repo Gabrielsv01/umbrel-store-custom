@@ -407,6 +407,8 @@ const loadConfig = () => {
                 signatureHeader: serviceTyped.signatureHeader?.toLowerCase() || undefined,
                 signaturePrefix: serviceTyped.signaturePrefix || undefined,
                 hmacAlgorithm: serviceTyped.hmacAlgorithm || 'sha256',
+                getTokenSecret: serviceTyped.getTokenSecret || undefined,
+                getTokenHeader: serviceTyped.getTokenHeader?.toLowerCase() || undefined,
                 filter: serviceFilter ? (payload: any, headers: any) => filterFunctions[serviceFilter](payload, loadedConfig[serviceName], headers) : undefined,
                 rateLimit,
             } as LoadedServiceConfig;

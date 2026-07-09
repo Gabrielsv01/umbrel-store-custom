@@ -100,6 +100,17 @@ export function copyUpstreamHeaders(
     }
 }
 
+export function tokensMatch(received: string, expected: string): boolean {
+    const receivedBuffer = Buffer.from(received, 'utf8');
+    const expectedBuffer = Buffer.from(expected, 'utf8');
+
+    if (receivedBuffer.length !== expectedBuffer.length) {
+        return false;
+    }
+
+    return crypto.timingSafeEqual(receivedBuffer, expectedBuffer);
+}
+
 export function signatureMatches(
     rawBody: Buffer,
     receivedSignature: string,
