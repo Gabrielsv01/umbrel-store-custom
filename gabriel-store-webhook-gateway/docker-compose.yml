@@ -16,6 +16,8 @@ services:
       - ENABLE_NO_SNIFF=true
       - ENABLE_FRAMEGUARD=true
       - ENABLE_XSS_FILTER=true
+      - COOKIE_SECURE=false
+      - DEBUG=false
       - ENABLE_COEP=false
       - ENABLE_PERMISSIONS_POLICY=false
       - ENABLE_HSTS_PRELOAD=false
