@@ -15,6 +15,7 @@ submitter: Gabriel Vieira
 submission: https://github.com/getumbrel/umbrel-apps/pull/2498
 repo: https://docs.puddletag.net/
 support: https://docs.puddletag.net/
+gallery: []
 releaseNotes: >-
   First version of the Puddletag app for Umbrel.
 dependencies: []
