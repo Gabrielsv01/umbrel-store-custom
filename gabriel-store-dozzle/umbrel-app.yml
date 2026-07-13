@@ -1,0 +1,25 @@
+manifestVersion: 1
+id: gabriel-store-dozzle
+name: Dozzle
+tagline: Real-time Docker logs viewer
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-dozzle/icon.svg
+category: Utilities
+version: "1.0.0"
+port: 5148
+description: >-
+  Dozzle is a real-time log viewer for Docker.
+  Monitor and view logs from all your running containers in a beautiful web interface.
+
+developer: Amir Bourmand
+website: https://dozzle.dev
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+releaseNotes: >-
+  First version of the Zrok app for Umbrel.
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
