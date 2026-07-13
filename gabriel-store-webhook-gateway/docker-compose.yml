@@ -16,6 +16,9 @@ services:
       - ENABLE_NO_SNIFF=true
       - ENABLE_FRAMEGUARD=true
       - ENABLE_XSS_FILTER=true
+      - ENABLE_COEP=false
+      - ENABLE_PERMISSIONS_POLICY=false
+      - ENABLE_HSTS_PRELOAD=false
       - LOGIN_PASSWORD_HASH=$2a$14$2ugEF5bxlp5NiAqfSGx3dOpsfcZD.lMZ/CqQzfYP.ecZXr.C5WDYe
     volumes:
       - ${APP_DATA_DIR}/config/webhooks.yml:/app/config/webhooks.yml

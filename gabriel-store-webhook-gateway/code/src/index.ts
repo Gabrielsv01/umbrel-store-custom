@@ -18,7 +18,11 @@ const app = express();
 if (process.env.ENABLE_HELMET === 'true') {
     app.use(helmet({
          contentSecurityPolicy : process.env.ENABLE_CSP === 'true' ? { directives: { defaultSrc: ["'self'"] } } : false,
-         hsts: process.env.ENABLE_HSTS === 'true',
+         hsts: process.env.ENABLE_HSTS === 'true' ? {
+             maxAge: 31536000,
+             includeSubDomains: true,
+             preload: process.env.ENABLE_HSTS_PRELOAD === 'true'
+         } : false,
          noSniff: process.env.ENABLE_NO_SNIFF === 'true',
          frameguard: process.env.ENABLE_FRAMEGUARD === 'true' ? { action: 'deny' } : false,
          xssFilter: process.env.ENABLE_XSS_FILTER === 'true',
