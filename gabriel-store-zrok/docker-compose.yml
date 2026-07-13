@@ -4,11 +4,21 @@ services:
   zrok:
     image: openziti/zrok:latest
     container_name: zrok_tunnel
-    command:
-      - ep-share
-      - "5124"
+    tty: true
+    stdin_open: true
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        # 1. Ativa o ambiente (se já estiver ativo, ignora)
+        zrok enable $$ZROK_ENABLE_TOKEN --headless || true
+        
+        # 2. Tenta reservar usando o modo correto 'proxy'
+        zrok reserve public localhost:5124 --backend-mode proxy --unique-name domain-reserved || true
+        
+        # 3. Abre o túnel definitivo
+        zrok share reserved domain-reserved --headless
     environment:
-      - ZROK_ENABLE_TOKEN=seu_token_aqui
-      - ZROK_SHARE_MODE=public
+      - ZROK_ENABLE_TOKEN=secret_token_here
     network_mode: host
     restart: unless-stopped
