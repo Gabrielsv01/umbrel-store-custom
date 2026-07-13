@@ -21,9 +21,22 @@ if (process.env.ENABLE_HELMET === 'true') {
          hsts: process.env.ENABLE_HSTS === 'true',
          noSniff: process.env.ENABLE_NO_SNIFF === 'true',
          frameguard: process.env.ENABLE_FRAMEGUARD === 'true' ? { action: 'deny' } : false,
-         xssFilter: process.env.ENABLE_XSS_FILTER === 'true'
+         xssFilter: process.env.ENABLE_XSS_FILTER === 'true',
+         crossOriginEmbedderPolicy: process.env.ENABLE_COEP === 'true'
     }));
 }
+
+// Permissions-Policy: o Helmet não emite esse header, então setamos manualmente.
+// Default é negar todos os recursos (deny-all); pode ser sobrescrito via PERMISSIONS_POLICY_VALUE.
+if (process.env.ENABLE_PERMISSIONS_POLICY === 'true') {
+    const permissionsPolicy = process.env.PERMISSIONS_POLICY_VALUE
+        || 'geolocation=(), camera=(), microphone=(), payment=(), usb=()';
+    app.use((_req, res, next) => {
+        res.setHeader('Permissions-Policy', permissionsPolicy);
+        next();
+    });
+}
+
 app.set('trust proxy', TRUST_PROXY);
 app.use(express.json({
     limit: JSON_BODY_LIMIT,
