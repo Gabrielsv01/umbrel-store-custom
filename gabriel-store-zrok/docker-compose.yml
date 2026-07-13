@@ -1,0 +1,14 @@
+version: "3.7"
+
+services:
+  zrok:
+    image: openziti/zrok:latest
+    container_name: zrok_tunnel
+    command:
+      - ep-share
+      - "5124"
+    environment:
+      - ZROK_ENABLE_TOKEN=seu_token_aqui
+      - ZROK_SHARE_MODE=public
+    network_mode: host
+    restart: unless-stopped

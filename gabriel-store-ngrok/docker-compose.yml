@@ -5,7 +5,7 @@ services:
     image: ngrok/ngrok:latest
     command:
       - http
-      - "5678"
+      - "5124"
     environment:
       NGROK_AUTHTOKEN: "123"   # put your token
     network_mode: host

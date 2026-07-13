@@ -1,0 +1,25 @@
+manifestVersion: 1
+id: gabriel-store-zrok
+name: Zrok Tunnel
+tagline: Expose your Umbrel to the internet with zrok
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-zrok/icon.svg
+category: Utilities
+version: "1.0.0"
+port: 5024
+description: >-
+  This app creates a secure tunnel to a local port using zrok.
+  Ideal for remotely and securely accessing your Umbrel services.
+
+developer: Zrok
+website: https://zrok.com
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+releaseNotes: >-
+  First version of the Zrok app for Umbrel.
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
