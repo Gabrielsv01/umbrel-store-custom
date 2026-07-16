@@ -1,6 +1,6 @@
 services:
   picoclaw:
-    image: docker.io/sipeed/picoclaw:v0.2.9
+    image: docker.io/sipeed/picoclaw:v0.3.1
     container_name: picoclaw
     restart: unless-stopped
     ports:
@@ -17,7 +17,7 @@ services:
       - PICOCLAW_GATEWAY_PORT=8080
   
   picoclaw-launcher:
-      image: docker.io/sipeed/picoclaw:v0.2.9-launcher
+      image: docker.io/sipeed/picoclaw:v0.3.1-launcher
       container_name: picoclaw-launcher
       restart: unless-stopped
       environment:
