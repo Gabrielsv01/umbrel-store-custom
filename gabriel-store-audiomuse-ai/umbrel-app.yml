@@ -16,8 +16,7 @@ submitter: AudioMuse
 submission: https://github.com/NeptuneHub/AudioMuse-AI
 repo: https://github.com/NeptuneHub/AudioMuse-AI
 support: https://github.com/NeptuneHub/AudioMuse-AI/issues
-gallery:
-  - https://raw.githubusercontent.com/NeptuneHub/AudioMuse-AI/main/assets/preview.png
+gallery: []
 permissions:
   - STORAGE_DOWNLOADS
 releaseNotes: >-
