@@ -1,0 +1,28 @@
+manifestVersion: 1
+id: gabriel-store-audiomuse-ai
+name: AudioMuse AI
+tagline: AI-powered music recommendation engine for Navidrome and Subsonic
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-changedetection/icon.png
+category: Media
+version: "1.0.0"
+port: 5149
+description: >-
+  AudioMuse-AI is an intelligent music recommendation and acoustic analysis server designed to work seamlessly with Navidrome and other Subsonic-compatible servers. 
+  
+  It processes your music library to generate embeddings, enabling features like smart recommendations, acoustic similarity search, and Instant Mix.
+developer: NeptuneHub
+website: https://github.com/NeptuneHub
+submitter: AudioMuse
+submission: https://github.com/NeptuneHub/AudioMuse-AI
+repo: https://github.com/NeptuneHub/AudioMuse-AI
+support: https://github.com/NeptuneHub/AudioMuse-AI/issues
+gallery:
+  - https://raw.githubusercontent.com/NeptuneHub/AudioMuse-AI/main/assets/preview.png
+permissions:
+  - STORAGE_DOWNLOADS
+releaseNotes: >-
+  Initial Umbrel App release with multi-container setup (Flask, Worker, Redis, and Postgres).
+dependencies: []
+path: "/"
+defaultUsername: ""
+defaultPassword: ""
