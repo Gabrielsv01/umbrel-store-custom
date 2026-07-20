@@ -3,7 +3,7 @@ id: gabriel-store-audiomuse-ai
 name: AudioMuse AI
 tagline: AI-powered music recommendation engine for Navidrome and Subsonic
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-changedetection/icon.svg
-category: Media
+category: media
 version: "1.0.0"
 port: 5149
 description: >-
