@@ -99,9 +99,11 @@ export function registerStdioRoutes(
       }
     }
 
-    // General proxy for other methods
+    // General proxy for other methods.
+    // logs:false — never replay historical stdout (stale responses whose id can
+    // collide with the current request's reused/reset id).
     const stream = await container.attach({
-      stream: true, stdin: true, stdout: true, stderr: true, hijack: true, logs: true
+      stream: true, stdin: true, stdout: true, stderr: true, hijack: true, logs: false
     });
 
     const hasId = Object.prototype.hasOwnProperty.call(payload, 'id');
@@ -110,6 +112,10 @@ export function registerStdioRoutes(
       setTimeout(() => { try { (stream as any).destroy(); } catch {} }, 500);
       return reply.code(204).send();
     }
+
+    // Hub-generated unique id → immune to client id reuse/collision.
+    const wireId = randomUUID();
+    const outboundPayload = { ...payload, id: wireId };
 
     const getMcpResponse = () => new Promise((resolve, reject) => {
       let responseBuffer = '';
@@ -146,13 +152,14 @@ export function registerStdioRoutes(
           try {
             const parsed = JSON.parse(trimmed);
             if (parsed && Object.prototype.hasOwnProperty.call(parsed, 'id')) {
-              if (String(parsed.id) === String(payload.id)) {
+              if (String(parsed.id) === String(wireId)) {
+                parsed.id = payload.id;
                 isFinished = true;
                 cleanup();
                 resolve(parsed);
                 return;
               } else {
-                console.log(`[HUB]: Drenando ID antigo: ${parsed.id} (esperando ${payload.id})`);
+                console.log(`[HUB]: Drenando ID antigo: ${parsed.id} (esperando ${wireId})`);
               }
             }
         } catch { }
@@ -174,7 +181,7 @@ export function registerStdioRoutes(
 
       setTimeout(() => {
         if (!isFinished) {
-          stream.write(`${JSON.stringify(payload)}\n`);
+          stream.write(`${JSON.stringify(outboundPayload)}\n`);
         }
       }, waitTime);
     });

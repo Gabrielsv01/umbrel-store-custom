@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify'
+import { randomUUID } from 'node:crypto'
 import type { Readable } from 'node:stream'
 import type { RegisterStdioRoutesDeps } from '../types/stdio.js'
 import type Docker from 'dockerode'
@@ -159,15 +160,26 @@ async function handleStdioInspect(
       return reply.code(204).send()
     }
 
-    // Handle requests with id
+    // Handle requests with id.
+    // IMPORTANT: logs:false — do NOT replay the container's historical stdout.
+    // Replaying history means we'd re-read stale JSON-RPC responses from earlier
+    // requests, and since MCP clients reuse/reset small sequential ids across
+    // reconnects, an old response can collide with the current request's id.
     const stream = await container.attach({
       stream: true,
       stdin: true,
       stdout: true,
       stderr: true,
       hijack: true,
-      logs: true,
+      logs: false,
     })
+
+    // Send a hub-generated unique id to the container and match the response on
+    // that, then map the client's original id back on the way out. This makes
+    // response correlation immune to id reuse/collision (and to any leaked
+    // history), even under concurrent in-flight requests sharing this stdout.
+    const wireId = randomUUID()
+    const outboundPayload = { ...payload, id: wireId }
 
     const getMcpResponse = () =>
       new Promise<JsonRpcResponse>((resolve, reject) => {
@@ -209,7 +221,9 @@ async function handleStdioInspect(
             try {
               const parsed = JSON.parse(trimmed) as Record<string, unknown>
               if (Object.prototype.hasOwnProperty.call(parsed, 'id')) {
-                if (String(parsed.id) === String(payload.id)) {
+                if (String(parsed.id) === String(wireId)) {
+                  // Restore the client's original id before resolving.
+                  parsed.id = payload.id
                   isFinished = true
                   cleanup()
                   resolve(parsed as unknown as JsonRpcResponse)
@@ -238,7 +252,7 @@ async function handleStdioInspect(
 
         setTimeout(() => {
           if (!isFinished) {
-            stream.write(`${JSON.stringify(payload)}\n`)
+            stream.write(`${JSON.stringify(outboundPayload)}\n`)
           }
         }, waitTime)
       })
