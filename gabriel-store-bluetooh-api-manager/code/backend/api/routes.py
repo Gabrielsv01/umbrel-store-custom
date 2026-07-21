@@ -20,6 +20,7 @@ from ..adapters.classic import classic
 from ..adapters.files import files
 from ..core.config import settings
 from ..core.events import bus
+from ..cleanup import cleanup
 from ..scheduler import scheduler
 from ..tts import tts
 
@@ -180,6 +181,18 @@ async def recent_events() -> list[dict]:
     return bus.history()
 
 
+# ---- Storage / cleanup ---------------------------------------------------
+@router.get("/storage")
+async def storage_usage() -> dict:
+    return cleanup.usage()
+
+
+@router.post("/cleanup")
+async def storage_cleanup() -> dict:
+    """Delete old generated/uploaded audio not referenced by a schedule or queue."""
+    return cleanup.sweep()
+
+
 # ---- Bluetooth Classic (speakers/headsets: pair & connect) --------------
 @router.get("/classic/devices")
 async def classic_devices() -> list[dict]:
@@ -318,6 +331,9 @@ async def tts_submit(
     device: str = Form(...),
     mode: str = Form("play", description="play | schedule"),
     length_scale: Optional[float] = Form(None, description="speech rate: 1.0 normal, >1 slower, <1 faster"),
+    noise_scale: Optional[float] = Form(None, description="expressiveness / variability"),
+    noise_w: Optional[float] = Form(None, description="cadence (timing) variability"),
+    sentence_silence: Optional[float] = Form(None, description="pause between sentences (seconds)"),
     time: Optional[str] = Form(None),
     repeat: str = Form("once"),
     days: str = Form(""),
@@ -334,8 +350,10 @@ async def tts_submit(
         except ValueError:
             raise HTTPException(status_code=400, detail="days must be CSV of 0..6")
         sched = {"time": time, "repeat": repeat, "days": day_list, "date": date, "title": title}
+    params = {"length_scale": length_scale, "noise_scale": noise_scale,
+              "noise_w": noise_w, "sentence_silence": sentence_silence}
     return tts.submit(text=text, voice=voice, device=device, mode=mode, sched=sched,
-                      length_scale=length_scale)
+                      params=params)
 
 
 @router.delete("/schedules/{sid}")

@@ -45,7 +45,7 @@ class TTSService:
 
     def submit(self, *, text: str, voice: str, device: str, mode: str,
                sched: Optional[Dict[str, Any]] = None,
-               length_scale: Optional[float] = None) -> Dict[str, Any]:
+               params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         job = {
             "id": uuidlib.uuid4().hex[:8],
             "text": text,
@@ -54,7 +54,8 @@ class TTSService:
             "device": device,
             "mode": mode,
             "sched": sched,
-            "length_scale": length_scale,
+            # Piper tuning: length_scale, noise_scale, noise_w, sentence_silence.
+            "params": {k: v for k, v in (params or {}).items() if v is not None},
             "status": "queued",
         }
         self._pending.append(job)
@@ -84,9 +85,7 @@ class TTSService:
         try:
             os.makedirs(self._dir, exist_ok=True)
             path = os.path.join(self._dir, f"{job['id']}.wav")
-            payload = {"text": job["text"], "voice": job["voice"]}
-            if job.get("length_scale") is not None:
-                payload["length_scale"] = job["length_scale"]
+            payload = {"text": job["text"], "voice": job["voice"], **job.get("params", {})}
             async with httpx.AsyncClient(timeout=300) as client:
                 resp = await client.post(f"{PIPER_URL}/synthesize", json=payload)
                 resp.raise_for_status()

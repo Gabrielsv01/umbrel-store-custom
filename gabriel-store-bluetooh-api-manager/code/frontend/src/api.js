@@ -70,13 +70,17 @@ export const api = {
   // Text-to-speech (Piper)
   ttsVoices: () => request("/tts/voices"),
   ttsStatus: () => request("/tts"),
-  ttsSubmit: ({ text, voice, device, mode, length_scale, time, repeat, days, date, title }) => {
+  ttsSubmit: ({ text, voice, device, mode, length_scale, noise_scale, noise_w,
+                sentence_silence, time, repeat, days, date, title }) => {
     const fd = new FormData();
     fd.append("text", text);
     fd.append("voice", voice);
     fd.append("device", device);
     fd.append("mode", mode);
     if (length_scale) fd.append("length_scale", length_scale);
+    if (noise_scale) fd.append("noise_scale", noise_scale);
+    if (noise_w) fd.append("noise_w", noise_w);
+    if (sentence_silence) fd.append("sentence_silence", sentence_silence);
     if (time) fd.append("time", time);
     if (repeat) fd.append("repeat", repeat);
     if (days) fd.append("days", days);
@@ -84,6 +88,10 @@ export const api = {
     if (title) fd.append("title", title);
     return upload("/tts", fd);
   },
+
+  // Storage / cleanup
+  storage: () => request("/storage"),
+  cleanup: () => request("/cleanup", { method: "POST" }),
 
   // Scheduler
   schedules: () => request("/schedules"),

@@ -15,7 +15,12 @@ export default function Voice({ classic }) {
   const [days, setDays] = useState([]);
   const [title, setTitle] = useState("");
   const [lengthScale, setLengthScale] = useState("1.0");
+  const [advanced, setAdvanced] = useState(false);
+  const [noiseScale, setNoiseScale] = useState("");
+  const [noiseW, setNoiseW] = useState("");
+  const [sentenceSilence, setSentenceSilence] = useState("");
   const [status, setStatus] = useState({ jobs: [], queued: 0 });
+  const [storage, setStorage] = useState(null);
   const [error, setError] = useState(null);
 
   const connectedSpeakers = classic.filter((c) => c.connected);
@@ -31,10 +36,29 @@ export default function Voice({ classic }) {
 
   useEffect(() => {
     const tick = () => api.ttsStatus().then(setStatus).catch(() => {});
+    const stick = () => api.storage().then(setStorage).catch(() => {});
     tick();
+    stick();
     const t = setInterval(tick, 2000);
-    return () => clearInterval(t);
+    const t2 = setInterval(stick, 10000);
+    return () => { clearInterval(t); clearInterval(t2); };
   }, []);
+
+  async function cleanNow() {
+    try {
+      await api.cleanup();
+      setStorage(await api.storage());
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  function fmtBytes(b) {
+    if (b == null) return "—";
+    if (b < 1024) return `${b} B`;
+    if (b < 1048576) return `${(b / 1024).toFixed(0)} KB`;
+    return `${(b / 1048576).toFixed(1)} MB`;
+  }
 
   function toggleDay(i) {
     setDays((d) => (d.includes(i) ? d.filter((x) => x !== i) : [...d, i]));
@@ -51,6 +75,9 @@ export default function Voice({ classic }) {
       await api.ttsSubmit({
         text, voice, device, mode,
         length_scale: lengthScale,
+        noise_scale: advanced && noiseScale ? noiseScale : undefined,
+        noise_w: advanced && noiseW ? noiseW : undefined,
+        sentence_silence: advanced && sentenceSilence ? sentenceSilence : undefined,
         time: mode === "schedule" ? time : undefined,
         repeat: mode === "schedule" ? repeat : undefined,
         days: mode === "schedule" ? days.join(",") : undefined,
@@ -106,7 +133,27 @@ export default function Voice({ classic }) {
             <option value="1.25">Slower</option>
             <option value="1.5">Slowest</option>
           </select>
+          <label style={{ marginLeft: "auto" }}>
+            <input type="checkbox" checked={advanced} onChange={(e) => setAdvanced(e.target.checked)} /> Advanced voice
+          </label>
         </div>
+
+        {advanced && (
+          <div className="row" style={{ flexWrap: "wrap", gap: "0.75rem" }}>
+            <label>Expressiveness&nbsp;
+              <input type="number" step="0.05" min="0" max="1.5" placeholder="0.667" value={noiseScale}
+                     onChange={(e) => setNoiseScale(e.target.value)} style={{ width: 70 }} />
+            </label>
+            <label>Cadence&nbsp;
+              <input type="number" step="0.05" min="0" max="1.5" placeholder="0.8" value={noiseW}
+                     onChange={(e) => setNoiseW(e.target.value)} style={{ width: 70 }} />
+            </label>
+            <label>Sentence pause (s)&nbsp;
+              <input type="number" step="0.1" min="0" max="5" placeholder="0.2" value={sentenceSilence}
+                     onChange={(e) => setSentenceSilence(e.target.value)} style={{ width: 70 }} />
+            </label>
+          </div>
+        )}
 
         <div className="row">
           <label>
@@ -161,6 +208,20 @@ export default function Voice({ classic }) {
             <span className="len" style={{ marginLeft: "auto" }}>{j.status}{j.error ? `: ${j.error}` : ""}</span>
           </div>
         ))}
+      </div>
+
+      <div className="card">
+        <div className="row" style={{ margin: 0 }}>
+          <strong>Storage</strong>
+          <span className="props" style={{ marginLeft: "0.5rem" }}>
+            {storage ? `${storage.files} audio files · ${fmtBytes(storage.bytes)}` : "…"}
+          </span>
+          <button style={{ marginLeft: "auto" }} onClick={cleanNow}>Clean now</button>
+        </div>
+        <p className="hint" style={{ marginBottom: 0 }}>
+          Old generated/uploaded audio is removed automatically after{" "}
+          {storage?.retention_days ?? 7} days (files tied to a schedule are kept).
+        </p>
       </div>
     </section>
   );
