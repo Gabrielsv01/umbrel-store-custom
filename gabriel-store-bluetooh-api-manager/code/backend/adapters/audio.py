@@ -1,37 +1,84 @@
-"""Audio streaming to a Bluetooth A2DP speaker via bluez-alsa (self-contained).
+"""Audio streaming to a Bluetooth A2DP speaker via bluez-alsa, with a queue.
 
-The container runs its own bluez-alsa daemon (bluealsad -p a2dp-source), so we
-don't need any audio server on the host. To play we:
-  1. make sure the speaker is connected (bluetoothctl connect <MAC>), which makes
-     bluealsad expose an ALSA PCM `bluealsa:DEV=<MAC>,PROFILE=a2dp`;
-  2. decode the file/URL with ffmpeg and pipe raw PCM into `aplay` on that device.
+The container runs its own bluez-alsa daemon (bluealsad -p a2dp-source), so no
+host audio server is needed. Tracks (uploaded files or URLs) are enqueued and a
+single background player plays them one after another. To play a track we:
+  1. make sure the speaker is connected (bluetoothctl connect <MAC>);
+  2. decode with ffmpeg and pipe raw PCM into `aplay` on the bluez-alsa PCM.
 
-Best-effort: needs a real adapter + a speaker that has been paired once. One
-stream at a time (KISS). Errors are surfaced on the event bus (Logs tab).
+Best-effort: needs a real adapter + a paired speaker. Errors surface on the bus.
 """
 from __future__ import annotations
 
 import asyncio
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from ..core.events import bus
 
 
 class AudioService:
     def __init__(self) -> None:
+        self._pending: List[Dict[str, Any]] = []
+        self._current: Optional[Dict[str, Any]] = None
         self._ffmpeg: Optional[asyncio.subprocess.Process] = None
         self._aplay: Optional[asyncio.subprocess.Process] = None
-        self._label: Optional[str] = None
-        self._device: Optional[str] = None
+        self._loop_task: Optional[asyncio.Task] = None
+        self._wake = asyncio.Event()
+        self._interrupt = False  # set when skip/stop kills the current track
+        self._counter = 0
 
+    # ---- public API ------------------------------------------------------
     def status(self) -> Dict[str, Any]:
-        playing = self._aplay is not None and self._aplay.returncode is None
         return {
-            "playing": playing,
-            "source": self._label if playing else None,
-            "device": self._device if playing else None,
+            "playing": self._current is not None,
+            "current": self._current,
+            "queue": list(self._pending),
+            "queue_length": len(self._pending),
         }
+
+    def enqueue(self, source: str, device: str) -> Dict[str, Any]:
+        self._counter += 1
+        item = {"id": self._counter, "source": source, "device": device,
+                "label": os.path.basename(source) if "://" not in source else source}
+        self._pending.append(item)
+        bus.publish("audio_enqueued", **item)
+        self._ensure_loop()
+        self._wake.set()
+        return self.status()
+
+    async def skip(self) -> Dict[str, Any]:
+        """Stop the current track and move on to the next in the queue."""
+        await self._kill_current(interrupt=True)
+        bus.publish("audio_skipped")
+        return self.status()
+
+    async def stop(self) -> Dict[str, Any]:
+        """Stop playback and clear the whole queue."""
+        self._pending.clear()
+        await self._kill_current(interrupt=True)
+        bus.publish("audio_stopped")
+        return self.status()
+
+    def clear_queue(self) -> Dict[str, Any]:
+        self._pending.clear()
+        return self.status()
+
+    # ---- internals -------------------------------------------------------
+    def _ensure_loop(self) -> None:
+        if self._loop_task is None or self._loop_task.done():
+            self._loop_task = asyncio.create_task(self._run())
+
+    async def _run(self) -> None:
+        while True:
+            if not self._pending:
+                self._wake.clear()
+                await self._wake.wait()
+                continue
+            item = self._pending.pop(0)
+            self._current = item
+            await self._play_one(item)
+            self._current = None
 
     async def _connect(self, device: str) -> None:
         proc = await asyncio.create_subprocess_exec(
@@ -40,20 +87,16 @@ class AudioService:
         )
         out, _ = await proc.communicate()
         text = (out or b"").decode(errors="replace")
-        if "Connection successful" not in text and "already" not in text.lower():
-            # Not fatal on its own — the device may already be connected — but
-            # record it so failures are visible.
+        if "successful" not in text.lower() and "already" not in text.lower():
             bus.publish("audio_connect", device=device, detail=text.strip()[-200:])
 
-    async def play(self, source: str, device: str) -> Dict[str, Any]:
-        await self.stop()  # only one stream at a time
+    async def _play_one(self, item: Dict[str, Any]) -> None:
+        source, device = item["source"], item["device"]
+        self._interrupt = False
         await self._connect(device)
 
         pcm = f"bluealsa:DEV={device},PROFILE=a2dp"
-        # Connect ffmpeg -> aplay with a real OS pipe (asyncio can't chain a
-        # subprocess StreamReader into another subprocess's stdin).
         read_fd, write_fd = os.pipe()
-        # ffmpeg decodes anything (file or URL) to 44.1kHz/16-bit stereo WAV.
         self._ffmpeg = await asyncio.create_subprocess_exec(
             "ffmpeg", "-hide_banner", "-loglevel", "warning", "-re", "-i", source,
             "-vn", "-ar", "44100", "-ac", "2", "-f", "wav", "pipe:1",
@@ -65,47 +108,38 @@ class AudioService:
             stdin=read_fd, stderr=asyncio.subprocess.PIPE,
         )
         os.close(read_fd)
-        self._label = source
-        self._device = device
-        bus.publish("audio_started", source=source, device=device)
-        asyncio.create_task(self._monitor(self._ffmpeg, self._aplay, source, device))
-        return self.status()
+        bus.publish("audio_started", source=source, device=device,
+                    queue_length=len(self._pending))
 
-    async def _monitor(self, ffmpeg, aplay, label, device) -> None:
-        _, aplay_err = await aplay.communicate()
-        # aplay finished (stream ended or errored); stop ffmpeg if still running.
-        if ffmpeg.returncode is None:
-            ffmpeg.kill()
+        _, aplay_err = await self._aplay.communicate()
+        code = self._aplay.returncode
+        if self._ffmpeg.returncode is None:
+            self._ffmpeg.kill()
         ffmpeg_err = b""
         try:
-            _, ffmpeg_err = await asyncio.wait_for(ffmpeg.communicate(), timeout=3)
+            _, ffmpeg_err = await asyncio.wait_for(self._ffmpeg.communicate(), timeout=3)
         except asyncio.TimeoutError:
             pass
-        if aplay is self._aplay:
-            self._ffmpeg = self._aplay = self._label = self._device = None
-        code = aplay.returncode
+        self._ffmpeg = self._aplay = None
+
+        if self._interrupt:
+            return  # skip/stop already published its own event
         if code == 0:
-            bus.publish("audio_finished", source=label, device=device)
+            bus.publish("audio_finished", source=source, device=device)
         else:
             msg = (aplay_err or ffmpeg_err or b"").decode(errors="replace")[-400:]
-            bus.publish("error", where="audio", source=label, device=device,
+            bus.publish("error", where="audio", source=source, device=device,
                         message=msg or f"aplay exit {code}")
 
-    async def stop(self) -> Dict[str, Any]:
-        procs = [p for p in (self._aplay, self._ffmpeg) if p is not None]
-        self._ffmpeg = self._aplay = self._label = self._device = None
-        stopped = False
-        for proc in procs:
-            if proc.returncode is None:
+    async def _kill_current(self, interrupt: bool) -> None:
+        self._interrupt = interrupt
+        for proc in (self._aplay, self._ffmpeg):
+            if proc is not None and proc.returncode is None:
                 proc.kill()
-                stopped = True
                 try:
                     await asyncio.wait_for(proc.wait(), timeout=3)
                 except asyncio.TimeoutError:
                     pass
-        if stopped:
-            bus.publish("audio_stopped")
-        return {"playing": False}
 
 
 audio = AudioService()

@@ -19,16 +19,23 @@ export default function App() {
   const [tab, setTab] = useState("devices");
   const { connected, devices, log, gattData } = useEventStream();
   const [stats, setStats] = useState(null);
-  const deviceList = Object.values(devices).sort(
+  const [classic, setClassic] = useState([]);
+
+  const bleList = Object.values(devices).sort(
     (a, b) => Number(b.connected) - Number(a.connected) || (b.rssi ?? -999) - (a.rssi ?? -999)
   );
 
-  // Poll the observability snapshot for the status bar.
   useEffect(() => {
     const tick = () => api.stats().then(setStats).catch(() => setStats(null));
+    const tickC = () => api.classicDevices().then(setClassic).catch(() => {});
     tick();
-    const t = setInterval(tick, 5000);
-    return () => clearInterval(t);
+    tickC();
+    const t1 = setInterval(tick, 5000);
+    const t2 = setInterval(tickC, 4000);
+    return () => {
+      clearInterval(t1);
+      clearInterval(t2);
+    };
   }, []);
 
   const adapter = stats?.adapter;
@@ -38,6 +45,10 @@ export default function App() {
       : adapter.powered
       ? { cls: "on", text: `adapter on · ${adapter.address || adapter.name || "hci"}` }
       : { cls: "off", text: "adapter powered off" };
+
+  const connectedCount =
+    bleList.filter((d) => d.connected).length +
+    classic.filter((d) => d.connected).length;
 
   return (
     <div className="app">
@@ -54,7 +65,7 @@ export default function App() {
       <div className="statusbar">
         <span className={`chip ${adapterState.cls}`}>{adapterState.text}</span>
         <span className="chip">{stats?.devices_seen ?? 0} seen</span>
-        <span className="chip">{stats?.connected ?? 0} connected</span>
+        <span className={`chip ${connectedCount ? "on" : ""}`}>{connectedCount} connected</span>
         <span className={`chip ${stats?.audio?.playing ? "on" : ""}`}>
           {stats?.audio?.playing ? "audio ▶" : "audio idle"}
         </span>
@@ -77,10 +88,12 @@ export default function App() {
       </nav>
 
       <main>
-        {tab === "devices" && <Devices devices={deviceList} />}
-        {tab === "live" && <LiveData devices={deviceList} gattData={gattData} />}
-        {tab === "audio" && <Audio />}
-        {tab === "files" && <Files devices={deviceList} />}
+        {tab === "devices" && (
+          <Devices ble={bleList} classic={classic} onChange={() => api.classicDevices().then(setClassic).catch(() => {})} />
+        )}
+        {tab === "live" && <LiveData devices={bleList} gattData={gattData} />}
+        {tab === "audio" && <Audio classic={classic} />}
+        {tab === "files" && <Files devices={bleList} />}
         {tab === "logs" && <Logs log={log} />}
       </main>
     </div>

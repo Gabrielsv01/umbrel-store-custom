@@ -60,9 +60,13 @@ export const api = {
   classicConnect: (addr) => request(`/classic/${addr}/connect`, { method: "POST" }),
   classicDisconnect: (addr) =>
     request(`/classic/${addr}/disconnect`, { method: "POST" }),
+  classicPairConnect: (addr) =>
+    request(`/classic/${addr}/pair-connect`, { method: "POST" }),
 
-  // Audio (Phase 2)
+  // Audio (Phase 2) — queue based
   audioStatus: () => request("/audio/status"),
+  audioQueue: () => request("/audio/queue"),
+  audioSkip: () => request("/audio/skip", { method: "POST" }),
   audioStop: () => request("/audio/stop", { method: "POST" }),
   audioPlay: ({ device, file, url }) => {
     const fd = new FormData();

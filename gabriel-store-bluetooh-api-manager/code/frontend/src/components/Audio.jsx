@@ -1,96 +1,45 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
 
-export default function Audio() {
+export default function Audio({ classic }) {
   const [device, setDevice] = useState("");
   const [url, setUrl] = useState("");
   const [file, setFile] = useState(null);
-  const [status, setStatus] = useState({ playing: false });
+  const [state, setState] = useState({ playing: false, current: null, queue: [] });
   const [error, setError] = useState(null);
 
-  // Classic speakers (pairing)
-  const [speakers, setSpeakers] = useState([]);
-  const [scanning, setScanning] = useState(false);
-  const [busy, setBusy] = useState(null);
-  const [note, setNote] = useState(null);
-
-  async function refreshSpeakers() {
-    try {
-      setSpeakers(await api.classicDevices());
-    } catch (e) {
-      setError(e.message);
-    }
-  }
+  const connectedSpeakers = classic.filter((c) => c.connected);
 
   useEffect(() => {
-    refreshSpeakers();
-    const t = setInterval(
-      () => api.audioStatus().then(setStatus).catch(() => {}),
-      3000
-    );
-    api.audioStatus().then(setStatus).catch(() => {});
+    if (!device && connectedSpeakers.length) setDevice(connectedSpeakers[0].address);
+  }, [connectedSpeakers, device]);
+
+  useEffect(() => {
+    const tick = () => api.audioStatus().then(setState).catch(() => {});
+    tick();
+    const t = setInterval(tick, 2000);
     return () => clearInterval(t);
   }, []);
 
-  async function scan() {
-    setScanning(true);
+  async function add() {
     setError(null);
-    setNote("Scanning for ~15s — put the speaker in pairing mode…");
-    try {
-      setSpeakers(await api.classicScan(15));
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setScanning(false);
-      setNote(null);
-    }
-  }
-
-  async function act(fn, addr) {
-    setBusy(addr);
-    setError(null);
-    try {
-      const r = await fn(addr);
-      if (r && r.ok === false) setError(`${r.verb}: ${r.detail}`);
-      await refreshSpeakers();
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function pairAndConnect(addr) {
-    setBusy(addr);
-    setError(null);
-    try {
-      await api.classicPair(addr);
-      await api.classicTrust(addr);
-      const r = await api.classicConnect(addr);
-      if (r && r.ok === false) setError(`connect: ${r.detail}`);
-      setDevice(addr);
-      await refreshSpeakers();
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function play() {
-    setError(null);
-    if (!device) return setError("Choose or connect a speaker first.");
+    if (!device) return setError("Choose a connected speaker (or type its address).");
     if (!file && !url) return setError("Choose a file or paste a URL.");
     try {
-      setStatus(await api.audioPlay({ device, file, url: url || undefined }));
+      setState(await api.audioPlay({ device, file, url: url || undefined }));
+      setUrl("");
+      setFile(null);
+      const el = document.getElementById("audio-file");
+      if (el) el.value = "";
     } catch (e) {
       setError(e.message);
     }
   }
 
-  async function stop() {
+  async function ctl(fn) {
+    setError(null);
     try {
-      setStatus(await api.audioStop());
+      setState(await fn());
     } catch (e) {
       setError(e.message);
     }
@@ -99,60 +48,23 @@ export default function Audio() {
   return (
     <section>
       <p className="hint">
-        Stream an audio file or URL to a Bluetooth speaker (A2DP). Audio is
-        handled inside the app (bluez-alsa) — no host audio server needed.
+        Queue audio files or URLs to a connected Bluetooth speaker (A2DP) — they
+        play in order. Connect a speaker in the <strong>Devices</strong> tab first.
       </p>
       {error && <div className="error">{error}</div>}
-      {note && <div className="hint">{note}</div>}
 
-      {/* Pairing */}
       <div className="card">
         <div className="row">
-          <strong>Speakers (Bluetooth Classic)</strong>
-          <button onClick={scan} disabled={scanning} style={{ marginLeft: "auto" }}>
-            {scanning ? "Scanning…" : "Scan"}
-          </button>
-          <button onClick={refreshSpeakers} disabled={scanning}>Refresh</button>
-        </div>
-        {speakers.length === 0 && (
-          <p className="empty">No devices yet — put the speaker in pairing mode and Scan.</p>
-        )}
-        {speakers.map((s) => (
-          <div key={s.address} className="char">
-            <div className="mono char-uuid">
-              {s.name} <span className="props">{s.address}</span>
-            </div>
-            <div className="props">
-              {s.paired ? "paired" : "not paired"}
-              {s.connected ? " · connected" : ""}
-            </div>
-            <div className="char-actions">
-              {!s.connected ? (
-                <>
-                  <button disabled={busy === s.address} onClick={() => pairAndConnect(s.address)}>
-                    {busy === s.address ? "…" : s.paired ? "Connect" : "Pair + Connect"}
-                  </button>
-                </>
-              ) : (
-                <button disabled={busy === s.address} onClick={() => act(api.classicDisconnect, s.address)}>
-                  Disconnect
-                </button>
-              )}
-              <button
-                className={device === s.address ? "on" : ""}
-                onClick={() => setDevice(s.address)}
-              >
-                {device === s.address ? "✓ target" : "Use for audio"}
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Playback */}
-      <div className="card">
-        <div className="row">
-          <label>Play to:&nbsp;</label>
+          <label>Speaker:&nbsp;</label>
+          {connectedSpeakers.length > 0 && (
+            <select value={device} onChange={(e) => setDevice(e.target.value)}>
+              {connectedSpeakers.map((c) => (
+                <option key={c.address} value={c.address}>
+                  {c.name} ({c.address})
+                </option>
+              ))}
+            </select>
+          )}
           <input
             type="text"
             placeholder="AA:BB:CC:DD:EE:FF"
@@ -163,7 +75,7 @@ export default function Audio() {
         </div>
         <div className="row">
           <label>File:&nbsp;</label>
-          <input type="file" accept="audio/*" onChange={(e) => setFile(e.target.files[0])} />
+          <input id="audio-file" type="file" accept="audio/*" onChange={(e) => setFile(e.target.files[0])} />
         </div>
         <div className="row">
           <label>or URL:&nbsp;</label>
@@ -176,12 +88,34 @@ export default function Audio() {
           />
         </div>
         <div className="row">
-          <button onClick={play} disabled={status.playing}>▶ Play</button>
-          <button onClick={stop} disabled={!status.playing}>■ Stop</button>
-          <span className={`status ${status.playing ? "on" : "off"}`}>
-            {status.playing ? `playing → ${status.device}` : "idle"}
-          </span>
+          <button onClick={add}>➕ Add to queue</button>
+          <button onClick={() => ctl(api.audioSkip)} disabled={!state.playing}>⏭ Skip</button>
+          <button onClick={() => ctl(api.audioStop)} disabled={!state.playing && !state.queue?.length}>
+            ■ Stop &amp; clear
+          </button>
         </div>
+      </div>
+
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>Now playing</h3>
+        {state.current ? (
+          <div className="reading">
+            <span>▶ {state.current.label}</span>
+            <span className="mono" style={{ marginLeft: "auto" }}>{state.current.device}</span>
+          </div>
+        ) : (
+          <p className="empty">Nothing playing.</p>
+        )}
+
+        <h3>Up next ({state.queue?.length || 0})</h3>
+        {(!state.queue || state.queue.length === 0) && <p className="empty">Queue is empty.</p>}
+        {state.queue?.map((q, i) => (
+          <div key={q.id} className="reading">
+            <span className="len">{i + 1}.</span>
+            <span>{q.label}</span>
+            <span className="mono" style={{ marginLeft: "auto" }}>{q.device}</span>
+          </div>
+        ))}
       </div>
     </section>
   );

@@ -97,7 +97,13 @@ select {
 
 .row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
 
-.card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; max-width: 640px; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; max-width: 640px; margin-bottom: 0.75rem; }
+.card.device.connected { border-color: var(--ok); }
+.row.sub { margin: 0.3rem 0 0; padding-top: 0.4rem; border-top: 1px solid var(--border); font-size: 0.85rem; }
+.badge { font-size: 0.66rem; padding: 0.1rem 0.4rem; border-radius: 4px; background: var(--panel2); border: 1px solid var(--border); color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.badge.le { color: var(--data); border-color: var(--data); }
+.badge.classic { color: var(--accent); border-color: var(--accent); }
+.badge.on { color: var(--ok); border-color: var(--ok); }
 .card input[type="text"] { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0.35rem 0.5rem; }
 .error.ok-box { background: rgba(52, 211, 153, 0.12); border-color: var(--ok); color: var(--ok); }
 

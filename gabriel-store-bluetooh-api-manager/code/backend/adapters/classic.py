@@ -48,7 +48,8 @@ class ClassicManager:
 
     async def devices(self) -> List[Dict[str, Any]]:
         known = _parse_devices(await _btctl("devices"))
-        paired = set(_parse_devices(await _btctl("paired-devices")).keys())
+        # BlueZ 5.66+ uses `devices Paired`/`Connected`; `paired-devices` is empty.
+        paired = set(_parse_devices(await _btctl("devices", "Paired")).keys())
         connected = set(_parse_devices(await _btctl("devices", "Connected")).keys())
         return [
             {
@@ -84,6 +85,42 @@ class ClassicManager:
 
     async def disconnect(self, address: str) -> Dict[str, Any]:
         return await self._action("disconnect", address)
+
+    async def pair_connect(self, address: str, scan_seconds: int = 25) -> Dict[str, Any]:
+        """Pair + trust + connect, keeping discovery active the whole time.
+
+        BlueZ evicts an unpaired device as soon as discovery stops, so we hold a
+        scan running (in the background) until the device shows up and pairing
+        completes. This is what makes "Pair + Connect" reliable from the UI.
+        """
+        bus.publish("classic_scan", state="start", seconds=scan_seconds)
+        scan = await asyncio.create_subprocess_exec(
+            "bluetoothctl", "--timeout", str(scan_seconds), "scan", "on",
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+        try:
+            appeared = False
+            for _ in range(scan_seconds):
+                info = await _btctl("info", address, timeout=5)
+                if "not available" not in info.lower() and address.lower() in info.lower():
+                    appeared = True
+                    break
+                await asyncio.sleep(1)
+            pair = await self.pair(address)
+            await self.trust(address)
+            connect = await self.connect(address)
+            return {
+                "appeared": appeared,
+                "ok": connect["ok"],
+                "pair": pair,
+                "connect": connect,
+            }
+        finally:
+            try:
+                scan.kill()
+            except ProcessLookupError:
+                pass
+            bus.publish("classic_scan", state="stop")
 
 
 classic = ClassicManager()

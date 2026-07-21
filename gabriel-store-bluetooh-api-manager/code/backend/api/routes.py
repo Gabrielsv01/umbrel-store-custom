@@ -181,6 +181,12 @@ async def classic_connect(address: str) -> dict:
     return await classic.connect(address)
 
 
+@router.post("/classic/{address}/pair-connect")
+async def classic_pair_connect(address: str) -> dict:
+    """Scan (holding discovery on), pair, trust and connect in one reliable step."""
+    return await classic.pair_connect(address)
+
+
 @router.post("/classic/{address}/disconnect")
 async def classic_disconnect(address: str) -> dict:
     return await classic.disconnect(address)
@@ -192,24 +198,35 @@ async def audio_status() -> dict:
     return audio.status()
 
 
+@router.get("/audio/queue")
+async def audio_queue() -> dict:
+    return audio.status()
+
+
 @router.post("/audio/play")
 async def audio_play(
     device: str = Form(...),
     url: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
 ) -> dict:
-    """Play an audio file (upload) or a remote URL to a Bluetooth speaker.
+    """Add a track (uploaded file or URL) to the queue and start playing.
 
     `device` is the speaker's Bluetooth address (AA:BB:CC:DD:EE:FF); it must be
-    paired. We connect it (A2DP) and stream via bluez-alsa.
+    paired. Calling this repeatedly queues tracks — they play in order without
+    waiting. Streamed via bluez-alsa (A2DP).
     """
     if (file is None) == (url is None):
         raise HTTPException(status_code=400, detail="Provide exactly one of 'file' or 'url'")
     source = url if url is not None else await _save_upload("audio", file)
     try:
-        return await audio.play(source, device=device)
+        return audio.enqueue(source, device=device)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=str(exc))
+
+
+@router.post("/audio/skip")
+async def audio_skip() -> dict:
+    return await audio.skip()
 
 
 @router.post("/audio/stop")

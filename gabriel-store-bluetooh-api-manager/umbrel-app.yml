@@ -4,7 +4,7 @@ name: Bluetooth API Manager
 tagline: Manage Bluetooth devices, stream data and control them over an API
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-bluetooh-api-manager/icon.svg
 category: Utilities
-version: "1.2.0"
+version: "1.2.1"
 port: 5157
 description: >-
   Bluetooth API Manager gives you a single place to see and control the
@@ -40,8 +40,11 @@ repo: https://github.com/Gabrielsv01/umbrel-store-custom
 support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
 gallery: []
 releaseNotes: >-
-  1.2.0: pair Bluetooth Classic speakers/headsets from the Audio tab (scan,
-  pair, connect) and fixed the audio pipeline. 1.1.0: self-contained audio via
+  1.2.1: unified device view (LE + Classic of the same device in one card),
+  an audio play queue (add tracks without waiting), reliable one-tap
+  Pair + Connect for speakers, and live connection status. 1.2.0: pair
+  Bluetooth Classic speakers/headsets from the Audio tab (scan, pair, connect)
+  and fixed the audio pipeline. 1.1.0: self-contained audio via
   an in-container bluez-alsa stack (no host audio server); the app runs its own
   Bluetooth stack, so disable the host's bluetooth service
   (systemctl disable --now bluetooth). 1.0.0: BLE discovery, live GATT data,
