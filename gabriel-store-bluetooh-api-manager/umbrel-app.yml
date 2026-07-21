@@ -4,7 +4,7 @@ name: Bluetooth API Manager
 tagline: Manage Bluetooth devices, stream data and control them over an API
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-bluetooh-api-manager/icon.svg
 category: Utilities
-version: "1.3.3"
+version: "1.4.0"
 port: 5157
 description: >-
   Bluetooth API Manager gives you a single place to see and control the
@@ -40,7 +40,10 @@ repo: https://github.com/Gabrielsv01/umbrel-store-custom
 support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
 gallery: []
 releaseNotes: >-
-  1.3.3: skip the reconnect when a speaker is already connected, so it doesn't
+  1.4.0: text-to-speech! New Voice tab + API — type text, Piper (pt-BR Razo
+  voice) generates speech and plays it on a speaker now or on a schedule. Runs
+  as a separate 'piper' container; generation is queued. 1.3.3: skip the
+  reconnect when a speaker is already connected, so it doesn't
   re-announce "connected" before playing (scheduled/queued plays start cleanly).
   1.3.2: schedules can have an optional title (shown instead of the file/URL).
   1.3.1: rename devices (friendly per-device name) and rename the Pi's own

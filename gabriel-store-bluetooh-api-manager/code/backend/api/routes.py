@@ -21,6 +21,7 @@ from ..adapters.files import files
 from ..core.config import settings
 from ..core.events import bus
 from ..scheduler import scheduler
+from ..tts import tts
 
 router = APIRouter(prefix="/api", tags=["bluetooth"])
 
@@ -294,6 +295,45 @@ async def create_schedule(
                              repeat=repeat, days=day_list, date=date, title=title)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+# ---- Text-to-speech (Piper) ---------------------------------------------
+@router.get("/tts/voices")
+async def tts_voices() -> list[str]:
+    try:
+        return await tts.voices()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"piper service unreachable: {exc}")
+
+
+@router.get("/tts")
+async def tts_status() -> dict:
+    return tts.status()
+
+
+@router.post("/tts")
+async def tts_submit(
+    text: str = Form(...),
+    voice: str = Form(...),
+    device: str = Form(...),
+    mode: str = Form("play", description="play | schedule"),
+    time: Optional[str] = Form(None),
+    repeat: str = Form("once"),
+    days: str = Form(""),
+    date: Optional[str] = Form(None),
+    title: Optional[str] = Form(None),
+) -> dict:
+    """Generate speech from text and either play it now or schedule it."""
+    sched = None
+    if mode == "schedule":
+        if not time:
+            raise HTTPException(status_code=400, detail="schedule mode needs a time (HH:MM)")
+        try:
+            day_list = [int(d) for d in days.split(",") if d.strip() != ""]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="days must be CSV of 0..6")
+        sched = {"time": time, "repeat": repeat, "days": day_list, "date": date, "title": title}
+    return tts.submit(text=text, voice=voice, device=device, mode=mode, sched=sched)
 
 
 @router.delete("/schedules/{sid}")

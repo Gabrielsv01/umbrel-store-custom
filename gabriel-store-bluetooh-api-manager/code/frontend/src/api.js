@@ -67,6 +67,23 @@ export const api = {
   setAdapterName: (name) =>
     request(`/adapter/name`, { method: "POST", body: JSON.stringify({ name }) }),
 
+  // Text-to-speech (Piper)
+  ttsVoices: () => request("/tts/voices"),
+  ttsStatus: () => request("/tts"),
+  ttsSubmit: ({ text, voice, device, mode, time, repeat, days, date, title }) => {
+    const fd = new FormData();
+    fd.append("text", text);
+    fd.append("voice", voice);
+    fd.append("device", device);
+    fd.append("mode", mode);
+    if (time) fd.append("time", time);
+    if (repeat) fd.append("repeat", repeat);
+    if (days) fd.append("days", days);
+    if (date) fd.append("date", date);
+    if (title) fd.append("title", title);
+    return upload("/tts", fd);
+  },
+
   // Scheduler
   schedules: () => request("/schedules"),
   scheduleCreate: ({ device, time, repeat, days, date, title, file, url }) => {

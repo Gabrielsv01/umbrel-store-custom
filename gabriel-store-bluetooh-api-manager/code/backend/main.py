@@ -17,13 +17,15 @@ from .adapters.bluetooth import ble
 from .api import routes, ws
 from .core.config import settings
 from .scheduler import scheduler
+from .tts import tts
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Start continuous BLE discovery + the play scheduler as the server comes up.
+    # Start continuous BLE discovery + the play scheduler + TTS worker.
     await ble.start()
     scheduler.start()
+    tts.start()
     try:
         yield
     finally:
@@ -34,7 +36,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Bluetooth API Manager",
     description="Discover Bluetooth devices, watch their data, and control them over an API.",
-    version="1.3.3",
+    version="1.4.0",
     lifespan=lifespan,
 )
 
