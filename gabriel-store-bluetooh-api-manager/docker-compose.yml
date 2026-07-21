@@ -1,0 +1,24 @@
+version: "3.7"
+services:
+  bluetooth-api-manager:
+    # Pre-built image pulled from Docker Hub (Umbrel does not build on-device).
+    # To rebuild locally: `docker build -t gabrielsv01/bluetooth-api-manager:1.1.0 ./code`
+    image: gabrielsv01/bluetooth-api-manager:1.1.0
+    container_name: bluetooth-api-manager
+    environment:
+      - PORT=5157
+      - TZ=${TZ:-UTC}
+    # Host networking + privileged give the container direct access to the HCI
+    # Bluetooth adapter. The app runs its OWN Bluetooth stack (bluetoothd,
+    # bluez-alsa, obexd) so it is fully self-contained — no host audio server or
+    # host D-Bus needed.
+    #
+    # IMPORTANT: because the container owns the adapter, disable the host's own
+    # bluetooth service once on the Pi to avoid conflicts:
+    #     sudo systemctl disable --now bluetooth
+    network_mode: host
+    privileged: true
+    volumes:
+      # Persist uploaded audio/files, received files and app state.
+      - ${APP_DATA_DIR:-./data}/data:/data
+    restart: unless-stopped

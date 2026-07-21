@@ -1,0 +1,51 @@
+manifestVersion: 1
+id: gabriel-store-bluetooh-api-manager
+name: Bluetooth API Manager
+tagline: Manage Bluetooth devices, stream data and control them over an API
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-bluetooh-api-manager/icon.svg
+category: Utilities
+version: "1.1.0"
+port: 5157
+description: >-
+  Bluetooth API Manager gives you a single place to see and control the
+  Bluetooth adapter on your Umbrel host.
+
+
+  Features:
+
+  - Live list of nearby / connected devices with name, address and signal
+    strength (RSSI).
+
+  - Inspect GATT services and characteristics, and watch the data a device is
+    transmitting in real time.
+
+  - A clean REST API (with Swagger docs at /docs) so other systems can connect
+    to a device and read/write its characteristics.
+
+  - Stream any audio file — local upload or a direct URL — to a Bluetooth
+    speaker/headset (A2DP, best-effort, requires an audio server on the host).
+
+  - Send files to a device over OBEX Object Push.
+
+  - A web interface to watch everything happening on the manager in real time.
+
+
+  Requires a host with a working Bluetooth adapter and the BlueZ stack
+  (bluetoothd). Runs with host networking and access to the system D-Bus.
+developer: Gabriel Vieira
+website: https://github.com/Gabrielsv01/umbrel-store-custom
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+releaseNotes: >-
+  1.1.0: self-contained audio — stream files/URLs to a Bluetooth speaker (A2DP)
+  using an in-container bluez-alsa stack, no host audio server needed. The app
+  now runs its own Bluetooth stack, so disable the host's bluetooth service
+  (systemctl disable --now bluetooth). 1.0.0: BLE discovery, live GATT data,
+  REST + WebSocket API and a web interface.
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
