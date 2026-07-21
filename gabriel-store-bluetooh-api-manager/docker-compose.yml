@@ -2,8 +2,8 @@ version: "3.7"
 services:
   bluetooth-api-manager:
     # Pre-built image pulled from Docker Hub (Umbrel does not build on-device).
-    # To rebuild locally: `docker build -t gabrielsv01/bluetooth-api-manager:1.2.1 ./code`
-    image: gabrielsv01/bluetooth-api-manager:1.2.1
+    # To rebuild locally: `docker build -t gabrielsv01/bluetooth-api-manager:1.2.2 ./code`
+    image: gabrielsv01/bluetooth-api-manager:1.2.2
     container_name: bluetooth-api-manager
     environment:
       - PORT=5157
@@ -21,4 +21,7 @@ services:
     volumes:
       # Persist uploaded audio/files, received files and app state.
       - ${APP_DATA_DIR:-./data}/data:/data
+      # Persist BlueZ pairings + cached device names so they survive restarts
+      # and app updates (otherwise every restart forgets paired speakers).
+      - ${APP_DATA_DIR:-./data}/bluetooth:/var/lib/bluetooth
     restart: unless-stopped

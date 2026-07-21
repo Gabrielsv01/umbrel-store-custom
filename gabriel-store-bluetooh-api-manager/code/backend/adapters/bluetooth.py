@@ -117,17 +117,33 @@ class BLEManager:
             raise KeyError(f"Device {address} is not connected")
         return client
 
-    async def connect(self, address: str) -> Dict[str, Any]:
+    async def connect(self, address: str, attempts: int = 5) -> Dict[str, Any]:
         if address in self._clients:
             return {"address": address, "connected": True}
-        target: Any = self._ble_objects.get(address, address)
-        client = BleakClient(target, disconnected_callback=self._on_disconnect)
-        await client.connect()
-        self._clients[address] = client
-        if address in self._devices:
-            self._devices[address]["connected"] = True
-        bus.publish("device_connected", address=address)
-        return {"address": address, "connected": True}
+        # BlueZ evicts unpaired devices from its registry after they disconnect,
+        # so a stale cached object gives "device not found". Retry a few times so
+        # the continuous scanner can re-discover the device between attempts.
+        last_err: Optional[Exception] = None
+        for attempt in range(1, attempts + 1):
+            target: Any = self._ble_objects.get(address, address)
+            try:
+                client = BleakClient(target, disconnected_callback=self._on_disconnect)
+                await client.connect()
+                self._clients[address] = client
+                if address in self._devices:
+                    self._devices[address]["connected"] = True
+                bus.publish("device_connected", address=address)
+                return {"address": address, "connected": True}
+            except Exception as exc:  # noqa: BLE001
+                last_err = exc
+                if attempt < attempts:
+                    bus.publish("device_connect_retry", level="warn",
+                                address=address, attempt=attempt, message=str(exc))
+                    await asyncio.sleep(2)
+        raise RuntimeError(
+            f"could not connect to {address} after {attempts} tries "
+            f"(device may be out of range or not advertising): {last_err}"
+        )
 
     def _on_disconnect(self, client: BleakClient) -> None:
         address = client.address

@@ -162,7 +162,7 @@ export default function Devices({ ble, classic, onChange }) {
                       )
                     }
                   >
-                    {busy === leAddr ? "…" : g.le.connected ? "Disconnect" : "Connect (data)"}
+                    {busy === leAddr ? "…" : g.le.connected ? "Disconnect" : "Connect (BLE data)"}
                   </button>
                 </span>
               </div>
