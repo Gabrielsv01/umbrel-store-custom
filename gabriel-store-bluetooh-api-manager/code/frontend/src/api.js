@@ -69,13 +69,14 @@ export const api = {
 
   // Scheduler
   schedules: () => request("/schedules"),
-  scheduleCreate: ({ device, time, repeat, days, date, file, url }) => {
+  scheduleCreate: ({ device, time, repeat, days, date, title, file, url }) => {
     const fd = new FormData();
     fd.append("device", device);
     fd.append("time", time);
     fd.append("repeat", repeat);
     if (days) fd.append("days", days);
     if (date) fd.append("date", date);
+    if (title) fd.append("title", title);
     if (file) fd.append("file", file);
     if (url) fd.append("url", url);
     return upload("/schedules", fd);

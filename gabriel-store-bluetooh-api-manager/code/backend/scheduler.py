@@ -56,7 +56,8 @@ class Scheduler:
         }
 
     def add(self, *, device: str, source: str, label: str, at: str,
-            repeat: str, days: List[int], date: Optional[str]) -> Dict[str, Any]:
+            repeat: str, days: List[int], date: Optional[str],
+            title: Optional[str] = None) -> Dict[str, Any]:
         if repeat not in REPEATS:
             raise ValueError(f"repeat must be one of {sorted(REPEATS)}")
         try:
@@ -73,6 +74,7 @@ class Scheduler:
         self._counter += 1
         item = {
             "id": self._counter,
+            "title": (title or "").strip(),
             "device": device,
             "source": source,
             "label": label,

@@ -277,6 +277,7 @@ async def create_schedule(
     repeat: str = Form("once", description="once | daily | weekly"),
     days: str = Form("", description="weekdays for 'weekly', CSV 0=Mon..6=Sun"),
     date: Optional[str] = Form(None, description="YYYY-MM-DD, required for 'once'"),
+    title: Optional[str] = Form(None, description="optional friendly name"),
     url: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
 ) -> dict:
@@ -290,7 +291,7 @@ async def create_schedule(
         raise HTTPException(status_code=400, detail="days must be CSV of 0..6")
     try:
         return scheduler.add(device=device, source=source, label=label, at=time,
-                             repeat=repeat, days=day_list, date=date)
+                             repeat=repeat, days=day_list, date=date, title=title)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

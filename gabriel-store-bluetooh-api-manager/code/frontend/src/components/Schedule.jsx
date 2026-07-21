@@ -15,6 +15,7 @@ export default function Schedule({ classic }) {
   const [repeat, setRepeat] = useState("once");
   const [date, setDate] = useState("");
   const [days, setDays] = useState([]);
+  const [title, setTitle] = useState("");
 
   async function refresh() {
     try {
@@ -49,9 +50,10 @@ export default function Schedule({ classic }) {
         device, time, repeat,
         days: days.join(","),
         date: repeat === "once" ? date : undefined,
+        title: title || undefined,
         file, url: url || undefined,
       });
-      setUrl(""); setFile(null);
+      setUrl(""); setFile(null); setTitle("");
       const el = document.getElementById("sched-file");
       if (el) el.value = "";
       await refresh();
@@ -75,6 +77,11 @@ export default function Schedule({ classic }) {
       {error && <div className="error">{error}</div>}
 
       <div className="card">
+        <div className="row">
+          <label>Title:&nbsp;</label>
+          <input type="text" placeholder="(optional) e.g. Morning alarm" value={title}
+                 onChange={(e) => setTitle(e.target.value)} style={{ flex: 1 }} />
+        </div>
         <div className="row">
           <label>Speaker:&nbsp;</label>
           {connectedSpeakers.length > 0 && (
@@ -129,10 +136,13 @@ export default function Schedule({ classic }) {
         {data.items.map((s) => (
           <div key={s.id} className="char">
             <div className="row" style={{ margin: 0 }}>
-              <span>{s.enabled ? "🟢" : "⚪"} <strong>{describe(s)}</strong></span>
+              <span>{s.enabled ? "🟢" : "⚪"} <strong>{s.title || describe(s)}</strong></span>
               <span className="mono props" style={{ marginLeft: "auto" }}>{s.device}</span>
             </div>
-            <div className="props">{s.label}{s.last_fired ? ` · last fired ${s.last_fired}` : ""}</div>
+            <div className="props">
+              {s.title ? `${describe(s)} · ` : ""}{s.label}
+              {s.last_fired ? ` · last fired ${s.last_fired}` : ""}
+            </div>
             <div className="char-actions">
               <button onClick={() => api.scheduleToggle(s.id, !s.enabled).then(refresh)}>
                 {s.enabled ? "Disable" : "Enable"}
