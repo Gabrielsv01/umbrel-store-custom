@@ -81,6 +81,16 @@ class AudioService:
             self._current = None
 
     async def _connect(self, device: str) -> None:
+        # Already connected? Skip — reconnecting makes some speakers (e.g. Echo/
+        # Alexa) announce "connected" again before playing.
+        info = await asyncio.create_subprocess_exec(
+            "bluetoothctl", "info", device,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        )
+        out, _ = await info.communicate()
+        if "connected: yes" in (out or b"").decode(errors="replace").lower():
+            return
+
         proc = await asyncio.create_subprocess_exec(
             "bluetoothctl", "connect", device,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
