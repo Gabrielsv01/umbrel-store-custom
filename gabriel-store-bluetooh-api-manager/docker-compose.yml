@@ -2,8 +2,8 @@ version: "3.7"
 services:
   bluetooth-api-manager:
     # Pre-built image pulled from Docker Hub (Umbrel does not build on-device).
-    # To rebuild locally: `docker build -t gabrielsv01/bluetooth-api-manager:1.3.0 ./code`
-    image: gabrielsv01/bluetooth-api-manager:1.3.0
+    # To rebuild locally: `docker build -t gabrielsv01/bluetooth-api-manager:1.3.1 ./code`
+    image: gabrielsv01/bluetooth-api-manager:1.3.1
     container_name: bluetooth-api-manager
     environment:
       - PORT=5157

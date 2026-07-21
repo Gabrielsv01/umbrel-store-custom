@@ -95,6 +95,7 @@ class BLEManager:
                         "path": path,
                         "address": adapter.get("Address").value if "Address" in adapter else None,
                         "name": adapter.get("Name").value if "Name" in adapter else None,
+                        "alias": adapter.get("Alias").value if "Alias" in adapter else None,
                         "powered": adapter.get("Powered").value if "Powered" in adapter else None,
                         "discovering": adapter.get("Discovering").value if "Discovering" in adapter else None,
                     }

@@ -62,11 +62,37 @@ function unify(ble, classic) {
   );
 }
 
-export default function Devices({ ble, classic, onChange }) {
+export default function Devices({ ble, classic, adapter, onChange }) {
   const [busy, setBusy] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState(null);
+  const [adapterName, setAdapterName] = useState("");
   const groups = unify(ble, classic);
+
+  async function rename(addr, current) {
+    const name = window.prompt("Friendly name for this device:", current || "");
+    if (!name) return;
+    setBusy(addr);
+    setError(null);
+    try {
+      await api.renameDevice(addr, name);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(null);
+      onChange?.();
+    }
+  }
+
+  async function saveAdapterName() {
+    if (!adapterName.trim()) return;
+    setError(null);
+    try {
+      await api.setAdapterName(adapterName.trim());
+    } catch (e) {
+      setError(e.message);
+    }
+  }
 
   async function run(key, fn) {
     setBusy(key);
@@ -108,6 +134,19 @@ export default function Devices({ ble, classic, onChange }) {
         </button>
       </div>
       {error && <div className="error">{error}</div>}
+
+      <div className="row" style={{ fontSize: "0.85rem" }}>
+        <label>This Pi&apos;s Bluetooth name:&nbsp;</label>
+        <input
+          type="text"
+          placeholder={adapter?.alias || adapter?.name || "e.g. Umbrel BT"}
+          value={adapterName}
+          onChange={(e) => setAdapterName(e.target.value)}
+          style={{ flex: 1 }}
+        />
+        <button onClick={saveAdapterName}>Save</button>
+      </div>
+
       {groups.length === 0 && <p className="empty">No devices yet — scanning…</p>}
 
       {groups.map((g) => {
@@ -120,7 +159,15 @@ export default function Devices({ ble, classic, onChange }) {
               {g.le && <span className="badge le">LE</span>}
               {g.classic && <span className="badge classic">Classic</span>}
               {g.connected && <span className="badge on">connected</span>}
-              <span className="mono signal" style={{ marginLeft: "auto" }}>
+              <button
+                title="Rename"
+                disabled={busy === (cAddr || leAddr)}
+                onClick={() => rename(cAddr || leAddr, g.name)}
+                style={{ marginLeft: "auto" }}
+              >
+                ✎
+              </button>
+              <span className="mono signal">
                 {signalBars(g.rssi)} {g.rssi != null ? `${g.rssi}dBm` : ""}
               </span>
             </div>

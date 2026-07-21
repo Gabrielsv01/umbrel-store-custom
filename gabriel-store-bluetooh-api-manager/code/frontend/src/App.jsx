@@ -91,7 +91,7 @@ export default function App() {
 
       <main>
         {tab === "devices" && (
-          <Devices ble={bleList} classic={classic} onChange={() => api.classicDevices().then(setClassic).catch(() => {})} />
+          <Devices ble={bleList} classic={classic} adapter={adapter} onChange={() => api.classicDevices().then(setClassic).catch(() => {})} />
         )}
         {tab === "live" && <LiveData devices={bleList} gattData={gattData} />}
         {tab === "audio" && <Audio classic={classic} />}

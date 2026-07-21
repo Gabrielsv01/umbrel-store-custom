@@ -62,6 +62,10 @@ export const api = {
     request(`/classic/${addr}/disconnect`, { method: "POST" }),
   classicPairConnect: (addr) =>
     request(`/classic/${addr}/pair-connect`, { method: "POST" }),
+  renameDevice: (addr, name) =>
+    request(`/classic/${addr}/rename`, { method: "POST", body: JSON.stringify({ name }) }),
+  setAdapterName: (name) =>
+    request(`/adapter/name`, { method: "POST", body: JSON.stringify({ name }) }),
 
   // Scheduler
   schedules: () => request("/schedules"),

@@ -53,6 +53,10 @@ class CharBody(BaseModel):
     char_uuid: str
 
 
+class NameBody(BaseModel):
+    name: str
+
+
 @router.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
@@ -67,6 +71,15 @@ async def adapter_status() -> dict:
         "connected": sum(1 for d in devices if d["connected"]),
         "adapter": await ble.adapter_info(),
     }
+
+
+@router.post("/adapter/name")
+async def rename_adapter(body: NameBody) -> dict:
+    """Rename the local Bluetooth adapter (the name other devices see)."""
+    try:
+        return await classic.set_adapter_name(body.name)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc))
 
 
 @router.get("/stats")
@@ -196,6 +209,17 @@ async def classic_connect(address: str) -> dict:
 async def classic_pair_connect(address: str) -> dict:
     """Scan (holding discovery on), pair, trust and connect in one reliable step."""
     return await classic.pair_connect(address)
+
+
+@router.post("/classic/{address}/rename")
+async def classic_rename(address: str, body: NameBody) -> dict:
+    """Give a device a friendly name (persistent BlueZ alias)."""
+    try:
+        return await classic.set_device_alias(address, body.name)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc))
 
 
 @router.post("/classic/{address}/disconnect")

@@ -11,6 +11,9 @@ import asyncio
 import re
 from typing import Any, Dict, List
 
+from dbus_fast import BusType
+from dbus_fast.aio import MessageBus
+
 from ..core.events import bus
 
 _DEV_RE = re.compile(r"^Device\s+([0-9A-F:]{17})\s+(.*)$", re.IGNORECASE)
@@ -85,6 +88,37 @@ class ClassicManager:
 
     async def disconnect(self, address: str) -> Dict[str, Any]:
         return await self._action("disconnect", address)
+
+    async def set_device_alias(self, address: str, name: str) -> Dict[str, Any]:
+        """Give a device a friendly name (BlueZ Device1.Alias). Persistent, and
+        it's what `bluetoothctl devices` / our listing shows."""
+        dbus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+        try:
+            intro = await dbus.introspect("org.bluez", "/")
+            obj = dbus.get_proxy_object("org.bluez", "/", intro)
+            mgr = obj.get_interface("org.freedesktop.DBus.ObjectManager")
+            managed = await mgr.call_get_managed_objects()
+            path = None
+            for p, ifaces in managed.items():
+                dev = ifaces.get("org.bluez.Device1")
+                if dev and "Address" in dev and dev["Address"].value.upper() == address.upper():
+                    path = p
+                    break
+            if path is None:
+                raise KeyError(f"device {address} not known to BlueZ")
+            dintro = await dbus.introspect("org.bluez", path)
+            dobj = dbus.get_proxy_object("org.bluez", path, dintro)
+            await dobj.get_interface("org.bluez.Device1").set_alias(name)
+            bus.publish("device_renamed", address=address, name=name)
+            return {"address": address, "alias": name}
+        finally:
+            dbus.disconnect()
+
+    async def set_adapter_name(self, name: str) -> Dict[str, Any]:
+        """Rename the local adapter (what other devices see) via system-alias."""
+        text = await _btctl("system-alias", name, timeout=10)
+        bus.publish("adapter_renamed", name=name)
+        return {"name": name, "detail": text.strip()[-200:]}
 
     async def pair_connect(self, address: str, scan_seconds: int = 25) -> Dict[str, Any]:
         """Pair + trust + connect, keeping discovery active the whole time.
