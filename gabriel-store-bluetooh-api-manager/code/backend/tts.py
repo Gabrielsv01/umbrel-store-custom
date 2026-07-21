@@ -44,7 +44,8 @@ class TTSService:
         return {"jobs": list(self._jobs), "queued": len(self._pending)}
 
     def submit(self, *, text: str, voice: str, device: str, mode: str,
-               sched: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+               sched: Optional[Dict[str, Any]] = None,
+               length_scale: Optional[float] = None) -> Dict[str, Any]:
         job = {
             "id": uuidlib.uuid4().hex[:8],
             "text": text,
@@ -53,6 +54,7 @@ class TTSService:
             "device": device,
             "mode": mode,
             "sched": sched,
+            "length_scale": length_scale,
             "status": "queued",
         }
         self._pending.append(job)
@@ -82,11 +84,11 @@ class TTSService:
         try:
             os.makedirs(self._dir, exist_ok=True)
             path = os.path.join(self._dir, f"{job['id']}.wav")
+            payload = {"text": job["text"], "voice": job["voice"]}
+            if job.get("length_scale") is not None:
+                payload["length_scale"] = job["length_scale"]
             async with httpx.AsyncClient(timeout=300) as client:
-                resp = await client.post(
-                    f"{PIPER_URL}/synthesize",
-                    json={"text": job["text"], "voice": job["voice"]},
-                )
+                resp = await client.post(f"{PIPER_URL}/synthesize", json=payload)
                 resp.raise_for_status()
                 async with aiofiles.open(path, "wb") as fh:
                     await fh.write(resp.content)

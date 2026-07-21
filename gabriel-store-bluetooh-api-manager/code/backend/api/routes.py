@@ -317,6 +317,7 @@ async def tts_submit(
     voice: str = Form(...),
     device: str = Form(...),
     mode: str = Form("play", description="play | schedule"),
+    length_scale: Optional[float] = Form(None, description="speech rate: 1.0 normal, >1 slower, <1 faster"),
     time: Optional[str] = Form(None),
     repeat: str = Form("once"),
     days: str = Form(""),
@@ -333,7 +334,8 @@ async def tts_submit(
         except ValueError:
             raise HTTPException(status_code=400, detail="days must be CSV of 0..6")
         sched = {"time": time, "repeat": repeat, "days": day_list, "date": date, "title": title}
-    return tts.submit(text=text, voice=voice, device=device, mode=mode, sched=sched)
+    return tts.submit(text=text, voice=voice, device=device, mode=mode, sched=sched,
+                      length_scale=length_scale)
 
 
 @router.delete("/schedules/{sid}")

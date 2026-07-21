@@ -14,6 +14,7 @@ export default function Voice({ classic }) {
   const [date, setDate] = useState("");
   const [days, setDays] = useState([]);
   const [title, setTitle] = useState("");
+  const [lengthScale, setLengthScale] = useState("1.0");
   const [status, setStatus] = useState({ jobs: [], queued: 0 });
   const [error, setError] = useState(null);
 
@@ -49,6 +50,7 @@ export default function Voice({ classic }) {
     try {
       await api.ttsSubmit({
         text, voice, device, mode,
+        length_scale: lengthScale,
         time: mode === "schedule" ? time : undefined,
         repeat: mode === "schedule" ? repeat : undefined,
         days: mode === "schedule" ? days.join(",") : undefined,
@@ -94,6 +96,16 @@ export default function Voice({ classic }) {
           )}
           <input type="text" placeholder="AA:BB:CC:DD:EE:FF" value={device}
                  onChange={(e) => setDevice(e.target.value)} style={{ flex: 1 }} />
+        </div>
+
+        <div className="row">
+          <label>Speed:&nbsp;</label>
+          <select value={lengthScale} onChange={(e) => setLengthScale(e.target.value)}>
+            <option value="0.85">Fast</option>
+            <option value="1.0">Normal</option>
+            <option value="1.25">Slower</option>
+            <option value="1.5">Slowest</option>
+          </select>
         </div>
 
         <div className="row">

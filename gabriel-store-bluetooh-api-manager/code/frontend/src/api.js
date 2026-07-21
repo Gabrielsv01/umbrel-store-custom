@@ -70,12 +70,13 @@ export const api = {
   // Text-to-speech (Piper)
   ttsVoices: () => request("/tts/voices"),
   ttsStatus: () => request("/tts"),
-  ttsSubmit: ({ text, voice, device, mode, time, repeat, days, date, title }) => {
+  ttsSubmit: ({ text, voice, device, mode, length_scale, time, repeat, days, date, title }) => {
     const fd = new FormData();
     fd.append("text", text);
     fd.append("voice", voice);
     fd.append("device", device);
     fd.append("mode", mode);
+    if (length_scale) fd.append("length_scale", length_scale);
     if (time) fd.append("time", time);
     if (repeat) fd.append("repeat", repeat);
     if (days) fd.append("days", days);
