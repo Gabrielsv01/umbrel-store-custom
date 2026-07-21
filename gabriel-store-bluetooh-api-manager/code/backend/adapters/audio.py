@@ -95,11 +95,12 @@ class AudioService:
         self._interrupt = False
         await self._connect(device)
 
-        # `plug:` wraps the bluez-alsa PCM with automatic rate/format conversion,
-        # so it works whatever sample rate the device negotiated for A2DP (e.g.
-        # 44.1kHz on some speakers, 48kHz on Echo/Alexa). Without it, aplay fails
-        # with "Unable to install hw params" when the rates don't match.
-        pcm = f"plug:bluealsa:DEV={device},PROFILE=a2dp"
+        # Wrap the bluez-alsa PCM in ALSA's `plug` for automatic rate/format
+        # conversion, so it works whatever sample rate the device negotiated for
+        # A2DP (44.1kHz on many speakers, 48kHz on Echo/Alexa). The explicit
+        # plug:{SLAVE="..."} form is required — `plug:bluealsa:DEV=...` fails to
+        # parse (the commas confuse plug's argument parser).
+        pcm = f'plug:{{SLAVE="bluealsa:DEV={device},PROFILE=a2dp"}}'
         read_fd, write_fd = os.pipe()
         self._ffmpeg = await asyncio.create_subprocess_exec(
             "ffmpeg", "-hide_banner", "-loglevel", "warning", "-re", "-i", source,
