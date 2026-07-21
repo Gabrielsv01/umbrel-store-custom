@@ -4,7 +4,7 @@ name: Bluetooth API Manager
 tagline: Manage Bluetooth devices, stream data and control them over an API
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-bluetooh-api-manager/icon.svg
 category: Utilities
-version: "1.2.2"
+version: "1.2.3"
 port: 5157
 description: >-
   Bluetooth API Manager gives you a single place to see and control the
@@ -40,9 +40,12 @@ repo: https://github.com/Gabrielsv01/umbrel-store-custom
 support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
 gallery: []
 releaseNotes: >-
-  1.2.2: persist Bluetooth pairings across restarts/updates (paired speakers are
-  no longer forgotten); BLE connect now retries/re-discovers instead of failing
-  with "not found" after a disconnect. 1.2.1: unified device view (LE + Classic
+  1.2.3: new GET /api/devices/{addr}/values endpoint — snapshot of the latest
+  read/notified value per GATT characteristic, so external systems can poll
+  sensor data without a WebSocket; clearer Live Data guidance. 1.2.2: persist
+  Bluetooth pairings across restarts/updates (paired speakers are no longer
+  forgotten); BLE connect now retries/re-discovers instead of failing with
+  "not found" after a disconnect. 1.2.1: unified device view (LE + Classic
   of the same device in one card),
   an audio play queue (add tracks without waiting), reliable one-tap
   Pair + Connect for speakers, and live connection status. 1.2.0: pair

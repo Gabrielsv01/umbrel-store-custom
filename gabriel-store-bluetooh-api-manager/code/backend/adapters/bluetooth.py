@@ -30,6 +30,8 @@ class BLEManager:
         self._clients: Dict[str, BleakClient] = {}
         # set of "address|char_uuid" with an active notification
         self._notifying: set[str] = set()
+        # address -> {char_uuid: {hex, text, length, ts}} latest read/notified value
+        self._values: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
     # ---- lifecycle -------------------------------------------------------
     async def start(self) -> None:
@@ -184,10 +186,25 @@ class BLEManager:
             })
         return services
 
+    def _record(self, decoded: Dict[str, Any]) -> None:
+        """Cache the latest value of a characteristic for snapshot polling."""
+        chars = self._values.setdefault(decoded["address"], {})
+        chars[decoded["char"]] = {
+            "hex": decoded["hex"],
+            "text": decoded["text"],
+            "length": decoded["length"],
+            "ts": time.time(),
+        }
+
+    def get_values(self, address: str) -> Dict[str, Any]:
+        return self._values.get(address, {})
+
     async def read_char(self, address: str, char_uuid: str) -> Dict[str, Any]:
         client = self._client(address)
         value = await client.read_gatt_char(char_uuid)
-        return self._decode(value, address, char_uuid)
+        decoded = self._decode(value, address, char_uuid)
+        self._record(decoded)
+        return decoded
 
     async def write_char(
         self, address: str, char_uuid: str, data: bytes, response: bool = True
@@ -205,7 +222,9 @@ class BLEManager:
             return
 
         def callback(_sender: Any, value: bytearray) -> None:
-            bus.publish("gatt_data", **self._decode(bytes(value), address, char_uuid))
+            decoded = self._decode(bytes(value), address, char_uuid)
+            self._record(decoded)
+            bus.publish("gatt_data", **decoded)
 
         await client.start_notify(char_uuid, callback)
         self._notifying.add(key)

@@ -108,6 +108,16 @@ async def services(address: str) -> list[dict]:
         raise HTTPException(status_code=409, detail=str(exc))
 
 
+@router.get("/devices/{address}/values")
+async def device_values(address: str) -> dict:
+    """Snapshot of the latest read/notified value per characteristic.
+
+    Lets an external system poll one GET for the current state instead of
+    holding a WebSocket. Each entry: {hex, text, length, ts}.
+    """
+    return ble.get_values(address)
+
+
 @router.post("/devices/{address}/read")
 async def read_char(address: str, body: CharBody) -> dict:
     try:

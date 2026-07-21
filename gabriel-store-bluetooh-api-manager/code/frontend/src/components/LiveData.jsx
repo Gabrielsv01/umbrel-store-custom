@@ -47,7 +47,10 @@ export default function LiveData({ devices, gattData }) {
     <section className="live">
       {connected.length === 0 ? (
         <p className="empty">
-          No connected device. Connect one in the <strong>Devices</strong> tab.
+          No <strong>BLE data</strong> connection. Live Data shows GATT
+          characteristics — connect a device with <strong>“Connect (BLE data)”</strong>
+          in the Devices tab. Audio (Classic) connections, like speakers/headsets,
+          don’t provide GATT data here.
         </p>
       ) : (
         <>
