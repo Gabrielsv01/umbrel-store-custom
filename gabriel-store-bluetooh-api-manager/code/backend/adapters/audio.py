@@ -12,6 +12,7 @@ stream at a time (KISS). Errors are surfaced on the event bus (Logs tab).
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any, Dict, Optional
 
 from ..core.events import bus
@@ -49,16 +50,21 @@ class AudioService:
         await self._connect(device)
 
         pcm = f"bluealsa:DEV={device},PROFILE=a2dp"
-        # ffmpeg decodes anything (file or URL) to 44.1kHz/16-bit stereo WAV on stdout.
+        # Connect ffmpeg -> aplay with a real OS pipe (asyncio can't chain a
+        # subprocess StreamReader into another subprocess's stdin).
+        read_fd, write_fd = os.pipe()
+        # ffmpeg decodes anything (file or URL) to 44.1kHz/16-bit stereo WAV.
         self._ffmpeg = await asyncio.create_subprocess_exec(
             "ffmpeg", "-hide_banner", "-loglevel", "warning", "-re", "-i", source,
             "-vn", "-ar", "44100", "-ac", "2", "-f", "wav", "pipe:1",
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            stdout=write_fd, stderr=asyncio.subprocess.PIPE,
         )
+        os.close(write_fd)
         self._aplay = await asyncio.create_subprocess_exec(
             "aplay", "-D", pcm, "-q",
-            stdin=self._ffmpeg.stdout, stderr=asyncio.subprocess.PIPE,
+            stdin=read_fd, stderr=asyncio.subprocess.PIPE,
         )
+        os.close(read_fd)
         self._label = source
         self._device = device
         bus.publish("audio_started", source=source, device=device)

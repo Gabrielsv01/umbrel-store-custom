@@ -51,6 +51,16 @@ export const api = {
       body: JSON.stringify({ char_uuid, enable }),
     }),
 
+  // Bluetooth Classic (speakers)
+  classicDevices: () => request("/classic/devices"),
+  classicScan: (seconds = 15) =>
+    request(`/classic/scan?seconds=${seconds}`, { method: "POST" }),
+  classicPair: (addr) => request(`/classic/${addr}/pair`, { method: "POST" }),
+  classicTrust: (addr) => request(`/classic/${addr}/trust`, { method: "POST" }),
+  classicConnect: (addr) => request(`/classic/${addr}/connect`, { method: "POST" }),
+  classicDisconnect: (addr) =>
+    request(`/classic/${addr}/disconnect`, { method: "POST" }),
+
   // Audio (Phase 2)
   audioStatus: () => request("/audio/status"),
   audioStop: () => request("/audio/stop", { method: "POST" }),

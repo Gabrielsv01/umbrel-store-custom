@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from ..adapters.audio import audio
 from ..adapters.bluetooth import ble
+from ..adapters.classic import classic
 from ..adapters.files import files
 from ..core.config import settings
 from ..core.events import bus
@@ -152,6 +153,37 @@ async def notify(address: str, body: NotifyBody) -> dict:
 async def recent_events() -> list[dict]:
     """Recent events (same stream the WebSocket pushes) for polling clients."""
     return bus.history()
+
+
+# ---- Bluetooth Classic (speakers/headsets: pair & connect) --------------
+@router.get("/classic/devices")
+async def classic_devices() -> list[dict]:
+    return await classic.devices()
+
+
+@router.post("/classic/scan")
+async def classic_scan(seconds: int = 15) -> list[dict]:
+    return await classic.scan(seconds=min(max(seconds, 3), 60))
+
+
+@router.post("/classic/{address}/pair")
+async def classic_pair(address: str) -> dict:
+    return await classic.pair(address)
+
+
+@router.post("/classic/{address}/trust")
+async def classic_trust(address: str) -> dict:
+    return await classic.trust(address)
+
+
+@router.post("/classic/{address}/connect")
+async def classic_connect(address: str) -> dict:
+    return await classic.connect(address)
+
+
+@router.post("/classic/{address}/disconnect")
+async def classic_disconnect(address: str) -> dict:
+    return await classic.disconnect(address)
 
 
 # ---- Phase 2: audio streaming (A2DP) ------------------------------------

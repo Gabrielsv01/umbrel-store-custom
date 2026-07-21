@@ -79,7 +79,7 @@ export default function App() {
       <main>
         {tab === "devices" && <Devices devices={deviceList} />}
         {tab === "live" && <LiveData devices={deviceList} gattData={gattData} />}
-        {tab === "audio" && <Audio devices={deviceList} />}
+        {tab === "audio" && <Audio />}
         {tab === "files" && <Files devices={deviceList} />}
         {tab === "logs" && <Logs log={log} />}
       </main>
