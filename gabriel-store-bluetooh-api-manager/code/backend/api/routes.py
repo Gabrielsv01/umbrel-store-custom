@@ -20,6 +20,7 @@ from ..adapters.classic import classic
 from ..adapters.files import files
 from ..core.config import settings
 from ..core.events import bus
+from ..scheduler import scheduler
 
 router = APIRouter(prefix="/api", tags=["bluetooth"])
 
@@ -237,6 +238,52 @@ async def audio_play(
 @router.post("/audio/skip")
 async def audio_skip() -> dict:
     return await audio.skip()
+
+
+# ---- Scheduler (play at a given time/day) -------------------------------
+@router.get("/schedules")
+async def list_schedules() -> dict:
+    return scheduler.list()
+
+
+@router.post("/schedules")
+async def create_schedule(
+    device: str = Form(...),
+    time: str = Form(..., description="HH:MM (24h), server timezone"),
+    repeat: str = Form("once", description="once | daily | weekly"),
+    days: str = Form("", description="weekdays for 'weekly', CSV 0=Mon..6=Sun"),
+    date: Optional[str] = Form(None, description="YYYY-MM-DD, required for 'once'"),
+    url: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+) -> dict:
+    if (file is None) == (url is None):
+        raise HTTPException(status_code=400, detail="Provide exactly one of 'file' or 'url'")
+    source = url if url is not None else await _save_upload("audio", file)
+    label = source if url is not None else os.path.basename(source)
+    try:
+        day_list = [int(d) for d in days.split(",") if d.strip() != ""]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="days must be CSV of 0..6")
+    try:
+        return scheduler.add(device=device, source=source, label=label, at=time,
+                             repeat=repeat, days=day_list, date=date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/schedules/{sid}")
+async def delete_schedule(sid: int) -> dict:
+    if not scheduler.remove(sid):
+        raise HTTPException(status_code=404, detail="schedule not found")
+    return {"ok": True}
+
+
+@router.post("/schedules/{sid}/toggle")
+async def toggle_schedule(sid: int, enabled: bool = True) -> dict:
+    item = scheduler.toggle(sid, enabled)
+    if item is None:
+        raise HTTPException(status_code=404, detail="schedule not found")
+    return item
 
 
 @router.post("/audio/stop")

@@ -4,6 +4,7 @@ import { api } from "./api.js";
 import Devices from "./components/Devices.jsx";
 import LiveData from "./components/LiveData.jsx";
 import Audio from "./components/Audio.jsx";
+import Schedule from "./components/Schedule.jsx";
 import Files from "./components/Files.jsx";
 import Logs from "./components/Logs.jsx";
 
@@ -11,6 +12,7 @@ const TABS = [
   { id: "devices", label: "Devices" },
   { id: "live", label: "Live Data" },
   { id: "audio", label: "Audio" },
+  { id: "schedule", label: "Schedule" },
   { id: "files", label: "Files" },
   { id: "logs", label: "Logs" },
 ];
@@ -93,6 +95,7 @@ export default function App() {
         )}
         {tab === "live" && <LiveData devices={bleList} gattData={gattData} />}
         {tab === "audio" && <Audio classic={classic} />}
+        {tab === "schedule" && <Schedule classic={classic} />}
         {tab === "files" && <Files devices={bleList} />}
         {tab === "logs" && <Logs log={log} />}
       </main>

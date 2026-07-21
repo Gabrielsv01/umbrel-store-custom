@@ -63,6 +63,23 @@ export const api = {
   classicPairConnect: (addr) =>
     request(`/classic/${addr}/pair-connect`, { method: "POST" }),
 
+  // Scheduler
+  schedules: () => request("/schedules"),
+  scheduleCreate: ({ device, time, repeat, days, date, file, url }) => {
+    const fd = new FormData();
+    fd.append("device", device);
+    fd.append("time", time);
+    fd.append("repeat", repeat);
+    if (days) fd.append("days", days);
+    if (date) fd.append("date", date);
+    if (file) fd.append("file", file);
+    if (url) fd.append("url", url);
+    return upload("/schedules", fd);
+  },
+  scheduleDelete: (id) => request(`/schedules/${id}`, { method: "DELETE" }),
+  scheduleToggle: (id, enabled) =>
+    request(`/schedules/${id}/toggle?enabled=${enabled}`, { method: "POST" }),
+
   // Audio (Phase 2) — queue based
   audioStatus: () => request("/audio/status"),
   audioQueue: () => request("/audio/queue"),

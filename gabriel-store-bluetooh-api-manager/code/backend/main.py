@@ -16,22 +16,25 @@ from fastapi.staticfiles import StaticFiles
 from .adapters.bluetooth import ble
 from .api import routes, ws
 from .core.config import settings
+from .scheduler import scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Start continuous BLE discovery as soon as the server comes up.
+    # Start continuous BLE discovery + the play scheduler as the server comes up.
     await ble.start()
+    scheduler.start()
     try:
         yield
     finally:
+        await scheduler.stop()
         await ble.stop()
 
 
 app = FastAPI(
     title="Bluetooth API Manager",
     description="Discover Bluetooth devices, watch their data, and control them over an API.",
-    version="1.2.5",
+    version="1.3.0",
     lifespan=lifespan,
 )
 

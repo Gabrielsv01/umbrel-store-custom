@@ -2,11 +2,13 @@ version: "3.7"
 services:
   bluetooth-api-manager:
     # Pre-built image pulled from Docker Hub (Umbrel does not build on-device).
-    # To rebuild locally: `docker build -t gabrielsv01/bluetooth-api-manager:1.2.5 ./code`
-    image: gabrielsv01/bluetooth-api-manager:1.2.5
+    # To rebuild locally: `docker build -t gabrielsv01/bluetooth-api-manager:1.3.0 ./code`
+    image: gabrielsv01/bluetooth-api-manager:1.3.0
     container_name: bluetooth-api-manager
     environment:
       - PORT=5157
+      # Timezone used by the play Scheduler. Set to your zone, e.g.
+      # America/Sao_Paulo, so scheduled times match your wall clock.
       - TZ=${TZ:-UTC}
     # Host networking + privileged give the container direct access to the HCI
     # Bluetooth adapter. The app runs its OWN Bluetooth stack (bluetoothd,
