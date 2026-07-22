@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+backend/data/
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+
+# Local dev volumes
+data/
+music/

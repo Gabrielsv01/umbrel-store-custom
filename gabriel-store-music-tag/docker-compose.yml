@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  music-tag:
+    image: gabrielsv01/music-tag:1.0.0
+    container_name: music-tag
+    restart: unless-stopped
+    ports:
+      - "5150:5150"
+    environment:
+      - PORT=5150
+      # Comma-separated list of library folders to scan. Must match the mount
+      # points below (order/count doesn't matter, but the paths must line up).
+      - MUSIC_DIRS=/music,/larissa-music
+      - DATA_DIR=/data
+      # Set to "true" to keep a one-time backup copy of a file before its first edit.
+      - BACKUP_ON_WRITE=false
+    volumes:
+      # App state (SQLite catalog, optional backups).
+      - ${APP_DATA_DIR}/data:/data
+      # Music libraries (read-write so tags can be written back). Add more pairs
+      # here and list each container path in MUSIC_DIRS above.
+      - ${UMBREL_ROOT}/home/Downloads/music:/music
+      - ${UMBREL_ROOT}/home/Downloads/larissa-music:/larissa-music

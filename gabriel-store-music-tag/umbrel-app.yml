@@ -1,0 +1,36 @@
+manifestVersion: 1
+id: gabriel-store-music-tag
+name: Music Tag
+tagline: Scan your library and edit music metadata from your browser
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-music-tag/icon.svg
+category: Media
+version: "1.0.0"
+port: 5124
+description: >-
+  Music Tag scans all audio files inside your mapped volumes and lets you view
+  and edit their metadata — title, artist, album, year, genre, track/disc number
+  and cover artwork — from a clean web UI or a REST API.
+
+
+  Supports MP3, FLAC, M4A/AAC, OGG Vorbis, Opus, WAV, AIFF and more via mutagen.
+  Edits are written straight back to your files. Includes incremental scanning,
+  search, and bulk editing across many tracks at once.
+
+
+  A full REST API is available under /api (interactive docs at /docs).
+developer: Gabriel Vieira
+website: https://github.com/Gabrielsv01/umbrel-store-custom
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+releaseNotes: >-
+  First release. Scan mapped music volumes, browse and search your library, edit
+  tags and artwork individually or in bulk, all via UI or REST API.
+dependencies: []
+permissions:
+  - STORAGE_DOWNLOADS
+path: ""
+defaultUsername: ""
+defaultPassword: ""
