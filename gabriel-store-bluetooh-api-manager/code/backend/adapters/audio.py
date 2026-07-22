@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from typing import Any, Dict, List, Optional
 
 from ..core.events import bus
@@ -28,6 +29,12 @@ WARMUP_SECONDS = float(os.getenv("AUDIO_RECONNECT_DELAY", "1.5"))
 # wait this long and retry before falling back to a forced reconnect (which
 # makes the speaker chime and resets the link).
 A2DP_SETTLE = 2.0
+
+# How long a device stays "warm" after its last successful play. Within this
+# window a new play reuses the still-up A2DP link and skips the warm-up (no
+# glitch, no reconnect chime). Kept shorter than the speaker's own A2DP idle
+# timeout so we don't treat a link the speaker already dropped as warm.
+WARM_GRACE_SECONDS = 30.0
 
 # aplay/bluealsa errors that all mean "A2DP link isn't ready to stream yet": the
 # device is connected at ACL level but the audio transport isn't up, so the PCM
@@ -52,10 +59,12 @@ class AudioService:
         self._wake = asyncio.Event()
         self._interrupt = False  # set when skip/stop kills the current track
         self._counter = 0
-        # Address whose A2DP link is currently warm (we just streamed to it).
-        # The first play to a cold device gets a throwaway silent warm-up open;
-        # back-to-back queued tracks are already warm and skip it.
+        # Address whose A2DP link is warm, and the monotonic time until which it
+        # stays warm (see WARM_GRACE_SECONDS). The first play to a cold device
+        # gets a throwaway silent warm-up open; plays within the warm window
+        # reuse the live link and skip it (no glitch, no reconnect chime).
         self._warm_device: Optional[str] = None
+        self._warm_until: float = 0.0
 
     # ---- public API ------------------------------------------------------
     def status(self) -> Dict[str, Any]:
@@ -101,8 +110,9 @@ class AudioService:
     async def _run(self) -> None:
         while True:
             if not self._pending:
-                # Idle: the A2DP link will drop, so treat the next play as cold.
-                self._warm_device = None
+                # Don't reset warmth here: the speaker keeps the A2DP link up for
+                # a while after playback, so a play shortly after another should
+                # still skip the warm-up. Warmth expires by time (WARM_GRACE).
                 self._wake.clear()
                 await self._wake.wait()
                 continue
@@ -204,11 +214,12 @@ class AudioService:
         bus.publish("audio_started", source=source, device=device,
                     queue_length=len(self._pending))
 
-        # Cold link (first play, or first after the queue drained/idled): the
+        # Cold link (first play, or first after the warm window expired): the
         # first PCM open glitches on some speakers, so open once on throwaway
         # silence to take that hit, then stream the real track on a clean second
-        # open. Back-to-back queued tracks are already warm and skip this.
-        if device != self._warm_device and not self._interrupt:
+        # open. Plays within the warm window reuse the live link and skip this.
+        cold = device != self._warm_device or time.monotonic() > self._warm_until
+        if cold and not self._interrupt:
             await self._prime(device)
 
         if self._interrupt:
@@ -226,7 +237,10 @@ class AudioService:
         if self._interrupt:
             return  # skip/stop already published its own event
         if code == 0:
-            self._warm_device = device  # link is warm for the next queued track
+            # Keep the link warm for a grace window so a nearby next play skips
+            # the warm-up (and its reconnect chime).
+            self._warm_device = device
+            self._warm_until = time.monotonic() + WARM_GRACE_SECONDS
             bus.publish("audio_finished", source=source, device=device)
         else:
             msg = (aplay_err or ffmpeg_err).decode(errors="replace")[-400:]
