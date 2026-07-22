@@ -3,7 +3,7 @@ id: gabriel-store-music-tag
 name: Music Tag
 tagline: Scan your library and edit music metadata from your browser
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-music-tag/icon.svg
-category: Media
+category: media
 version: "1.0.0"
 port: 5150
 description: >-
