@@ -80,16 +80,18 @@ class AudioService:
             await self._play_one(item)
             self._current = None
 
-    async def _connect(self, device: str) -> None:
-        # Already connected? Skip — reconnecting makes some speakers (e.g. Echo/
-        # Alexa) announce "connected" again before playing.
-        info = await asyncio.create_subprocess_exec(
-            "bluetoothctl", "info", device,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
-        )
-        out, _ = await info.communicate()
-        if "connected: yes" in (out or b"").decode(errors="replace").lower():
-            return
+    async def _connect(self, device: str, force: bool = False) -> None:
+        # Fast path: if already connected, skip — reconnecting makes some
+        # speakers (Echo/Alexa) re-announce "connected". `force` runs connect
+        # anyway, which also brings up the A2DP profile bluez-alsa needs.
+        if not force:
+            info = await asyncio.create_subprocess_exec(
+                "bluetoothctl", "info", device,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+            )
+            out, _ = await info.communicate()
+            if "connected: yes" in (out or b"").decode(errors="replace").lower():
+                return
 
         proc = await asyncio.create_subprocess_exec(
             "bluetoothctl", "connect", device,
@@ -100,14 +102,9 @@ class AudioService:
         if "successful" not in text.lower() and "already" not in text.lower():
             bus.publish("audio_connect", device=device, detail=text.strip()[-200:])
 
-    async def _play_one(self, item: Dict[str, Any]) -> None:
-        source, device = item["source"], item["device"]
-        self._interrupt = False
-        await self._connect(device)
-
+    async def _run_pipe(self, source: str, device: str) -> tuple[int, bytes, bytes]:
         # Wrap the bluez-alsa PCM in ALSA's `plug` for automatic rate/format
-        # conversion, so it works whatever sample rate the device negotiated for
-        # A2DP (44.1kHz on many speakers, 48kHz on Echo/Alexa). The explicit
+        # conversion (44.1kHz on many speakers, 48kHz on Echo/Alexa). The explicit
         # plug:{SLAVE="..."} form is required — `plug:bluealsa:DEV=...` fails to
         # parse (the commas confuse plug's argument parser).
         pcm = f'plug:{{SLAVE="bluealsa:DEV={device},PROFILE=a2dp"}}'
@@ -123,9 +120,6 @@ class AudioService:
             stdin=read_fd, stderr=asyncio.subprocess.PIPE,
         )
         os.close(read_fd)
-        bus.publish("audio_started", source=source, device=device,
-                    queue_length=len(self._pending))
-
         _, aplay_err = await self._aplay.communicate()
         code = self._aplay.returncode
         if self._ffmpeg.returncode is None:
@@ -136,13 +130,31 @@ class AudioService:
         except asyncio.TimeoutError:
             pass
         self._ffmpeg = self._aplay = None
+        return code, aplay_err or b"", ffmpeg_err or b""
+
+    async def _play_one(self, item: Dict[str, Any]) -> None:
+        source, device = item["source"], item["device"]
+        self._interrupt = False
+        await self._connect(device)
+        bus.publish("audio_started", source=source, device=device,
+                    queue_length=len(self._pending))
+
+        code, aplay_err, ffmpeg_err = await self._run_pipe(source, device)
+
+        # "PCM not found" = the A2DP link isn't up yet (device connected at ACL
+        # level but the audio profile isn't). Force a real connect and retry once.
+        pcm_missing = b"PCM not found" in aplay_err or b"No such device" in aplay_err
+        if code != 0 and not self._interrupt and pcm_missing:
+            await self._connect(device, force=True)
+            await asyncio.sleep(2)
+            code, aplay_err, ffmpeg_err = await self._run_pipe(source, device)
 
         if self._interrupt:
             return  # skip/stop already published its own event
         if code == 0:
             bus.publish("audio_finished", source=source, device=device)
         else:
-            msg = (aplay_err or ffmpeg_err or b"").decode(errors="replace")[-400:]
+            msg = (aplay_err or ffmpeg_err).decode(errors="replace")[-400:]
             bus.publish("error", where="audio", source=source, device=device,
                         message=msg or f"aplay exit {code}")
 

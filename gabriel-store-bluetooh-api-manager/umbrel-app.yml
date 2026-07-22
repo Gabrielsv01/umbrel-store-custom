@@ -4,7 +4,7 @@ name: Bluetooth API Manager
 tagline: Manage Bluetooth devices, stream data and control them over an API
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-bluetooh-api-manager/icon.svg
 category: Utilities
-version: "1.5.0"
+version: "1.5.1"
 port: 5157
 description: >-
   Bluetooth API Manager gives you a single place to see and control the
@@ -40,7 +40,9 @@ repo: https://github.com/Gabrielsv01/umbrel-store-custom
 support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
 gallery: []
 releaseNotes: >-
-  1.5.0: automatic cleanup of old generated/uploaded audio (kept if tied to a
+  1.5.1: if playback fails because the A2DP link isn't up ("PCM not found"), the
+  app now forces a reconnect and retries once, so plays to a just-reconnected
+  speaker work reliably. 1.5.0: automatic cleanup of old generated/uploaded audio (kept if tied to a
   schedule; retention via AUDIO_RETENTION_DAYS) with a Storage panel + Clean-now
   button; fine voice controls in the Voice tab (expressiveness, cadence,
   sentence pause) per request. 1.4.2: tune the Piper voice via env vars (PIPER_LENGTH_SCALE speed,
