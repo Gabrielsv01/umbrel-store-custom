@@ -5,7 +5,7 @@ tagline: Scan your library and edit music metadata from your browser
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-music-tag/icon.svg
 category: Media
 version: "1.0.0"
-port: 5124
+port: 5150
 description: >-
   Music Tag scans all audio files inside your mapped volumes and lets you view
   and edit their metadata — title, artist, album, year, genre, track/disc number

@@ -27,7 +27,7 @@ DB_PATH = DATA_DIR / "catalog.db"
 STATIC_DIR = Path(os.getenv("STATIC_DIR", "/app/static"))
 
 # HTTP port. Matches the Umbrel manifest.
-PORT = int(os.getenv("PORT", "5124"))
+PORT = int(os.getenv("PORT", "5150"))
 
 # Audio extensions we index. Lower-case, with leading dot.
 AUDIO_EXTENSIONS = {

@@ -16,7 +16,7 @@ ENV PYTHONUNBUFFERED=1 \
     MUSIC_DIRS=/music \
     DATA_DIR=/data \
     STATIC_DIR=/app/static \
-    PORT=5124
+    PORT=5150
 
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
@@ -24,9 +24,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/app ./app
 COPY --from=frontend /build/dist ./static
 
-EXPOSE 5124
+EXPOSE 5150
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request,os;urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('PORT','5124')+'/api/health')" || exit 1
+    CMD python -c "import urllib.request,os;urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('PORT','5150')+'/api/health')" || exit 1
 
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
