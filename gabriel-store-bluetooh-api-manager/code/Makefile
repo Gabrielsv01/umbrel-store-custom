@@ -1,7 +1,7 @@
 .PHONY: up build start stop restart logs clean tag-version push-version release
 
 # Docker image configuration
-IMAGE_NAME = bluetooh-api-manager
+IMAGE_NAME = bluetooth-api-manager
 REGISTRY = gabrielsv01
 FULL_IMAGE_NAME = $(REGISTRY)/$(IMAGE_NAME)
 

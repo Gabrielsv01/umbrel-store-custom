@@ -4,7 +4,7 @@ name: Bluetooth API Manager
 tagline: Manage Bluetooth devices, stream data and control them over an API
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-bluetooh-api-manager/icon.svg
 category: Utilities
-version: "1.5.3"
+version: "1.5.4"
 port: 5157
 description: >-
   Bluetooth API Manager gives you a single place to see and control the
@@ -40,7 +40,10 @@ repo: https://github.com/Gabrielsv01/umbrel-store-custom
 support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
 gallery: []
 releaseNotes: >-
-  1.5.3: after a forced reconnect, wait for the speaker's "connected" prompt to
+  1.5.4: fix garbled / cut-off audio on Echo/Alexa after a reconnect — instead of
+  waiting in silence (which let the A2DP link sleep and glitch on wake), the app
+  now streams a silent lead-in that keeps the link warm while the "connected"
+  prompt plays, so the track starts cleanly (AUDIO_RECONNECT_DELAY). 1.5.3: after a forced reconnect, wait for the speaker's "connected" prompt to
   finish before streaming, so the audio no longer overlaps it
   (AUDIO_RECONNECT_DELAY). 1.5.2: the "Clean now" button now purges all cached audio immediately
   (automatic cleanup still respects the retention window). 1.5.1: if playback fails because the A2DP link isn't up ("PCM not found"), the

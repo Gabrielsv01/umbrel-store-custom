@@ -16,8 +16,12 @@ from typing import Any, Dict, List, Optional
 
 from ..core.events import bus
 
-# After a forced (re)connect the speaker often plays a "connected" prompt; wait
-# this long before streaming so the audio doesn't overlap it. Tunable via env.
+# After a forced (re)connect the speaker often plays a "connected" prompt. We
+# cover it with this many seconds of *streamed silence* (a lead-in) rather than
+# an idle wait: the silence keeps the A2DP link warm so the real audio starts
+# clean, instead of the speaker's decoder having to wake from idle mid-track
+# (which caused the "connected" prompt to overlap and the start to glitch/cut).
+# Tunable via env.
 RECONNECT_DELAY = float(os.getenv("AUDIO_RECONNECT_DELAY", "4.5"))
 
 
@@ -106,16 +110,21 @@ class AudioService:
         if "successful" not in text.lower() and "already" not in text.lower():
             bus.publish("audio_connect", device=device, detail=text.strip()[-200:])
 
-    async def _run_pipe(self, source: str, device: str) -> tuple[int, bytes, bytes]:
+    async def _run_pipe(self, source: str, device: str,
+                        lead_in: float = 0.0) -> tuple[int, bytes, bytes]:
         # Wrap the bluez-alsa PCM in ALSA's `plug` for automatic rate/format
         # conversion (44.1kHz on many speakers, 48kHz on Echo/Alexa). The explicit
         # plug:{SLAVE="..."} form is required — `plug:bluealsa:DEV=...` fails to
         # parse (the commas confuse plug's argument parser).
         pcm = f'plug:{{SLAVE="bluealsa:DEV={device},PROFILE=a2dp"}}'
+        # `lead_in` prepends that many seconds of silence to the stream so aplay
+        # keeps feeding the A2DP link (warm) while the speaker plays its connect
+        # prompt — the real audio then starts on an already-open link.
+        filters = ["-af", f"adelay=delays={int(lead_in * 1000)}:all=1"] if lead_in > 0 else []
         read_fd, write_fd = os.pipe()
         self._ffmpeg = await asyncio.create_subprocess_exec(
             "ffmpeg", "-hide_banner", "-loglevel", "warning", "-re", "-i", source,
-            "-vn", "-ar", "44100", "-ac", "2", "-f", "wav", "pipe:1",
+            "-vn", *filters, "-ar", "44100", "-ac", "2", "-f", "wav", "pipe:1",
             stdout=write_fd, stderr=asyncio.subprocess.PIPE,
         )
         os.close(write_fd)
@@ -150,10 +159,11 @@ class AudioService:
         pcm_missing = b"PCM not found" in aplay_err or b"No such device" in aplay_err
         if code != 0 and not self._interrupt and pcm_missing:
             await self._connect(device, force=True)
-            # Let the speaker finish its "connected" prompt before streaming, so
-            # the audio doesn't come out mixed with the announcement.
-            await asyncio.sleep(RECONNECT_DELAY)
-            code, aplay_err, ffmpeg_err = await self._run_pipe(source, device)
+            # Stream a silent lead-in so the A2DP link stays warm while the
+            # speaker plays its "connected" prompt; the real audio then starts
+            # cleanly instead of overlapping the prompt / glitching on wake.
+            code, aplay_err, ffmpeg_err = await self._run_pipe(
+                source, device, lead_in=RECONNECT_DELAY)
 
         if self._interrupt:
             return  # skip/stop already published its own event
