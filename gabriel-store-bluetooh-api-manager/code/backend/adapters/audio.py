@@ -17,16 +17,16 @@ from typing import Any, Dict, List, Optional
 from ..core.events import bus
 from .bluetooth import ble
 
-# Seconds of *streamed silence* played before the real audio whenever the A2DP
-# link is cold (first play, or a forced reconnect). Streaming silence — rather
-# than waiting idle — brings the link fully up and keeps it warm, so the real
-# audio starts clean instead of the speaker glitching/cutting its first seconds
-# (and it covers any "connected" prompt). Tunable via env.
-RECONNECT_DELAY = float(os.getenv("AUDIO_RECONNECT_DELAY", "4.5"))
+# Duration of the throwaway "warm-up" silence played on a cold A2DP link before
+# the real audio (see _warm_up). On some speakers (Echo/Alexa) the FIRST aplay
+# open after a (re)connect glitches its output while a second, separate open is
+# clean — so we sacrifice this silent open and the real track comes out clean.
+# Env-tunable (kept as AUDIO_RECONNECT_DELAY for backward compatibility).
+WARMUP_SECONDS = float(os.getenv("AUDIO_RECONNECT_DELAY", "1.5"))
 
 # The A2DP transport often just needs a moment to come up after a connect. We
-# wait this long and retry the stream *without* reconnecting before falling back
-# to a forced reconnect (which makes the speaker chime and resets the link).
+# wait this long and retry before falling back to a forced reconnect (which
+# makes the speaker chime and resets the link).
 A2DP_SETTLE = 2.0
 
 # aplay/bluealsa errors that all mean "A2DP link isn't ready to stream yet": the
@@ -53,8 +53,8 @@ class AudioService:
         self._interrupt = False  # set when skip/stop kills the current track
         self._counter = 0
         # Address whose A2DP link is currently warm (we just streamed to it).
-        # A cold link glitches its first seconds, so the first play to a cold
-        # device gets a silent lead-in; back-to-back queued tracks skip it.
+        # The first play to a cold device gets a throwaway silent warm-up open;
+        # back-to-back queued tracks are already warm and skip it.
         self._warm_device: Optional[str] = None
 
     # ---- public API ------------------------------------------------------
@@ -133,21 +133,17 @@ class AudioService:
         if "successful" not in text.lower() and "already" not in text.lower():
             bus.publish("audio_connect", device=device, detail=text.strip()[-200:])
 
-    async def _run_pipe(self, source: str, device: str,
-                        lead_in: float = 0.0) -> tuple[int, bytes, bytes]:
+    async def _pipe(self, ffmpeg_in: List[str], device: str) -> tuple[int, bytes, bytes]:
+        """Decode `ffmpeg_in` and stream it to the speaker's bluez-alsa PCM."""
         # Wrap the bluez-alsa PCM in ALSA's `plug` for automatic rate/format
         # conversion (44.1kHz on many speakers, 48kHz on Echo/Alexa). The explicit
         # plug:{SLAVE="..."} form is required — `plug:bluealsa:DEV=...` fails to
         # parse (the commas confuse plug's argument parser).
         pcm = f'plug:{{SLAVE="bluealsa:DEV={device},PROFILE=a2dp"}}'
-        # `lead_in` prepends that many seconds of silence to the stream so aplay
-        # keeps feeding the A2DP link (warm) while the speaker plays its connect
-        # prompt — the real audio then starts on an already-open link.
-        filters = ["-af", f"adelay=delays={int(lead_in * 1000)}:all=1"] if lead_in > 0 else []
         read_fd, write_fd = os.pipe()
         self._ffmpeg = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-hide_banner", "-loglevel", "warning", "-re", "-i", source,
-            "-vn", *filters, "-ar", "44100", "-ac", "2", "-f", "wav", "pipe:1",
+            "ffmpeg", "-hide_banner", "-loglevel", "warning", *ffmpeg_in,
+            "-vn", "-ar", "44100", "-ac", "2", "-f", "wav", "pipe:1",
             stdout=write_fd, stderr=asyncio.subprocess.PIPE,
         )
         os.close(write_fd)
@@ -168,6 +164,28 @@ class AudioService:
         self._ffmpeg = self._aplay = None
         return code, aplay_err or b"", ffmpeg_err or b""
 
+    async def _run_pipe(self, source: str, device: str) -> tuple[int, bytes, bytes]:
+        # `-re` reads the file at native rate so ffmpeg doesn't buffer it all up
+        # front; aplay paces the actual playback on the A2DP PCM.
+        return await self._pipe(["-re", "-i", source], device)
+
+    async def _warm_up(self, device: str) -> tuple[int, bytes, bytes]:
+        # Throwaway silent open: on some speakers the FIRST aplay open after a
+        # (re)connect glitches its output, while a second, separate open is
+        # clean. Streaming generated silence here takes that hit inaudibly so
+        # the real track (the next open) comes out clean.
+        return await self._pipe(
+            ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+             "-t", str(WARMUP_SECONDS)], device)
+
+    async def _prime(self, device: str) -> None:
+        """Warm the link with a silent open; if A2DP isn't up yet, settle and
+        try once more so the real open lands on a ready, already-primed link."""
+        code, aplay_err, _ = await self._warm_up(device)
+        if code != 0 and not self._interrupt and _link_not_ready(aplay_err):
+            await asyncio.sleep(A2DP_SETTLE)
+            await self._warm_up(device)
+
     async def _play_one(self, item: Dict[str, Any]) -> None:
         source, device = item["source"], item["device"]
         self._interrupt = False
@@ -186,30 +204,24 @@ class AudioService:
         bus.publish("audio_started", source=source, device=device,
                     queue_length=len(self._pending))
 
-        # Cold link (first play, or first after the queue drained/idled): stream
-        # a silent lead-in so the A2DP link is fully warm before the real audio,
-        # otherwise the speaker glitches the first seconds. A back-to-back queued
-        # track to the same device is already warm, so it skips the lead-in.
-        cold = device != self._warm_device
-        code, aplay_err, ffmpeg_err = await self._run_pipe(
-            source, device, lead_in=RECONNECT_DELAY if cold else 0.0)
+        # Cold link (first play, or first after the queue drained/idled): the
+        # first PCM open glitches on some speakers, so open once on throwaway
+        # silence to take that hit, then stream the real track on a clean second
+        # open. Back-to-back queued tracks are already warm and skip this.
+        if device != self._warm_device and not self._interrupt:
+            await self._prime(device)
+
+        if self._interrupt:
+            return
+
+        code, aplay_err, ffmpeg_err = await self._run_pipe(source, device)
 
         if code != 0 and not self._interrupt and _link_not_ready(aplay_err):
-            # First recover *without* reconnecting: the transport usually just
-            # needs a moment after connect. Wait, then retry with a silent
-            # lead-in that warms the link before the real audio. This avoids the
-            # speaker's disconnect/reconnect chime and rough start in the common
-            # case (device connected, A2DP a beat behind).
-            await asyncio.sleep(A2DP_SETTLE)
-            code, aplay_err, ffmpeg_err = await self._run_pipe(
-                source, device, lead_in=RECONNECT_DELAY)
-
-            if code != 0 and not self._interrupt and _link_not_ready(aplay_err):
-                # Still not up — force a real reconnect (may make the speaker
-                # chime) and try once more with the lead-in.
-                await self._connect(device, force=True)
-                code, aplay_err, ffmpeg_err = await self._run_pipe(
-                    source, device, lead_in=RECONNECT_DELAY)
+            # A2DP still not up — force a real reconnect (may make the speaker
+            # chime), re-prime, and try the real track once more.
+            await self._connect(device, force=True)
+            await self._prime(device)
+            code, aplay_err, ffmpeg_err = await self._run_pipe(source, device)
 
         if self._interrupt:
             return  # skip/stop already published its own event

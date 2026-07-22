@@ -4,7 +4,7 @@ name: Bluetooth API Manager
 tagline: Manage Bluetooth devices, stream data and control them over an API
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-bluetooh-api-manager/icon.svg
 category: Utilities
-version: "1.5.8"
+version: "1.5.9"
 port: 5157
 description: >-
   Bluetooth API Manager gives you a single place to see and control the
@@ -40,7 +40,11 @@ repo: https://github.com/Gabrielsv01/umbrel-store-custom
 support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
 gallery: []
 releaseNotes: >-
-  1.5.8: the silent warm-up lead-in now plays before the FIRST track too (not
+  1.5.9: fix the first track always glitching on Echo/Alexa — the speaker's
+  first PCM open after a connect is glitchy while a second open is clean, so the
+  app now sacrifices a short throwaway silent open first and streams the real
+  track on the clean second open; queued tracks skip it (AUDIO_RECONNECT_DELAY
+  sets the warm-up length, 1-2s is plenty). 1.5.8: the silent warm-up now plays before the FIRST track too (not
   only after an error/reconnect), so the very first audio to a cold speaker no
   longer glitches on its first seconds; back-to-back queued tracks skip it since
   the link is already warm (AUDIO_RECONNECT_DELAY). 1.5.7: recover from a broken pairing — a new "Forget" button (and
