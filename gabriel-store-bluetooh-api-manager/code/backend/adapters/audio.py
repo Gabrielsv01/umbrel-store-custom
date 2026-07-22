@@ -15,6 +15,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 from ..core.events import bus
+from .bluetooth import ble
 
 # After a forced (re)connect the speaker often plays a "connected" prompt. We
 # cover it with this many seconds of *streamed silence* (a lead-in) rather than
@@ -148,6 +149,17 @@ class AudioService:
     async def _play_one(self, item: Dict[str, Any]) -> None:
         source, device = item["source"], item["device"]
         self._interrupt = False
+        # Pause BLE discovery for the whole play: a running inquiry makes the
+        # BR/EDR A2DP connect fail with "br-connection-profile-unavailable" and
+        # also glitches the stream. Restored in the finally below.
+        await ble.pause_scan()
+        await asyncio.sleep(0.5)  # let BlueZ fully stop the inquiry first
+        try:
+            await self._play_locked(item, source, device)
+        finally:
+            await ble.resume_scan()
+
+    async def _play_locked(self, item: Dict[str, Any], source: str, device: str) -> None:
         await self._connect(device)
         bus.publish("audio_started", source=source, device=device,
                     queue_length=len(self._pending))

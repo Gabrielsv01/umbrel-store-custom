@@ -4,7 +4,7 @@ name: Bluetooth API Manager
 tagline: Manage Bluetooth devices, stream data and control them over an API
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-bluetooh-api-manager/icon.svg
 category: Utilities
-version: "1.5.5"
+version: "1.5.6"
 port: 5157
 description: >-
   Bluetooth API Manager gives you a single place to see and control the
@@ -40,7 +40,10 @@ repo: https://github.com/Gabrielsv01/umbrel-store-custom
 support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
 gallery: []
 releaseNotes: >-
-  1.5.5: also retry the reconnect when playback fails with "Unable to install hw
+  1.5.6: fix "br-connection-profile-unavailable" when playing to a paired
+  speaker — the app now pauses BLE discovery for the duration of a play, since a
+  running inquiry blocks the BR/EDR A2DP connect and glitches the stream;
+  discovery resumes automatically afterwards. 1.5.5: also retry the reconnect when playback fails with "Unable to install hw
   params" / "set_params" (not just "PCM not found") — same A2DP-not-ready cause,
   so plays to an Echo/Alexa whose audio transport hasn't negotiated yet now
   recover instead of erroring out. 1.5.4: fix garbled / cut-off audio on Echo/Alexa after a reconnect — instead of

@@ -57,6 +57,26 @@ class BLEManager:
         self._scanning = False
         bus.publish("scan_state", scanning=False)
 
+    async def pause_scan(self) -> None:
+        """Stop BLE discovery without touching connected clients.
+
+        BR/EDR (A2DP) connects fail with "br-connection-profile-unavailable"
+        while the adapter is busy with an inquiry/discovery, and the inquiry
+        also glitches an active A2DP stream. The audio player pauses discovery
+        around a connect+play and resumes it afterwards.
+        """
+        if self._scanner and self._scanning:
+            try:
+                await self._scanner.stop()
+            except Exception:  # noqa: BLE001
+                pass
+        self._scanning = False
+        bus.publish("scan_state", scanning=False)
+
+    async def resume_scan(self) -> None:
+        """Restart the continuous discovery paused by pause_scan()."""
+        await self.start()
+
     # ---- scanning --------------------------------------------------------
     def _on_detection(self, device: BLEDevice, adv: AdvertisementData) -> None:
         self._ble_objects[device.address] = device
