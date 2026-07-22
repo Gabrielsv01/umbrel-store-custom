@@ -154,10 +154,15 @@ class AudioService:
 
         code, aplay_err, ffmpeg_err = await self._run_pipe(source, device)
 
-        # "PCM not found" = the A2DP link isn't up yet (device connected at ACL
-        # level but the audio profile isn't). Force a real connect and retry once.
-        pcm_missing = b"PCM not found" in aplay_err or b"No such device" in aplay_err
-        if code != 0 and not self._interrupt and pcm_missing:
+        # These errors all mean the A2DP link isn't ready yet: the device is
+        # connected at ACL level but the audio transport isn't streaming, so the
+        # PCM is missing OR exists but has no valid codec config (aplay then
+        # fails to install hw params). Same fix: force a real connect + retry.
+        link_not_ready = any(m in aplay_err for m in (
+            b"PCM not found", b"No such device",
+            b"Unable to install hw params", b"set_params", b"Input/output error",
+        ))
+        if code != 0 and not self._interrupt and link_not_ready:
             await self._connect(device, force=True)
             # Stream a silent lead-in so the A2DP link stays warm while the
             # speaker plays its "connected" prompt; the real audio then starts
