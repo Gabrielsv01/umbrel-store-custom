@@ -53,9 +53,11 @@ class CleanupService:
             "retention_days": RETENTION_DAYS,
         }
 
-    def sweep(self) -> Dict[str, Any]:
+    def sweep(self, older_than: float | None = None) -> Dict[str, Any]:
+        """Delete unreferenced audio. `older_than` (seconds) limits it to files
+        older than that; None (manual "Clean now") purges all unreferenced files."""
         keep = self._keep()
-        cutoff = time.time() - self._retention
+        cutoff = (time.time() - older_than) if older_than is not None else (time.time() + 1)
         removed, freed = 0, 0
         for f in self._files():
             if f in keep:
@@ -76,7 +78,7 @@ class CleanupService:
         while True:
             await asyncio.sleep(SWEEP_INTERVAL)
             try:
-                self.sweep()
+                self.sweep(older_than=self._retention)  # auto: respect retention
             except Exception as exc:  # noqa: BLE001
                 bus.publish("error", where="cleanup", message=str(exc))
 

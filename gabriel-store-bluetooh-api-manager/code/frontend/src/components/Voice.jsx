@@ -219,8 +219,9 @@ export default function Voice({ classic }) {
           <button style={{ marginLeft: "auto" }} onClick={cleanNow}>Clean now</button>
         </div>
         <p className="hint" style={{ marginBottom: 0 }}>
-          Old generated/uploaded audio is removed automatically after{" "}
-          {storage?.retention_days ?? 7} days (files tied to a schedule are kept).
+          Auto-cleanup removes audio older than {storage?.retention_days ?? 7} days.
+          <strong> Clean now</strong> deletes all cached audio immediately. Files
+          tied to a schedule are always kept.
         </p>
       </div>
     </section>

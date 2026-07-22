@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Bluetooth API Manager",
     description="Discover Bluetooth devices, watch their data, and control them over an API.",
-    version="1.5.1",
+    version="1.5.2",
     lifespan=lifespan,
 )
 
