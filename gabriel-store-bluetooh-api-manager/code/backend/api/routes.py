@@ -241,6 +241,13 @@ async def classic_disconnect(address: str) -> dict:
     return await classic.disconnect(address)
 
 
+@router.post("/classic/{address}/forget")
+async def classic_forget(address: str) -> dict:
+    """Remove a device's bond/link key. Use to recover from a stale pairing that
+    fails authentication; then re-pair with the speaker in pairing mode."""
+    return await classic.remove(address)
+
+
 # ---- Phase 2: audio streaming (A2DP) ------------------------------------
 @router.get("/audio/status")
 async def audio_status() -> dict:

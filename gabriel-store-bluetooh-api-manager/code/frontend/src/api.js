@@ -62,6 +62,8 @@ export const api = {
     request(`/classic/${addr}/disconnect`, { method: "POST" }),
   classicPairConnect: (addr) =>
     request(`/classic/${addr}/pair-connect`, { method: "POST" }),
+  classicForget: (addr) =>
+    request(`/classic/${addr}/forget`, { method: "POST" }),
   renameDevice: (addr, name) =>
     request(`/classic/${addr}/rename`, { method: "POST", body: JSON.stringify({ name }) }),
   setAdapterName: (name) =>

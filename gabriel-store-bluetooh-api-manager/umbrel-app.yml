@@ -4,7 +4,7 @@ name: Bluetooth API Manager
 tagline: Manage Bluetooth devices, stream data and control them over an API
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-bluetooh-api-manager/icon.svg
 category: Utilities
-version: "1.5.6"
+version: "1.5.8"
 port: 5157
 description: >-
   Bluetooth API Manager gives you a single place to see and control the
@@ -40,7 +40,16 @@ repo: https://github.com/Gabrielsv01/umbrel-store-custom
 support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
 gallery: []
 releaseNotes: >-
-  1.5.6: fix "br-connection-profile-unavailable" when playing to a paired
+  1.5.8: the silent warm-up lead-in now plays before the FIRST track too (not
+  only after an error/reconnect), so the very first audio to a cold speaker no
+  longer glitches on its first seconds; back-to-back queued tracks skip it since
+  the link is already warm (AUDIO_RECONNECT_DELAY). 1.5.7: recover from a broken pairing — a new "Forget" button (and
+  POST /classic/{addr}/forget) clears a device's stale link key, and Pair +
+  Connect now auto-clears it when pairing fails with an authentication error
+  (0x05) so a single tap re-pairs cleanly (put the speaker in pairing mode
+  first). Also smoother playback start: if A2DP isn't up yet the app now waits
+  briefly and retries without reconnecting, so the speaker's disconnect/reconnect
+  chime and rough first seconds only happen as a last resort. 1.5.6: fix "br-connection-profile-unavailable" when playing to a paired
   speaker — the app now pauses BLE discovery for the duration of a play, since a
   running inquiry blocks the BR/EDR A2DP connect and glitches the stream;
   discovery resumes automatically afterwards. 1.5.5: also retry the reconnect when playback fails with "Unable to install hw

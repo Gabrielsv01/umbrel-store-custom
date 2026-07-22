@@ -17,13 +17,29 @@ from typing import Any, Dict, List, Optional
 from ..core.events import bus
 from .bluetooth import ble
 
-# After a forced (re)connect the speaker often plays a "connected" prompt. We
-# cover it with this many seconds of *streamed silence* (a lead-in) rather than
-# an idle wait: the silence keeps the A2DP link warm so the real audio starts
-# clean, instead of the speaker's decoder having to wake from idle mid-track
-# (which caused the "connected" prompt to overlap and the start to glitch/cut).
-# Tunable via env.
+# Seconds of *streamed silence* played before the real audio whenever the A2DP
+# link is cold (first play, or a forced reconnect). Streaming silence — rather
+# than waiting idle — brings the link fully up and keeps it warm, so the real
+# audio starts clean instead of the speaker glitching/cutting its first seconds
+# (and it covers any "connected" prompt). Tunable via env.
 RECONNECT_DELAY = float(os.getenv("AUDIO_RECONNECT_DELAY", "4.5"))
+
+# The A2DP transport often just needs a moment to come up after a connect. We
+# wait this long and retry the stream *without* reconnecting before falling back
+# to a forced reconnect (which makes the speaker chime and resets the link).
+A2DP_SETTLE = 2.0
+
+# aplay/bluealsa errors that all mean "A2DP link isn't ready to stream yet": the
+# device is connected at ACL level but the audio transport isn't up, so the PCM
+# is missing OR exists without a valid codec config (hw params won't install).
+_LINK_NOT_READY = (
+    b"PCM not found", b"No such device",
+    b"Unable to install hw params", b"set_params", b"Input/output error",
+)
+
+
+def _link_not_ready(aplay_err: bytes) -> bool:
+    return any(m in aplay_err for m in _LINK_NOT_READY)
 
 
 class AudioService:
@@ -36,6 +52,10 @@ class AudioService:
         self._wake = asyncio.Event()
         self._interrupt = False  # set when skip/stop kills the current track
         self._counter = 0
+        # Address whose A2DP link is currently warm (we just streamed to it).
+        # A cold link glitches its first seconds, so the first play to a cold
+        # device gets a silent lead-in; back-to-back queued tracks skip it.
+        self._warm_device: Optional[str] = None
 
     # ---- public API ------------------------------------------------------
     def status(self) -> Dict[str, Any]:
@@ -81,6 +101,8 @@ class AudioService:
     async def _run(self) -> None:
         while True:
             if not self._pending:
+                # Idle: the A2DP link will drop, so treat the next play as cold.
+                self._warm_device = None
                 self._wake.clear()
                 await self._wake.wait()
                 continue
@@ -164,27 +186,35 @@ class AudioService:
         bus.publish("audio_started", source=source, device=device,
                     queue_length=len(self._pending))
 
-        code, aplay_err, ffmpeg_err = await self._run_pipe(source, device)
+        # Cold link (first play, or first after the queue drained/idled): stream
+        # a silent lead-in so the A2DP link is fully warm before the real audio,
+        # otherwise the speaker glitches the first seconds. A back-to-back queued
+        # track to the same device is already warm, so it skips the lead-in.
+        cold = device != self._warm_device
+        code, aplay_err, ffmpeg_err = await self._run_pipe(
+            source, device, lead_in=RECONNECT_DELAY if cold else 0.0)
 
-        # These errors all mean the A2DP link isn't ready yet: the device is
-        # connected at ACL level but the audio transport isn't streaming, so the
-        # PCM is missing OR exists but has no valid codec config (aplay then
-        # fails to install hw params). Same fix: force a real connect + retry.
-        link_not_ready = any(m in aplay_err for m in (
-            b"PCM not found", b"No such device",
-            b"Unable to install hw params", b"set_params", b"Input/output error",
-        ))
-        if code != 0 and not self._interrupt and link_not_ready:
-            await self._connect(device, force=True)
-            # Stream a silent lead-in so the A2DP link stays warm while the
-            # speaker plays its "connected" prompt; the real audio then starts
-            # cleanly instead of overlapping the prompt / glitching on wake.
+        if code != 0 and not self._interrupt and _link_not_ready(aplay_err):
+            # First recover *without* reconnecting: the transport usually just
+            # needs a moment after connect. Wait, then retry with a silent
+            # lead-in that warms the link before the real audio. This avoids the
+            # speaker's disconnect/reconnect chime and rough start in the common
+            # case (device connected, A2DP a beat behind).
+            await asyncio.sleep(A2DP_SETTLE)
             code, aplay_err, ffmpeg_err = await self._run_pipe(
                 source, device, lead_in=RECONNECT_DELAY)
+
+            if code != 0 and not self._interrupt and _link_not_ready(aplay_err):
+                # Still not up — force a real reconnect (may make the speaker
+                # chime) and try once more with the lead-in.
+                await self._connect(device, force=True)
+                code, aplay_err, ffmpeg_err = await self._run_pipe(
+                    source, device, lead_in=RECONNECT_DELAY)
 
         if self._interrupt:
             return  # skip/stop already published its own event
         if code == 0:
+            self._warm_device = device  # link is warm for the next queued track
             bus.publish("audio_finished", source=source, device=device)
         else:
             msg = (aplay_err or ffmpeg_err).decode(errors="replace")[-400:]

@@ -42,6 +42,12 @@ def _parse_devices(text: str) -> Dict[str, str]:
 
 
 class ClassicManager:
+    @staticmethod
+    def _is_auth_failure(detail: str) -> bool:
+        low = detail.lower()
+        return "authenticationfailed" in low or "authentication failed" in low \
+            or "status 0x05" in low
+
     async def scan(self, seconds: int = 15) -> List[Dict[str, Any]]:
         """Run a timed BR/EDR + LE inquiry, then return everything known."""
         bus.publish("classic_scan", state="start", seconds=seconds)
@@ -88,6 +94,21 @@ class ClassicManager:
 
     async def disconnect(self, address: str) -> Dict[str, Any]:
         return await self._action("disconnect", address)
+
+    async def remove(self, address: str) -> Dict[str, Any]:
+        """Remove a device's bond/link key (bluetoothctl remove).
+
+        Needed to recover from a stale pairing whose key no longer matches the
+        speaker's — pairing/connecting then fails with "Authentication Failed"
+        (auth status 0x05). Removing lets a fresh Just-Works pairing succeed.
+        """
+        text = await _btctl("remove", address, timeout=15)
+        low = text.lower()
+        # "not available" = already gone; either way the bond is now clear.
+        ok = "removed" in low or "not available" in low
+        bus.publish("classic_action", level=None if ok else "warn",
+                    verb="remove", device=address, ok=ok, detail=text.strip()[-200:])
+        return {"verb": "remove", "device": address, "ok": ok, "detail": text.strip()[-400:]}
 
     async def set_device_alias(self, address: str, name: str) -> Dict[str, Any]:
         """Give a device a friendly name (BlueZ Device1.Alias). Persistent, and
@@ -141,6 +162,15 @@ class ClassicManager:
                     break
                 await asyncio.sleep(1)
             pair = await self.pair(address)
+            # A stale link key (device paired before, then reset/re-paired
+            # elsewhere) makes pairing fail with "Authentication Failed"
+            # (0x05). Clear our side and pair fresh — the speaker must be in
+            # pairing mode for this to take.
+            removed = None
+            if not pair["ok"] and self._is_auth_failure(pair.get("detail", "")):
+                removed = await self.remove(address)
+                await asyncio.sleep(2)  # let the held scan re-discover it
+                pair = await self.pair(address)
             await self.trust(address)
             connect = await self.connect(address)
             return {
@@ -148,6 +178,7 @@ class ClassicManager:
                 "ok": connect["ok"],
                 "pair": pair,
                 "connect": connect,
+                "removed_stale_bond": removed,
             }
         finally:
             try:

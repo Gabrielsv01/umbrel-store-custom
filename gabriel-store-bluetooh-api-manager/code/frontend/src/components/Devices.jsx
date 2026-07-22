@@ -192,6 +192,15 @@ export default function Devices({ ble, classic, adapter, onChange }) {
                       Disconnect
                     </button>
                   )}
+                  {g.classic.paired && (
+                    <button
+                      title="Remove the pairing/link key. Use if audio fails with an authentication error, then Pair + Connect again with the speaker in pairing mode."
+                      disabled={busy === cAddr}
+                      onClick={() => run(cAddr, () => api.classicForget(cAddr))}
+                    >
+                      Forget
+                    </button>
+                  )}
                 </span>
               </div>
             )}
