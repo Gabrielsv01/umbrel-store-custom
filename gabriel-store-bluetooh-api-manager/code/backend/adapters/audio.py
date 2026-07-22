@@ -16,6 +16,10 @@ from typing import Any, Dict, List, Optional
 
 from ..core.events import bus
 
+# After a forced (re)connect the speaker often plays a "connected" prompt; wait
+# this long before streaming so the audio doesn't overlap it. Tunable via env.
+RECONNECT_DELAY = float(os.getenv("AUDIO_RECONNECT_DELAY", "4.5"))
+
 
 class AudioService:
     def __init__(self) -> None:
@@ -146,7 +150,9 @@ class AudioService:
         pcm_missing = b"PCM not found" in aplay_err or b"No such device" in aplay_err
         if code != 0 and not self._interrupt and pcm_missing:
             await self._connect(device, force=True)
-            await asyncio.sleep(2)
+            # Let the speaker finish its "connected" prompt before streaming, so
+            # the audio doesn't come out mixed with the announcement.
+            await asyncio.sleep(RECONNECT_DELAY)
             code, aplay_err, ffmpeg_err = await self._run_pipe(source, device)
 
         if self._interrupt:
