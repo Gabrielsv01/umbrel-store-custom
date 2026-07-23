@@ -1,0 +1,13 @@
+version: "3.7"
+
+services:
+  9router:
+    image: decolua/9router:latest
+    container_name: 9router
+    ports:
+      - "5151:20128"
+    environment:
+      - DATA_DIR=/app/data
+    volumes:
+      - ${APP_DATA_DIR}/data:/app/data
+    restart: unless-stopped

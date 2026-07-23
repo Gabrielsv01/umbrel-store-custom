@@ -1,0 +1,25 @@
+manifestVersion: 1
+id: gabriel-store-9router
+name: 9Router
+tagline: Self-hosted router / proxy manager
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-9router/icon.svg
+category: Networking
+version: "1.0.0"
+port: 5151
+description: >-
+  9Router is a self-hosted routing and proxy management tool.
+  Data is persisted under the app data directory.
+
+developer: decolua
+website: https://hub.docker.com/r/decolua/9router
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+releaseNotes: >-
+  First version of the 9Router app for Umbrel.
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
