@@ -4,7 +4,7 @@ name: Bluetooth API Manager
 tagline: Manage Bluetooth devices, stream data and control them over an API
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-bluetooh-api-manager/icon.svg
 category: Utilities
-version: "1.5.10"
+version: "1.5.11"
 port: 5157
 description: >-
   Bluetooth API Manager gives you a single place to see and control the

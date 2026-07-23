@@ -4,7 +4,7 @@ function fmtTime(ts) {
   return new Date(ts * 1000).toLocaleTimeString();
 }
 
-const LEVELS = ["all", "info", "warn", "error"];
+const LEVELS = ["all", "debug", "info", "warn", "error"];
 
 export default function Logs({ log }) {
   const [level, setLevel] = useState("all");

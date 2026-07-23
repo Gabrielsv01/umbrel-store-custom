@@ -24,7 +24,13 @@ export function useEventStream() {
       };
       ws.onmessage = (msg) => {
         const event = JSON.parse(msg.data);
-        setLog((prev) => [...prev.slice(-499), event]);
+        // Keep high-frequency telemetry out of the log: device_update (once per
+        // second per device) and gatt_data have dedicated views (Devices / Live
+        // Data), and would otherwise flood the log and evict the audio/error
+        // events we actually investigate.
+        if (event.type !== "device_update" && event.type !== "gatt_data") {
+          setLog((prev) => [...prev.slice(-499), event]);
+        }
 
         switch (event.type) {
           case "device_update":

@@ -145,9 +145,11 @@ select {
 .logline { display: flex; gap: 0.6rem; padding: 0.15rem 0; font-size: 0.78rem; }
 .logline .time { color: var(--muted); flex: 0 0 auto; }
 .logline .lvl { flex: 0 0 1rem; text-align: center; font-weight: 700; }
+.logline .lvl.debug { color: var(--muted); opacity: 0.55; }
 .logline .lvl.info { color: var(--muted); }
 .logline .lvl.warn { color: var(--warn); }
 .logline .lvl.error { color: var(--err); }
+.logline.debug { opacity: 0.75; }
 .logline .type { flex: 0 0 11rem; color: var(--accent); }
 .logline .payload { color: var(--muted); word-break: break-all; }
 .logline.error .type { color: var(--err); }

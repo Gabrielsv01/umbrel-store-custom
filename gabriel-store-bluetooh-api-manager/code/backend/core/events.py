@@ -17,13 +17,29 @@ from typing import Any, AsyncIterator, Deque, Dict, Optional
 from .config import settings
 
 logger = logging.getLogger("btmgr.events")
-_LOG_LEVELS = {"info": logging.INFO, "warn": logging.WARNING, "error": logging.ERROR}
+_LOG_LEVELS = {
+    "debug": logging.DEBUG, "info": logging.INFO,
+    "warn": logging.WARNING, "error": logging.ERROR,
+}
+
+# High-frequency telemetry that would otherwise flood the bounded history and
+# evict the events we actually investigate (audio, errors, connects). We DON'T
+# store these in the main history/log; we keep only the LATEST event per
+# identity so a fresh subscriber can still rebuild the live view on connect.
+# Every update is still delivered live to current subscribers, and still counted
+# in stats. Maps a type to a function extracting its identity from the payload.
+_COALESCED = {
+    "device_update": lambda d: (d.get("device") or {}).get("address"),
+}
 
 
 class EventBus:
     def __init__(self, history: int = 500) -> None:
         self._subscribers: set[asyncio.Queue] = set()
         self._history: Deque[Dict[str, Any]] = deque(maxlen=history)
+        # Latest coalesced telemetry event per (type, identity) — replayed to new
+        # subscribers so the device list is populated without flooding the log.
+        self._latest: Dict[tuple, Dict[str, Any]] = {}
         self._seq = 0
         self._started = time.time()
         self._by_type: Counter = Counter()
@@ -47,10 +63,17 @@ class EventBus:
         """Publish an event to all current subscribers. Non-blocking."""
         level = level or self._infer_level(type_)
         event = self._make_event(type_, level, data)
-        self._history.append(event)
         self._by_type[type_] += 1
         self._by_level[level] += 1
-        logger.log(_LOG_LEVELS.get(level, logging.INFO), "%s %s", type_, data)
+        key_fn = _COALESCED.get(type_)
+        if key_fn is None:
+            self._history.append(event)
+            logger.log(_LOG_LEVELS.get(level, logging.INFO), "%s %s", type_, data)
+        else:
+            # Keep only the latest per identity; log at DEBUG so `docker logs`
+            # isn't flooded with per-second discovery telemetry either.
+            self._latest[(type_, key_fn(data))] = event
+            logger.debug("%s %s", type_, data)
         for queue in list(self._subscribers):
             # Drop for slow consumers rather than blocking the producer.
             try:
@@ -60,7 +83,16 @@ class EventBus:
         return event
 
     def history(self) -> list[Dict[str, Any]]:
+        """Meaningful events only (coalesced telemetry excluded), for the Logs
+        tab and polling clients — this is what you actually investigate."""
         return list(self._history)
+
+    def replay(self) -> list[Dict[str, Any]]:
+        """What a new subscriber gets: the latest telemetry snapshots (so the
+        live device list rebuilds instantly) plus the meaningful history,
+        ordered by sequence."""
+        events = list(self._latest.values()) + list(self._history)
+        return sorted(events, key=lambda e: e["seq"])
 
     def stats(self) -> Dict[str, Any]:
         return {
@@ -72,8 +104,8 @@ class EventBus:
 
     async def subscribe(self) -> AsyncIterator[Dict[str, Any]]:
         """Yield events as they arrive. Replays recent history first."""
-        queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
-        for event in self._history:
+        queue: asyncio.Queue = asyncio.Queue(maxsize=2000)
+        for event in self.replay():
             queue.put_nowait(event)
         self._subscribers.add(queue)
         try:

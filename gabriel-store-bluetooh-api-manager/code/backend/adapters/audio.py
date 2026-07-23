@@ -18,12 +18,21 @@ from typing import Any, Dict, List, Optional
 from ..core.events import bus
 from .bluetooth import ble
 
-# Duration of the throwaway "warm-up" silence played on a cold A2DP link before
-# the real audio (see _warm_up). On some speakers (Echo/Alexa) the FIRST aplay
-# open after a (re)connect glitches its output while a second, separate open is
-# clean — so we sacrifice this silent open and the real track comes out clean.
+# Duration of the throwaway "warm-up" silence played to absorb the FIRST-open
+# glitch on some speakers (Echo/Alexa): the first aplay open after a (re)connect
+# glitches its output while a second, separate open is clean — so we sacrifice
+# this silent open and the real track comes out clean. Used on recovery re-prime.
 # Env-tunable (kept as AUDIO_RECONNECT_DELAY for backward compatibility).
 WARMUP_SECONDS = float(os.getenv("AUDIO_RECONNECT_DELAY", "1.5"))
+
+# Longer silent lead-in for a COLD link. A short glitch-absorbing warm-up isn't
+# enough when the speaker is asleep in standby: Echo/Alexa keep the ACL link up
+# (so `connect` no-ops) and aplay reports success even though the speaker's amp
+# is still powering up — so the real track plays into a still-waking speaker and
+# is lost, yet the system sees "finished" with no error. We stream this many
+# seconds of silence on a cold link to cover the wake-from-standby latency, so
+# the real track lands on an awake, rendering speaker. Env-tunable.
+COLD_WARMUP_SECONDS = float(os.getenv("AUDIO_COLD_WARMUP", "4.0"))
 
 # The A2DP transport often just needs a moment to come up after a connect. We
 # wait this long and retry before falling back to a forced reconnect (which
@@ -47,6 +56,11 @@ _LINK_NOT_READY = (
 
 def _link_not_ready(aplay_err: bytes) -> bool:
     return any(m in aplay_err for m in _LINK_NOT_READY)
+
+
+def _snip(err: bytes, n: int = 200) -> str:
+    """Trim a subprocess error blob for inclusion in a diagnostic event."""
+    return (err or b"").decode(errors="replace").strip()[-n:]
 
 
 class AudioService:
@@ -121,7 +135,10 @@ class AudioService:
             await self._play_one(item)
             self._current = None
 
-    async def _connect(self, device: str, force: bool = False) -> None:
+    async def _connect(self, device: str, force: bool = False) -> str:
+        """Ensure the speaker is connected. Returns a short status for
+        diagnostics: "already" (fast-path hit — was connected at ACL level),
+        "connected", or "failed"."""
         # Fast path: if already connected, skip — reconnecting makes some
         # speakers (Echo/Alexa) re-announce "connected". `force` runs connect
         # anyway, which also brings up the A2DP profile bluez-alsa needs.
@@ -132,7 +149,7 @@ class AudioService:
             )
             out, _ = await info.communicate()
             if "connected: yes" in (out or b"").decode(errors="replace").lower():
-                return
+                return "already"
 
         proc = await asyncio.create_subprocess_exec(
             "bluetoothctl", "connect", device,
@@ -140,8 +157,11 @@ class AudioService:
         )
         out, _ = await proc.communicate()
         text = (out or b"").decode(errors="replace")
-        if "successful" not in text.lower() and "already" not in text.lower():
-            bus.publish("audio_connect", device=device, detail=text.strip()[-200:])
+        ok = "successful" in text.lower() or "already" in text.lower()
+        if not ok:
+            bus.publish("audio_connect", level="warn", device=device,
+                        detail=text.strip()[-200:])
+        return "connected" if ok else "failed"
 
     async def _pipe(self, ffmpeg_in: List[str], device: str) -> tuple[int, bytes, bytes]:
         """Decode `ffmpeg_in` and stream it to the speaker's bluez-alsa PCM."""
@@ -179,22 +199,32 @@ class AudioService:
         # front; aplay paces the actual playback on the A2DP PCM.
         return await self._pipe(["-re", "-i", source], device)
 
-    async def _warm_up(self, device: str) -> tuple[int, bytes, bytes]:
+    async def _warm_up(self, device: str, seconds: float) -> tuple[int, bytes, bytes]:
         # Throwaway silent open: on some speakers the FIRST aplay open after a
         # (re)connect glitches its output, while a second, separate open is
         # clean. Streaming generated silence here takes that hit inaudibly so
-        # the real track (the next open) comes out clean.
+        # the real track (the next open) comes out clean. On a cold link the
+        # longer duration also covers the speaker's wake-from-standby latency.
         return await self._pipe(
             ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
-             "-t", str(WARMUP_SECONDS)], device)
+             "-t", str(seconds)], device)
 
-    async def _prime(self, device: str) -> None:
+    async def _prime(self, device: str, seconds: float, kind: str) -> None:
         """Warm the link with a silent open; if A2DP isn't up yet, settle and
-        try once more so the real open lands on a ready, already-primed link."""
-        code, aplay_err, _ = await self._warm_up(device)
-        if code != 0 and not self._interrupt and _link_not_ready(aplay_err):
-            await asyncio.sleep(A2DP_SETTLE)
-            await self._warm_up(device)
+        try once more so the real open lands on a ready, already-primed link.
+        `kind` ("cold"/"recovery") is for diagnostics only."""
+        for attempt in (1, 2):
+            t0 = time.monotonic()
+            code, aplay_err, _ = await self._warm_up(device, seconds)
+            bus.publish("audio_prime", level="debug", device=device, kind=kind,
+                        attempt=attempt, seconds=seconds, code=code,
+                        link_ready=not _link_not_ready(aplay_err),
+                        ms=round((time.monotonic() - t0) * 1000),
+                        detail=_snip(aplay_err))
+            if not (code != 0 and not self._interrupt and _link_not_ready(aplay_err)):
+                return
+            if attempt == 1:
+                await asyncio.sleep(A2DP_SETTLE)
 
     async def _play_one(self, item: Dict[str, Any]) -> None:
         source, device = item["source"], item["device"]
@@ -210,41 +240,67 @@ class AudioService:
             await ble.resume_scan()
 
     async def _play_locked(self, item: Dict[str, Any], source: str, device: str) -> None:
-        await self._connect(device)
+        t_begin = time.monotonic()
+        # Cold link = first play, or first after the warm window expired.
+        cold = device != self._warm_device or time.monotonic() > self._warm_until
+        warm_left = round(max(0.0, self._warm_until - time.monotonic()), 1)
+
+        conn = await self._connect(device)
+        # Diagnostic snapshot of the decision inputs — the data we need to tell a
+        # swallowed cold play apart from a genuine failure after the fact.
+        bus.publish("audio_play_begin", level="debug", source=source, device=device,
+                    cold=cold, warm_left_s=warm_left, connect=conn,
+                    queue_length=len(self._pending))
         bus.publish("audio_started", source=source, device=device,
                     queue_length=len(self._pending))
 
-        # Cold link (first play, or first after the warm window expired): the
-        # first PCM open glitches on some speakers, so open once on throwaway
-        # silence to take that hit, then stream the real track on a clean second
-        # open. Plays within the warm window reuse the live link and skip this.
-        cold = device != self._warm_device or time.monotonic() > self._warm_until
+        # Cold link: the first PCM open glitches on some speakers AND the speaker
+        # may still be waking from standby, so open once on throwaway silence
+        # (long enough to cover the wake) before streaming the real track. Plays
+        # within the warm window reuse the live link and skip this.
         if cold and not self._interrupt:
-            await self._prime(device)
+            await self._prime(device, COLD_WARMUP_SECONDS, kind="cold")
 
         if self._interrupt:
             return
 
+        attempts = 1
+        t0 = time.monotonic()
         code, aplay_err, ffmpeg_err = await self._run_pipe(source, device)
+        bus.publish("audio_track", level="debug", device=device, attempt=attempts,
+                    code=code, link_ready=not _link_not_ready(aplay_err),
+                    ms=round((time.monotonic() - t0) * 1000),
+                    aplay_err=_snip(aplay_err), ffmpeg_err=_snip(ffmpeg_err))
 
         if code != 0 and not self._interrupt and _link_not_ready(aplay_err):
             # A2DP still not up — force a real reconnect (may make the speaker
             # chime), re-prime, and try the real track once more.
+            bus.publish("audio_reconnect", level="warn", device=device,
+                        reason=_snip(aplay_err) or f"aplay exit {code}")
             await self._connect(device, force=True)
-            await self._prime(device)
+            await self._prime(device, WARMUP_SECONDS, kind="recovery")
+            attempts = 2
+            t0 = time.monotonic()
             code, aplay_err, ffmpeg_err = await self._run_pipe(source, device)
+            bus.publish("audio_track", level="debug", device=device, attempt=attempts,
+                        code=code, link_ready=not _link_not_ready(aplay_err),
+                        ms=round((time.monotonic() - t0) * 1000),
+                        aplay_err=_snip(aplay_err), ffmpeg_err=_snip(ffmpeg_err))
 
         if self._interrupt:
             return  # skip/stop already published its own event
+        total_ms = round((time.monotonic() - t_begin) * 1000)
         if code == 0:
             # Keep the link warm for a grace window so a nearby next play skips
             # the warm-up (and its reconnect chime).
             self._warm_device = device
             self._warm_until = time.monotonic() + WARM_GRACE_SECONDS
-            bus.publish("audio_finished", source=source, device=device)
+            bus.publish("audio_finished", source=source, device=device,
+                        from_cold=cold, attempts=attempts, total_ms=total_ms)
         else:
-            msg = (aplay_err or ffmpeg_err).decode(errors="replace")[-400:]
+            msg = _snip(aplay_err or ffmpeg_err, 400)
             bus.publish("error", where="audio", source=source, device=device,
+                        attempts=attempts, total_ms=total_ms,
                         message=msg or f"aplay exit {code}")
 
     async def _kill_current(self, interrupt: bool) -> None:

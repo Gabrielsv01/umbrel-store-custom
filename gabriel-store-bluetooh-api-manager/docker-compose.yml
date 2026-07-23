@@ -2,8 +2,8 @@ version: "3.7"
 services:
   bluetooth-api-manager:
     # Pre-built image pulled from Docker Hub (Umbrel does not build on-device).
-    # To rebuild locally: `docker build -t gabrielsv01/bluetooth-api-manager:1.5.10 ./code`
-    image: gabrielsv01/bluetooth-api-manager:1.5.10
+    # To rebuild locally: `docker build -t gabrielsv01/bluetooth-api-manager:1.5.11 ./code`
+    image: gabrielsv01/bluetooth-api-manager:1.5.11
     container_name: bluetooth-api-manager
     environment:
       - PORT=5157
@@ -15,11 +15,17 @@ services:
       # Auto-delete generated/uploaded audio older than this many days
       # (files referenced by a schedule are always kept).
       - AUDIO_RETENTION_DAYS=1
-      # Seconds of throwaway "warm-up" silence played on a cold A2DP link (first
-      # play / reconnect) before the real audio: the first PCM open glitches on
-      # some speakers, so this silent open takes the hit and the real track — a
-      # clean second open — comes out right. 1-2s is plenty.
+      # Seconds of throwaway "warm-up" silence used on a RECOVERY re-prime (after
+      # a forced reconnect): the first PCM open glitches on some speakers, so this
+      # silent open takes the hit and the real track — a clean second open — comes
+      # out right. 1-2s is plenty.
       - AUDIO_RECONNECT_DELAY=1.5
+      # Longer silent lead-in for a COLD A2DP link (first play, or first after the
+      # warm window expired). Covers the speaker's wake-from-standby latency:
+      # Echo/Alexa keep the link up while asleep, so a short warm-up isn't enough
+      # and the real track plays into a still-waking speaker (heard as "the first
+      # message didn't play"). Raise toward 5-6s if a first play is still swallowed.
+      - AUDIO_COLD_WARMUP=4.0
     # Host networking + privileged give the container direct access to the HCI
     # Bluetooth adapter. The app runs its OWN Bluetooth stack (bluetoothd,
     # bluez-alsa, obexd) so it is fully self-contained — no host audio server or
