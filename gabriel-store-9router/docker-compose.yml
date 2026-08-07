@@ -2,7 +2,7 @@ version: "3.7"
 
 services:
   9router:
-    image: decolua/9router:latest
+    image: decolua/9router:0.5.50
     container_name: 9router
     ports:
       - "5151:20128"
