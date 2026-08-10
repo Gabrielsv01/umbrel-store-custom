@@ -1,0 +1,26 @@
+manifestVersion: 1
+id: gabriel-store-metube
+name: Metube
+tagline: Download videos from YouTube and other sites with metube
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-metube/icon.svg
+category: Utilities
+version: "1.0.0"
+port: 5152
+description: >-
+  This app allows you to download videos from YouTube and other sites using metube.
+
+developer: Gabriel Vieira
+website: https://github.com/Gabrielsv01/umbrel-store-custom
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+releaseNotes: >-
+  First version of the METUBE app for Umbrel.
+dependencies: []
+permissions:
+  - STORAGE_DOWNLOADS
+path: ""
+defaultUsername: ""
+defaultPassword: ""
