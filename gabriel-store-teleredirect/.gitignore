@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Segredos e estado local (nunca versionar)
+config.yaml
+string.session
+media_store.json
+bot_activity.log
+cache/

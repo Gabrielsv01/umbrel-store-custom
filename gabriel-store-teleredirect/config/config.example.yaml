@@ -1,0 +1,26 @@
+# Configurations for teleredirect
+# Copie este arquivo para config.yaml e preencha com seus valores reais.
+# Todo valor abaixo também pode ser definido via variável de ambiente
+# (TELETHON_API_ID, TELETHON_API_HASH, TELE_REDIRECT_FROM_BOT_ID,
+# TELE_REDIRECT_TO_GROUP_ID, TELE_REDIRECT_BASE_URL) — nesse caso elas têm
+# prioridade sobre o que estiver aqui.
+
+telethon:
+  api_id: 123456
+  api_hash: "seu_api_hash_aqui"
+
+# Bot e grupo (IDs numéricos) usados para o encaminhamento.
+forward:
+  from_bot_id: 1234567890
+  to_group_id: -1001122334455
+
+# URL base que o bot envia para o grupo apontando para o proxy de stream.
+# Use o IP da máquina onde a aplicação roda (visível na sua rede local).
+proxy:
+  base_url: "http://localhost:5153"
+
+# Opcional: por quanto tempo (segundos) uma mídia já encaminhada continua
+# disponível em cache local para quem estiver assistindo via /stream antes
+# de ser removida do disco. Padrão: 3600 (1 hora).
+cache:
+  retention_seconds: 3600

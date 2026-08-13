@@ -1,0 +1,24 @@
+version: "3.7"
+services:
+  teleredirect:
+    image: gabrielsv01/teleredirect:1.0.0
+    container_name: teleredirect
+    environment:
+      - PORT=5153
+      - TZ=${TZ:-UTC}
+      # Sobrescreve config/config.yaml sem editar o arquivo, se preferir:
+      # - TELETHON_API_ID=
+      # - TELETHON_API_HASH=
+      # - TELE_REDIRECT_FROM_BOT_ID=
+      # - TELE_REDIRECT_TO_GROUP_ID=
+      # - TELE_REDIRECT_BASE_URL=http://localhost:5153
+    ports:
+      - "5153:5153"
+    volumes:
+      # config/config.yaml precisa existir antes de subir o container
+      # (cp config/config.example.yaml config/config.yaml na raiz do projeto).
+      - ./config:/app/config
+      # Sessão do Telegram, estado das mídias, cache e log — persistem
+      # fora do container, sobrevivem a rebuilds/updates da imagem.
+      - ./data:/app/data
+    restart: unless-stopped

@@ -1,0 +1,6 @@
+telethon
+flask
+requests
+pyyaml
+qrcode[pil]
+imageio-ffmpeg

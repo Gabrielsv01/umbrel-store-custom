@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="TeleRedirect">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#29B6D8"/>
+      <stop offset="1" stop-color="#0B4C8C"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.4" r="0.65">
+      <stop offset="0" stop-color="#AEEBFF" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#AEEBFF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
+  </defs>
+
+  <!-- App tile -->
+  <rect x="0" y="0" width="512" height="512" rx="114" fill="url(#bg)"/>
+  <rect x="0" y="0" width="512" height="512" rx="114" fill="url(#glow)"/>
+
+  <!-- Motion trail behind the plane, hinting at the redirect/forward -->
+  <g fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="16" stroke-linecap="round">
+    <path d="M120 300 a 210 210 0 0 1 40 -158"/>
+    <path d="M96 232 a 264 264 0 0 1 66 -190"/>
+  </g>
+
+  <!-- Paper-plane glyph (send / forward), soft shadow pass -->
+  <g filter="url(#soft)" opacity="0.35" transform="translate(256,266) rotate(-8) scale(13.5) translate(-12.5,-12)">
+    <path d="M2,21 L23,12 L2,3 L2,10 L17,12 L2,14 Z" fill="#0B4C8C"/>
+  </g>
+
+  <!-- Paper-plane glyph (send / forward) -->
+  <g transform="translate(256,266) rotate(-8) scale(13.5) translate(-12.5,-12)">
+    <path d="M2,21 L23,12 L2,3 L2,10 L17,12 L2,14 Z" fill="#FFFFFF"/>
+  </g>
+</svg>

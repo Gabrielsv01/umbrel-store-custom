@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TeleRedirect – Biblioteca de Mídia</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 1rem; background: #0f172a; color: #e2e8f0; }
+        h1 { color: #38bdf8; }
+        .card { background: #1e293b; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+        .card video, .card img { width: 100%; border-radius: 6px; background: #000; }
+        .meta { color: #94a3b8; font-size: 0.85rem; margin-top: 0.5rem; word-break: break-all; }
+        .empty { color: #94a3b8; text-align: center; padding: 3rem; }
+        a.link { color: #38bdf8; word-break: break-all; }
+
+        .cache-bar { height: 6px; background: #0f172a; border-radius: 4px; overflow: hidden; margin-top: 0.5rem; }
+        .cache-bar__fill { height: 100%; width: 0%; background: #38bdf8; transition: width 0.3s ease; }
+        .cache-label { font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem; }
+        .wait-badge { display: inline-block; margin-top: 0.5rem; padding: 0.25rem 0.5rem; border-radius: 4px; background: #334155; color: #fbbf24; font-size: 0.8rem; }
+        .stream-warning { color: #fbbf24; font-size: 0.75rem; margin-top: 0.25rem; }
+        .error-badge { display: inline-block; margin-top: 0.5rem; color: #f87171; font-size: 0.8rem; }
+
+        .controls { margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .btn { padding: 0.35rem 0.75rem; border-radius: 6px; border: 1px solid #334155; background: #1e293b;
+               color: #e2e8f0; font-size: 0.8rem; cursor: pointer; }
+        .btn:hover { background: #334155; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-delete { border-color: #7f1d1d; color: #f87171; }
+        .btn-delete:hover { background: #7f1d1d; color: #fecaca; }
+        [hidden] { display: none !important; }
+    </style>
+</head>
+<body>
+    <h1>🎬 TeleRedirect – Biblioteca de Mídia</h1>
+    {% if items %}
+        {% for item in items %}
+        {% set src = "/stream/" + item.id + (item.ext if item.ext else '') %}
+        <div class="card media-card" data-media-id="{{ item.id }}">
+            <strong>{{ item.caption or item.name }}</strong>
+
+            {% if item.mime and item.mime.startswith('video') %}
+                <video controls preload="metadata" src="{{ src }}"></video>
+                <div class="cache-bar"><div class="cache-bar__fill"></div></div>
+                <div class="cache-label">Cache: carregando...</div>
+                <div class="wait-badge" hidden>⏳ Aguardando o cache alcançar o ponto pedido...</div>
+                <div class="stream-warning" hidden>⚠️ Este arquivo pode não permitir avançar livremente até o download terminar.</div>
+            {% elif item.mime and item.mime.startswith('image') %}
+                <img src="{{ src }}" alt="{{ item.name }}">
+            {% endif %}
+
+            <div class="error-badge" {% if item.state != 'error' %}hidden{% endif %}>
+                ❌ Erro no download{{ ': ' + item.error if item.error else '' }}
+            </div>
+
+            <div class="controls">
+                <button class="btn btn-pause" hidden>⏸️ Pausar</button>
+                <button class="btn btn-resume" hidden>▶️ Retomar</button>
+                <button class="btn btn-delete">🗑️ Excluir</button>
+            </div>
+
+            <div class="meta">
+                ID: {{ item.id }} ·
+                Tamanho: {{ '%.1f MB'|format(item.size / 1048576) if item.size else 'desconhecido' }} ·
+                {% if item.duration %}Duração: {{ '%d:%02d'|format((item.duration // 60)|int, (item.duration % 60)|int) }} · {% endif %}
+                Tipo: {{ item.mime }} ·
+                Estado: {{ item.state or 'desconhecido' }}
+                <br>
+                <a class="link" href="{{ src }}">{{ src }}</a>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty">
+            Nenhuma mídia salva ainda.<br>
+            <small>Quando o bot enviar um vídeo/arquivo, ele aparecerá aqui automaticamente.</small>
+        </div>
+    {% endif %}
+    <script src="{{ url_for('static', filename='player.js') }}" defer></script>
+</body>
+</html>
