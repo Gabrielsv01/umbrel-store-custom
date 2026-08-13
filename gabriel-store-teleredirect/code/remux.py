@@ -199,7 +199,7 @@ def assemble_sparse_preview_source(src_path, dst_path, up_to_bytes, moov_offset,
             os.remove(tmp_path)
 
 
-def remux_partial_with_moov_tail_to_mp4(src_path, dst_path, up_to_bytes, moov_offset, moov_bytes, timeout=120):
+def remux_partial_with_moov_tail_to_mp4(src_path, dst_path, up_to_bytes, moov_offset, moov_bytes, timeout=300):
     """Como `remux_partial_to_mp4`, mas para um MP4 sem faststart cujo moov
     já foi obtido fora de ordem (ver assemble_sparse_preview_source) —
     monta o arquivo esparso com o moov na posição certa antes de remuxar,
@@ -215,7 +215,7 @@ def remux_partial_with_moov_tail_to_mp4(src_path, dst_path, up_to_bytes, moov_of
             os.remove(snapshot_path)
 
 
-def remux_partial_to_mp4(src_path, dst_path, up_to_bytes, timeout=120):
+def remux_partial_to_mp4(src_path, dst_path, up_to_bytes, timeout=300):
     """Como `remux_to_mp4`, mas opera sobre uma cópia congelada dos
     primeiros `up_to_bytes` de `src_path` — para gerar uma prévia web
     enquanto o download ainda está em andamento, sem remuxar um arquivo

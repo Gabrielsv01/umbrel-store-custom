@@ -1,6 +1,6 @@
 services:
   teleredirect:
-    image: gabrielsv01/teleredirect:1.0.2
+    image: gabrielsv01/teleredirect:1.0.3
     container_name: teleredirect
     environment:
       - PORT=5153
