@@ -6,6 +6,14 @@ IMAGE_NAME = teleredirect
 REGISTRY = gabrielsv01
 FULL_IMAGE_NAME = $(REGISTRY)/$(IMAGE_NAME)
 
+# Plataformas do release publicado no registry: Umbrel roda tanto em ARM
+# (Raspberry Pi) quanto em x86, então a imagem publicada precisa cobrir as
+# duas — uma imagem só-arm64 não funcionaria num Umbrel x86, e vice-versa.
+# Precisa de `docker buildx` + `--push` (não `docker build` comum): um
+# manifest multi-plataforma não existe como imagem local única, só depois
+# de publicado no registry.
+PLATFORMS = linux/amd64,linux/arm64
+
 # Build and start containers in detached mode
 up:
 	docker-compose up -d --build
@@ -14,14 +22,18 @@ up:
 build:
 	docker-compose build
 
-# Build image with version tag
+# Build local (só a plataforma nativa desta máquina) pra testar antes de
+# publicar — NÃO é multi-arch, é só pra rodar/inspecionar localmente.
 build-version:
 ifndef VERSION
 	$(error VERSION is required. Usage: make build-version VERSION=1.2.3)
 endif
 	docker build -t $(IMAGE_NAME):$(VERSION) -t $(IMAGE_NAME):latest .
 
-# Tag image with version
+# ATENÇÃO: tag-version/push-version publicam só a plataforma nativa desta
+# máquina (não multi-arch) — usar por engano depois de um `make release`
+# SUBSTITUIRIA o manifest multi-arch por uma imagem de uma plataforma só.
+# Pra publicar de verdade, use `make release`.
 tag-version:
 ifndef VERSION
 	$(error VERSION is required. Usage: make tag-version VERSION=1.2.3)
@@ -34,20 +46,16 @@ push-version: tag-version
 	docker push $(FULL_IMAGE_NAME):$(VERSION)
 	docker push $(FULL_IMAGE_NAME):latest
 
-# Complete release: build, tag and push
-# Faz tudo: build + tag + push em um comando
+# Release completo: build multi-arch (amd64 + arm64) + push num só comando.
 # make release VERSION=1.0.0
 release:
 ifndef VERSION
 	$(error VERSION is required. Usage: make release VERSION=1.2.3)
 endif
-	@echo "Building version $(VERSION)..."
-	docker build -t $(IMAGE_NAME):$(VERSION) -t $(IMAGE_NAME):latest .
-	docker tag $(IMAGE_NAME):latest $(FULL_IMAGE_NAME):$(VERSION)
-	docker tag $(IMAGE_NAME):latest $(FULL_IMAGE_NAME):latest
-	@echo "Pushing version $(VERSION) to registry..."
-	docker push $(FULL_IMAGE_NAME):$(VERSION)
-	docker push $(FULL_IMAGE_NAME):latest
+	@echo "Building and pushing $(FULL_IMAGE_NAME):$(VERSION) for $(PLATFORMS)..."
+	docker buildx build --platform $(PLATFORMS) \
+		-t $(FULL_IMAGE_NAME):$(VERSION) -t $(FULL_IMAGE_NAME):latest \
+		--push .
 	@echo "Release $(VERSION) completed!"
 
 # Start existing containers
