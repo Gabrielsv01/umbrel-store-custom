@@ -39,12 +39,16 @@ PARTIAL_REMUX_MIN_NEW_BYTES = 8 * 1024 * 1024
 # buscar o moov fora de ordem por offset (ver find_moov_expected_offset)
 # pra viabilizar prévia parcial DURANTE o download, não só depois que ele
 # termina. MOOV_TAIL_MAX_BYTES limita o tamanho aceito do box moov em si
-# (sanidade — moov real raramente passa de poucos MB). MOOV_TAIL_MAX_TOTAL_SIZE
-# desliga a técnica pra arquivos muito grandes: o remux final produzido a
-# partir do arquivo esparso montado não tem garantia de preservar o buraco
-# esparso no disco, então o pior caso de uso de disco temporário escala com
-# o tamanho total do arquivo.
-MOOV_TAIL_MAX_BYTES = 4 * 1024 * 1024
+# (sanidade — protege contra um offset errado apontando pra um "size"
+# gigante/lixo). Um moov real cresce com a quantidade de samples/frames:
+# um vídeo de ~1h já passou de 8MB aqui (visto em produção, via o log de
+# "Offset calculado... não bateu" que esse limite gerava com 4MB) — por
+# isso a folga generosa. MOOV_TAIL_MAX_TOTAL_SIZE desliga a técnica pra
+# arquivos muito grandes: o remux final produzido a partir do arquivo
+# esparso montado não tem garantia de preservar o buraco esparso no disco,
+# então o pior caso de uso de disco temporário escala com o tamanho total
+# do arquivo.
+MOOV_TAIL_MAX_BYTES = 32 * 1024 * 1024
 MOOV_TAIL_MAX_TOTAL_SIZE = 3 * 1024 * 1024 * 1024
 
 # Intervalo de atualização da mensagem de status enviada ao grupo
