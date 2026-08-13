@@ -1,19 +1,38 @@
 import os
 import time
 import asyncio
+import logging
 import mimetypes
 from flask import Flask, Response, request, render_template, jsonify, stream_with_context, redirect, url_for
+import config
+
+# Configurado aqui (o entrypoint de verdade, seja `python app.py`, `uv run`
+# ou gunicorn `app:app`) e não em bot_manager.py — assim cobre também os
+# próprios logs do Flask/Werkzeug (ex.: traceback de um 500), não só o
+# BotManager. Um único arquivo + stdout: dá pra consultar via /api/logs ou
+# via `docker logs`, sem precisar acessar o disco do host.
+LOG_PATH = os.path.join(config.DATA_PATH, 'bot_activity.log')
+_log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
+_file_handler = logging.FileHandler(LOG_PATH)
+_file_handler.setFormatter(_log_formatter)
+_stream_handler = logging.StreamHandler()
+_stream_handler.setFormatter(_log_formatter)
+logging.basicConfig(level=logging.INFO, handlers=[_file_handler, _stream_handler])
+
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError
 from bot_manager import BotManager
-import config
 import remux
 
 app = Flask(__name__)
 
 CACHE_DIR = os.path.join(config.DATA_PATH, 'cache')
 SESSION_PATH = os.path.join(config.DATA_PATH, 'string.session')
+
+# Máximo de bytes lidos do FINAL do arquivo de log — evita carregar um log
+# gigante inteiro na memória; suficiente pra várias milhares de linhas.
+MAX_LOG_TAIL_BYTES = 2 * 1024 * 1024
 
 
 def _has_saved_session():
@@ -40,7 +59,11 @@ _login_loop = asyncio.new_event_loop()
 def _require_session():
     if bot_manager is not None:
         return None
-    if request.path in LOGIN_PATHS or request.path.startswith('/static'):
+    # /api/logs não depende do BotManager (só lê um arquivo) — liberado sem
+    # sessão de propósito, pra poder diagnosticar problemas no próprio
+    # login/setup (ex.: o 500 de config inválida que esse endpoint existe
+    # justamente pra investigar).
+    if request.path in LOGIN_PATHS or request.path == '/api/logs' or request.path.startswith('/static'):
         return None
     return redirect(url_for('login_index'))
 
@@ -73,6 +96,7 @@ def login_send_code():
         _login_run(client.connect())
         _login_run(client.send_code_request(phone))
     except Exception as e:
+        app.logger.exception('Falha ao enviar código de login')
         return render_template('login.html', step='phone', error=f'Falha ao enviar o código: {e}')
 
     _login_state['client'] = client
@@ -92,6 +116,7 @@ def login_sign_in():
     except SessionPasswordNeededError:
         return render_template('login.html', step='password')
     except Exception as e:
+        app.logger.exception('Falha ao validar código de login')
         return render_template('login.html', step='code', error=f'Código inválido ou expirado: {e}')
 
     return _finish_login(client)
@@ -107,6 +132,7 @@ def login_password():
     try:
         _login_run(client.sign_in(password=pwd))
     except Exception as e:
+        app.logger.exception('Falha ao validar senha 2FA de login')
         return render_template('login.html', step='password', error=f'Senha incorreta: {e}')
 
     return _finish_login(client)
@@ -170,6 +196,7 @@ def api_pause_media(msg_id):
     try:
         ok = _run_on_bot_loop(bot_manager.pause_download(msg_id))
     except Exception:
+        app.logger.exception('Falha ao pausar %s', msg_id)
         return jsonify({'ok': False, 'error': 'falha ao pausar (timeout ou erro interno)'}), 500
     return jsonify({'ok': ok})
 
@@ -179,6 +206,7 @@ def api_resume_media(msg_id):
     try:
         ok = _run_on_bot_loop(bot_manager.resume_download(msg_id))
     except Exception:
+        app.logger.exception('Falha ao retomar %s', msg_id)
         return jsonify({'ok': False, 'error': 'falha ao retomar (timeout ou erro interno)'}), 500
     return jsonify({'ok': ok})
 
@@ -188,6 +216,7 @@ def api_delete_media(msg_id):
     try:
         ok = _run_on_bot_loop(bot_manager.delete_media(msg_id))
     except Exception:
+        app.logger.exception('Falha ao excluir %s', msg_id)
         return jsonify({'ok': False, 'error': 'falha ao excluir (timeout ou erro interno)'}), 500
     return jsonify({'ok': ok})
 
@@ -202,6 +231,33 @@ def api_diagnostics():
         'can_remux': bot_manager.can_remux,
         'ffmpeg_path': remux._ffmpeg_binary(),
     })
+
+
+# ---------------------------------------------------------------
+# Cauda do log (BotManager + Flask/Werkzeug, ver configuração de logging
+# no topo do arquivo), pra diagnosticar sem precisar de `docker logs`/SSH.
+# ?lines=N controla quantas linhas (padrão 200, máx. 5000).
+# ---------------------------------------------------------------
+@app.route('/api/logs')
+def api_logs():
+    try:
+        wanted_lines = int(request.args.get('lines', 200))
+    except (TypeError, ValueError):
+        wanted_lines = 200
+    wanted_lines = max(1, min(wanted_lines, 5000))
+
+    if not os.path.exists(LOG_PATH):
+        return Response('', mimetype='text/plain')
+
+    with open(LOG_PATH, 'rb') as f:
+        f.seek(0, os.SEEK_END)
+        size = f.tell()
+        f.seek(max(0, size - MAX_LOG_TAIL_BYTES))
+        data = f.read()
+
+    text_lines = data.decode('utf-8', errors='replace').splitlines()
+    tail = text_lines[-wanted_lines:]
+    return Response('\n'.join(tail) + '\n', mimetype='text/plain')
 
 
 # ---------------------------------------------------------------

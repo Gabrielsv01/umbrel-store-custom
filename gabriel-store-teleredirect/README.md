@@ -163,6 +163,17 @@ docker compose up -d --build
 
 ---
 
+## Diagnóstico
+
+Dois endpoints somente-leitura, sem depender de acesso SSH/`docker logs` ao host:
+
+- **`GET /api/logs?lines=N`** (texto puro, padrão 200 linhas, máx. 5000) — cauda de `data/bot_activity.log`, que recebe tanto a atividade do `BotManager` quanto qualquer erro do próprio Flask/Werkzeug (a configuração de logging fica centralizada no topo do `app.py`, cobrindo o processo inteiro). Funciona mesmo **sem sessão ainda** — é justamente pra diagnosticar problemas no próprio login/setup.
+- **`GET /api/diagnostics`** — confirma se o `ffmpeg` (via `imageio-ffmpeg`) está disponível nesta instância, e o caminho do binário usado.
+
+Ambos não têm autenticação própria (mesmo modelo do resto do app — pensado pra rede local/Umbrel, não pra internet aberta).
+
+---
+
 ## Pontos importantes / boas práticas
 
 | Recurso | Como está implementado | Observação |

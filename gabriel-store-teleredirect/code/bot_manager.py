@@ -14,22 +14,11 @@ import config
 import remux
 from media_store import MediaStore, RECEIVED, CACHING, READY, UPLOADING, FORWARDED, ERROR, PAUSED
 
+# Handlers (arquivo + stdout) configurados centralmente no logger RAIZ,
+# em app.py — o entrypoint real do processo. Este logger só precisa
+# existir; ele propaga pra raiz normalmente (comportamento padrão do
+# módulo logging), então cai no mesmo arquivo/stdout sem duplicar setup.
 logger = logging.getLogger('teleredirect')
-logger.setLevel(logging.INFO)
-if not logger.handlers:
-    # Configurado no logger próprio, não via logging.basicConfig() — isso
-    # configuraria o logger RAIZ do processo com só um FileHandler, sem
-    # handler de stdout, e como este módulo é importado assim que o Flask
-    # sobe, isso sequestraria também os logs do próprio Flask/Werkzeug
-    # (inclusive tracebacks de erro 500) só pro arquivo, nunca pro
-    # `docker logs`/terminal.
-    _formatter = logging.Formatter('%(asctime)s - %(message)s')
-    _file_handler = logging.FileHandler(os.path.join(config.DATA_PATH, 'bot_activity.log'))
-    _file_handler.setFormatter(_formatter)
-    _stream_handler = logging.StreamHandler()
-    _stream_handler.setFormatter(_formatter)
-    logger.addHandler(_file_handler)
-    logger.addHandler(_stream_handler)
 
 # Piso conservador de throughput pra estimar um timeout de download
 # proporcional ao tamanho do arquivo (LAN/DC do Telegram costuma ser bem
@@ -809,6 +798,11 @@ class BotManager:
 
         moov_offset = remux.find_moov_expected_offset(file_path)
         if moov_offset is None:
+            logger.info(
+                "Layout de %s não bate com ftyp->boxes->mdat->moov nos primeiros bytes; "
+                "sem prévia parcial pra este arquivo",
+                os.path.basename(file_path),
+            )
             return
 
         try:
@@ -824,12 +818,21 @@ class BotManager:
             return
 
         if len(header) < 8:
+            logger.info(
+                "Cabeçalho do moov adiantado de %s veio incompleto (offset %d, %d bytes) — sem prévia parcial",
+                os.path.basename(file_path), moov_offset, len(header),
+            )
             return
         size = int.from_bytes(header[0:4], 'big')
         fourcc = header[4:8]
         if fourcc != b'moov' or size <= 8 or size > MOOV_TAIL_MAX_BYTES:
             # Offset calculado não bateu com um moov de verdade (ou veio
             # maior do que o razoável) — não insiste a cada ciclo.
+            logger.info(
+                "Offset calculado (%d) pro moov de %s não bateu (fourcc=%r, size=%d) — "
+                "desistindo da prévia parcial pra este download",
+                moov_offset, os.path.basename(file_path), fourcc, size,
+            )
             open(absent_path, 'wb').close()
             return
 
@@ -846,6 +849,10 @@ class BotManager:
             return
 
         if len(moov_bytes) < size:
+            logger.info(
+                "Moov adiantado de %s veio incompleto (%d de %d bytes esperados) — sem prévia parcial",
+                os.path.basename(file_path), len(moov_bytes), size,
+            )
             return
 
         tmp_path = tail_path + '.tmp'

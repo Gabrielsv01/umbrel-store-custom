@@ -88,6 +88,12 @@ class AppLoginFlowTests(unittest.TestCase):
         resp = self.client.get('/api/media', follow_redirects=False)
         self.assertEqual(resp.status_code, 302)
 
+    def test_api_logs_is_reachable_without_session(self):
+        # /api/logs não depende do BotManager — precisa funcionar mesmo sem
+        # sessão, já que é justamente pra diagnosticar problemas no login.
+        resp = self.client.get('/api/logs', follow_redirects=False)
+        self.assertEqual(resp.status_code, 200)
+
     def test_login_page_itself_is_reachable_without_session(self):
         resp = self.client.get('/login')
         self.assertEqual(resp.status_code, 200)
