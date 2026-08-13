@@ -1,4 +1,3 @@
-version: "3.7"
 services:
   teleredirect:
     image: gabrielsv01/teleredirect:1.0.0
@@ -15,10 +14,16 @@ services:
     ports:
       - "5153:5153"
     volumes:
+      # APP_DATA_DIR é injetada automaticamente pelo Umbrel, apontando pra
+      # pasta persistente do app (sobrevive a updates/reinstalls, é
+      # incluída em backups). Localmente (sem Umbrel), cai pra "." — a
+      # própria raiz do projeto — então continua usando ./config e ./data,
+      # os mesmos caminhos usados pela execução nativa (make run/serve).
+      #
       # config/config.yaml precisa existir antes de subir o container
       # (cp config/config.example.yaml config/config.yaml na raiz do projeto).
-      - ./config:/app/config
+      - ${APP_DATA_DIR:-.}/config:/app/config
       # Sessão do Telegram, estado das mídias, cache e log — persistem
       # fora do container, sobrevivem a rebuilds/updates da imagem.
-      - ./data:/app/data
+      - ${APP_DATA_DIR:-.}/data:/app/data
     restart: unless-stopped

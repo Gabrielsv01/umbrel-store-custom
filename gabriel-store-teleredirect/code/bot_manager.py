@@ -14,8 +14,22 @@ import config
 import remux
 from media_store import MediaStore, RECEIVED, CACHING, READY, UPLOADING, FORWARDED, ERROR, PAUSED
 
-logging.basicConfig(filename=os.path.join(config.DATA_PATH, 'bot_activity.log'), level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger('teleredirect')
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    # Configurado no logger próprio, não via logging.basicConfig() — isso
+    # configuraria o logger RAIZ do processo com só um FileHandler, sem
+    # handler de stdout, e como este módulo é importado assim que o Flask
+    # sobe, isso sequestraria também os logs do próprio Flask/Werkzeug
+    # (inclusive tracebacks de erro 500) só pro arquivo, nunca pro
+    # `docker logs`/terminal.
+    _formatter = logging.Formatter('%(asctime)s - %(message)s')
+    _file_handler = logging.FileHandler(os.path.join(config.DATA_PATH, 'bot_activity.log'))
+    _file_handler.setFormatter(_formatter)
+    _stream_handler = logging.StreamHandler()
+    _stream_handler.setFormatter(_formatter)
+    logger.addHandler(_file_handler)
+    logger.addHandler(_stream_handler)
 
 # Piso conservador de throughput pra estimar um timeout de download
 # proporcional ao tamanho do arquivo (LAN/DC do Telegram costuma ser bem

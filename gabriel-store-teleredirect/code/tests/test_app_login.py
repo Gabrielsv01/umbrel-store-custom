@@ -126,6 +126,17 @@ class AppLoginFlowTests(unittest.TestCase):
         self.assertIn(b'Falha ao enviar o c\xc3\xb3digo', resp.data)
         self.assertIn(b'name="phone"', resp.data)
 
+    def test_send_code_client_creation_failure_shows_error_instead_of_500(self):
+        # Regressão: _new_login_client() (que lê config.yaml/env vars) rodava
+        # fora do try/except — config ausente/inválido (ex.: telethon.api_id
+        # não numérico) virava um 500 cru em vez da página de erro estilizada.
+        with mock.patch('app._new_login_client', side_effect=TypeError("int() argument must be a string")):
+            resp = self.client.post('/login/send_code', data={'phone': '+5511999999999'})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b'Falha ao enviar o c\xc3\xb3digo', resp.data)
+        self.assertIn(b'name="phone"', resp.data)
+
     def test_sign_in_success_creates_bot_manager_and_redirects_to_index(self):
         fake = FakeLoginTelegramClient()
         app_module._login_state['client'] = fake

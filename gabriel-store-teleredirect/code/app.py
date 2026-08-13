@@ -68,8 +68,8 @@ def login_send_code():
     if not phone:
         return render_template('login.html', step='phone', error='Informe o telefone.')
 
-    client = _new_login_client()
     try:
+        client = _new_login_client()
         _login_run(client.connect())
         _login_run(client.send_code_request(phone))
     except Exception as e:
