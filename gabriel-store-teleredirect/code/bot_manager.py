@@ -227,6 +227,17 @@ class BotManager:
                 await self.client.connect()
                 if await self.client.is_user_authorized():
                     logger.info("Conectado e autorizado.")
+                    # StringSession não persiste o cache de entidades entre
+                    # reinícios (diferente de uma sessão em SQLite) — sem
+                    # isso, get_messages(chat_id, ...) na reconciliação
+                    # abaixo falha com "Could not find the input entity"
+                    # pro bot de origem, e qualquer download órfão em
+                    # andamento no momento do restart é perdido em vez de
+                    # retomado. get_dialogs() popula o cache pra todos os
+                    # diálogos existentes (bot de origem e grupo de
+                    # destino inclusos, já que necessariamente já
+                    # conversamos com os dois antes).
+                    await self.client.get_dialogs()
                     await self._reconcile_orphaned_downloads()
                     await self._start_listening()
                 else:

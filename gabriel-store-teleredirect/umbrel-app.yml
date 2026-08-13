@@ -4,7 +4,7 @@ name: TeleRedirect
 tagline: Cache and re-forward Telegram bot media, with a web player and live streaming
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-teleredirect/icon.svg
 category: media
-version: "1.0.3"
+version: "1.0.4"
 port: 5153
 description: >-
   TeleRedirect sits between a Telegram bot and a destination group/chat and

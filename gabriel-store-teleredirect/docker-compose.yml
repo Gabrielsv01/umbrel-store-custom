@@ -1,6 +1,7 @@
 services:
   teleredirect:
-    image: gabrielsv01/teleredirect:1.0.3
+    build:
+      context: ./code/Dockerfile
     container_name: teleredirect
     environment:
       - PORT=5153
