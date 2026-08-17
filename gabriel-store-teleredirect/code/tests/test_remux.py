@@ -1,3 +1,4 @@
+import glob
 import json
 import os
 import shutil
@@ -12,6 +13,15 @@ import remux
 
 def _mp4_box(fourcc, body=b''):
     return struct.pack('>I', 8 + len(body)) + fourcc + body
+
+
+def _leftover_siblings(dst_path):
+    """Lista arquivos irmãos de `dst_path` (tmp/snapshot intermediários) —
+    os nomes agora incluem um sufixo aleatório (ver
+    remux._unique_sibling_path), então não dá mais pra checar um nome
+    fixo como antes; qualquer arquivo cujo nome comece com `dst_path + '.'`
+    e não seja o próprio destino é lixo que devia ter sido limpo."""
+    return [p for p in glob.glob(dst_path + '.*') if p != dst_path]
 
 
 class IsMatroskaTests(unittest.TestCase):
@@ -241,7 +251,7 @@ class AssembleSparsePreviewSourceTests(unittest.TestCase):
         with open(self.src, 'wb') as f:
             f.write(b'P' * 100)
         remux.assemble_sparse_preview_source(self.src, self.dst, 100, 200, _mp4_box(b'moov', b'\x00' * 8))
-        self.assertFalse(os.path.exists(self.dst + '.tmp'))
+        self.assertEqual(_leftover_siblings(self.dst), [])
 
 
 class RemuxPartialWithMoovTailTests(unittest.TestCase):
@@ -275,7 +285,7 @@ class RemuxPartialWithMoovTailTests(unittest.TestCase):
 
         self.assertTrue(os.path.exists(self.dst))
         self.assertNotEqual(seen_inputs[0], self.src)  # remuxou o arquivo montado, não o cru
-        self.assertFalse(os.path.exists(self.dst + '.src-snapshot'))
+        self.assertEqual(_leftover_siblings(self.dst), [])
 
     @mock.patch('remux.subprocess.run')
     def test_failure_cleans_up_snapshot(self, mock_run):
@@ -288,7 +298,7 @@ class RemuxPartialWithMoovTailTests(unittest.TestCase):
                 os.path.getsize(self.src) + 2000, moov_bytes,
             )
 
-        self.assertFalse(os.path.exists(self.dst + '.src-snapshot'))
+        self.assertEqual(_leftover_siblings(self.dst), [])
 
 
 class RemuxToMp4Tests(unittest.TestCase):
@@ -315,14 +325,39 @@ class RemuxToMp4Tests(unittest.TestCase):
         remux.remux_to_mp4(self.src, self.dst)
 
         self.assertTrue(os.path.exists(self.dst))
-        self.assertFalse(os.path.exists(self.dst + '.tmp'))
+        self.assertEqual(_leftover_siblings(self.dst), [])
         with open(self.dst, 'rb') as f:
             self.assertEqual(f.read(), b'mp4 remuxado fake')
 
     @mock.patch('remux.subprocess.run')
+    def test_two_calls_to_same_destination_use_different_tmp_files(self, mock_run):
+        # Regressão: a prévia parcial e o remux final podem legitimamente
+        # mirar o mesmo dst_path ao mesmo tempo (prévia em andamento quando
+        # o download termina). Com um nome de tmp fixo, um dos dois apagar
+        # seu próprio tmp no `finally` derruba o outro no meio do segundo
+        # passe do ffmpeg ("Unable to re-open ... for shifting data",
+        # visto em produção) — daí cada chamada precisar do seu próprio tmp.
+        seen_tmp_dsts = []
+
+        def fake_run(cmd, **kwargs):
+            tmp_dst = cmd[cmd.index('-f') + 2]
+            seen_tmp_dsts.append(tmp_dst)
+            with open(tmp_dst, 'wb') as f:
+                f.write(b'x')
+            return subprocess.CompletedProcess(cmd, 0, stdout=b'', stderr=b'')
+
+        mock_run.side_effect = fake_run
+
+        remux.remux_to_mp4(self.src, self.dst)
+        remux.remux_to_mp4(self.src, self.dst)
+
+        self.assertEqual(len(seen_tmp_dsts), 2)
+        self.assertNotEqual(seen_tmp_dsts[0], seen_tmp_dsts[1])
+
+    @mock.patch('remux.subprocess.run')
     def test_command_uses_stream_copy_no_reencode(self, mock_run):
         def fake_run(cmd, **kwargs):
-            with open(self.dst + '.tmp', 'wb') as f:
+            with open(cmd[cmd.index('-f') + 2], 'wb') as f:
                 f.write(b'x')
             return subprocess.CompletedProcess(cmd, 0, stdout=b'', stderr=b'')
 
@@ -337,7 +372,7 @@ class RemuxToMp4Tests(unittest.TestCase):
     @mock.patch('remux.subprocess.run')
     def test_failure_raises_and_leaves_no_partial_output(self, mock_run):
         def fake_run(cmd, **kwargs):
-            with open(self.dst + '.tmp', 'wb') as f:
+            with open(cmd[cmd.index('-f') + 2], 'wb') as f:
                 f.write(b'saida parcial de uma falha')
             return subprocess.CompletedProcess(cmd, 1, stdout=b'', stderr=b'erro fatal simulado')
 
@@ -347,7 +382,7 @@ class RemuxToMp4Tests(unittest.TestCase):
             remux.remux_to_mp4(self.src, self.dst)
 
         self.assertFalse(os.path.exists(self.dst))
-        self.assertFalse(os.path.exists(self.dst + '.tmp'))
+        self.assertEqual(_leftover_siblings(self.dst), [])
 
     @mock.patch('remux.subprocess.run', side_effect=subprocess.TimeoutExpired(cmd='ffmpeg', timeout=1))
     def test_timeout_propagates_without_partial_output(self, mock_run):
@@ -378,7 +413,7 @@ class SplitSegmentToMp4Tests(unittest.TestCase):
         remux.split_segment_to_mp4(self.src, self.dst, start_seconds=10, duration_seconds=5)
 
         self.assertTrue(os.path.exists(self.dst))
-        self.assertFalse(os.path.exists(self.dst + '.tmp'))
+        self.assertEqual(_leftover_siblings(self.dst), [])
 
     @mock.patch('remux.subprocess.run')
     def test_uses_stream_copy_and_seeks_before_input(self, mock_run):
@@ -424,7 +459,7 @@ class SplitSegmentToMp4Tests(unittest.TestCase):
             remux.split_segment_to_mp4(self.src, self.dst, start_seconds=0, duration_seconds=5)
 
         self.assertFalse(os.path.exists(self.dst))
-        self.assertFalse(os.path.exists(self.dst + '.tmp'))
+        self.assertEqual(_leftover_siblings(self.dst), [])
 
 
 @unittest.skipUnless(remux.ffmpeg_available(), 'ffmpeg não está instalado nesta máquina')

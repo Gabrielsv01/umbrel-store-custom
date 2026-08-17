@@ -96,6 +96,9 @@
       this.awaitingCatchUp = false;
       this.webPlayable = true;
       this.loadedRemuxBytes = null; // quanto da fonte crua a versão atualmente carregada no <video> cobre
+      this.remuxedUpToBytes = null; // quanto da fonte crua já foi de fato remuxado NO SERVIDOR (pode ficar
+                                     // bem atrás de cachedBytes — download cru corre mais rápido que os
+                                     // ciclos de remux parcial, ver PARTIAL_REMUX_INTERVAL_SECONDS)
       this.usesRemux = false; // ver _effectiveSeekableEnd() — muda qual sinal é confiável
 
       this.savedPosition = loadSavedPosition(this.mediaId);
@@ -125,7 +128,20 @@
     get estimatedCachedSeconds() {
       if (!this.duration || !this.totalBytes) return null;
       if (this.isDone) return this.duration;
-      return this.duration * (this.cachedBytes / this.totalBytes);
+      // Quando há remux em andamento (Matroska ou MP4 com moov no final —
+      // ver remux.py), o servidor só entrega, no máximo, o que já foi
+      // efetivamente remuxado (remuxed_up_to_bytes / safe_cap em
+      // app.py:stream) — o download cru (cachedBytes) pode estar bem à
+      // frente disso. Sem esse teto, esta estimativa (usada por
+      // _effectiveSeekableEnd pra decidir quando é seguro retomar/buscar)
+      // fica otimista demais, manda o navegador buscar um trecho que o
+      // servidor ainda vai responder com 503, e o <video> trava sem que o
+      // mecanismo de recarregar-preservando-posição perceba (ele só age
+      // quando as flags de "travado" ainda estão de pé).
+      const bytes = this.remuxedUpToBytes != null
+        ? Math.min(this.cachedBytes, this.remuxedUpToBytes)
+        : this.cachedBytes;
+      return this.duration * (bytes / this.totalBytes);
     }
 
     async _poll() {
@@ -140,6 +156,7 @@
           this.uploadedBytes = data.uploaded_bytes;
           this.uploadTotalBytes = data.upload_total_bytes;
           this.usesRemux = data.container === 'matroska';
+          this.remuxedUpToBytes = data.remuxed_up_to_bytes;
 
           this._updatePlayabilityWarning(data);
           this._maybeReloadForNewRemux(data);

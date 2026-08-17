@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import subprocess
+import uuid
 
 # Assinatura EBML: identifica Matroska/WebM. Muitos bots redistribuem rips
 # em Matroska com extensão/mime_type de .mp4 — o <video> do navegador não
@@ -9,6 +10,18 @@ import subprocess
 # foi baixado, então isso precisa ser detectado e remuxado (não recodificado
 # — os codecs internos, tipicamente H.264/AAC, já são nativos do navegador).
 MATROSKA_MAGIC = b'\x1a\x45\xdf\xa3'
+
+
+def _unique_sibling_path(path, suffix):
+    """Gera um nome de arquivo irmão de `path` com um sufixo único
+    (`suffix`, ex.: '.tmp', '.src-snapshot'). Necessário porque mais de um
+    remux pode legitimamente mirar o MESMO `dst_path` ao mesmo tempo (ex.:
+    uma prévia parcial em andamento quando o download termina e o remux
+    final começa) — um nome fixo faria as duas chamadas disputarem o
+    mesmo arquivo intermediário, e uma delas apagar/sobrescrever o que a
+    outra ainda está usando (visto em produção como "Unable to re-open
+    ... output file for shifting data" no ffmpeg)."""
+    return f"{path}.{uuid.uuid4().hex}{suffix}"
 
 
 def is_matroska(path):
@@ -109,7 +122,7 @@ def remux_to_mp4(src_path, dst_path, timeout=300):
     if not ffmpeg_bin:
         raise RuntimeError('ffmpeg não disponível (nem via static-ffmpeg, nem no PATH do sistema)')
 
-    tmp_dst = dst_path + '.tmp'
+    tmp_dst = _unique_sibling_path(dst_path, '.tmp')
     try:
         result = subprocess.run(
             [
@@ -201,7 +214,7 @@ def assemble_sparse_preview_source(src_path, dst_path, up_to_bytes, moov_offset,
     — inerente a uma prévia de download parcial, não um bug)."""
     prefix_len = min(up_to_bytes, moov_offset)
     total_size = moov_offset + len(moov_bytes)
-    tmp_path = dst_path + '.tmp'
+    tmp_path = _unique_sibling_path(dst_path, '.tmp')
     try:
         with open(src_path, 'rb') as fin, open(tmp_path, 'wb') as fout:
             remaining = prefix_len
@@ -318,7 +331,7 @@ def remux_partial_with_moov_tail_to_mp4(src_path, dst_path, up_to_bytes, moov_of
     em vez de simplesmente truncar (que falharia com "moov atom not
     found", já que o moov real ainda não foi alcançado pelo download
     sequencial nesse ponto)."""
-    snapshot_path = dst_path + '.src-snapshot'
+    snapshot_path = _unique_sibling_path(dst_path, '.src-snapshot')
     try:
         assemble_sparse_preview_source(src_path, snapshot_path, up_to_bytes, moov_offset, moov_bytes)
         remux_to_mp4(snapshot_path, dst_path, timeout=timeout)
@@ -346,7 +359,7 @@ def split_segment_to_mp4(src_path, dst_path, start_seconds, duration_seconds=Non
     if not ffmpeg_bin:
         raise RuntimeError('ffmpeg não disponível (nem via static-ffmpeg, nem no PATH do sistema)')
 
-    tmp_dst = dst_path + '.tmp'
+    tmp_dst = _unique_sibling_path(dst_path, '.tmp')
     cmd = [ffmpeg_bin, '-y', '-nostdin', '-ss', str(start_seconds), '-i', src_path]
     if duration_seconds is not None:
         cmd += ['-t', str(duration_seconds)]
@@ -372,7 +385,7 @@ def remux_partial_to_mp4(src_path, dst_path, up_to_bytes, timeout=300):
     prematurely" mas termina com sucesso, produzindo um MP4 válido
     cobrindo exatamente o que foi decodificável (confirmado empiricamente
     com arquivos truncados em vários pontos)."""
-    snapshot_path = dst_path + '.src-snapshot'
+    snapshot_path = _unique_sibling_path(dst_path, '.src-snapshot')
     try:
         with open(src_path, 'rb') as fin, open(snapshot_path, 'wb') as fout:
             remaining = up_to_bytes
