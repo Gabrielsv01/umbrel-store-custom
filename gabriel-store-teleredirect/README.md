@@ -41,7 +41,7 @@ gabriel-store-teleredirect/
     └─ bot_activity.log     # log do BotManager
 ```
 
-* `code/requirements.txt` contém: `telethon`, `flask`, `requests`, `pyyaml`, `qrcode[pil]`, `imageio-ffmpeg`.
+* `code/requirements.txt` contém: `telethon`, `flask`, `requests`, `pyyaml`, `qrcode[pil]`, `static-ffmpeg`.
 * Todo valor de `config/config.yaml` pode ser sobrescrito por variável de ambiente (`TELETHON_API_ID`, `TELETHON_API_HASH`, `TELE_REDIRECT_FROM_BOT_ID`, `TELE_REDIRECT_TO_GROUP_ID`, `TELE_REDIRECT_BASE_URL`), que tem prioridade sobre o arquivo.
 * `code/config.py` resolve `BASE_PATH` como a raiz do projeto (um nível acima de `code/`) — é onde ficam `config/` e `data/` (via `config.DATA_PATH`), independente de onde o código-fonte está.
 
@@ -122,7 +122,7 @@ Muitos bots de redistribuição de filmes/séries mandam arquivos que são, na v
 
 O `bot_manager.py` detecta isso automaticamente (assinatura EBML no início do arquivo) e, quando o download termina, **remuxa** (não recodifica — os codecs internos, tipicamente H.264/AAC, já são nativos do navegador) o arquivo para um `.web.mp4` usando `ffmpeg -c copy`. O `/stream` passa a servir esse arquivo remuxado automaticamente; o original (Matroska) continua sendo o que é reenviado ao grupo, sem alteração.
 
-O `ffmpeg` usado é o binário empacotado pela dependência Python `imageio-ffmpeg` (já no `requirements.txt`) — `make install` resolve tudo, sem precisar de `sudo`/`apt-get` nem depender de nada pré-instalado no sistema. Se por algum motivo esse pacote não conseguir prover um binário pra sua plataforma, o código cai automaticamente para um `ffmpeg` do `PATH` do sistema, se houver um.
+O `ffmpeg` (e o `ffprobe`, usado pelo cálculo de ponto de corte seguro na divisão de vídeos grandes — ver seção correspondente) vêm da dependência Python `static-ffmpeg` (já no `requirements.txt`) — `make install` resolve tudo, sem precisar de `sudo`/`apt-get` nem depender de nada pré-instalado no sistema. No Docker, o binário da plataforma é baixado uma vez no **build** da imagem (não em runtime), então o container nunca depende de rede pra ter ffmpeg/ffprobe disponíveis. Se por algum motivo esse pacote não conseguir prover um binário pra sua plataforma, o código cai automaticamente para um `ffmpeg`/`ffprobe` do `PATH` do sistema, se houver um.
 
 Se nenhum dos dois estiver disponível, o `BotManager` loga um aviso na inicialização e segue funcionando normalmente — só não remuxa; arquivos Matroska ficam disponíveis via VLC/mpv (que decodificam Matroska nativamente, incluindo enquanto o arquivo ainda está sendo baixado), mas não reproduzem no player web até o remux acontecer.
 
@@ -168,7 +168,7 @@ docker compose up -d --build
 Dois endpoints somente-leitura, sem depender de acesso SSH/`docker logs` ao host:
 
 - **`GET /api/logs?lines=N`** (texto puro, padrão 200 linhas, máx. 5000) — cauda de `data/bot_activity.log`, que recebe tanto a atividade do `BotManager` quanto qualquer erro do próprio Flask/Werkzeug (a configuração de logging fica centralizada no topo do `app.py`, cobrindo o processo inteiro). Funciona mesmo **sem sessão ainda** — é justamente pra diagnosticar problemas no próprio login/setup.
-- **`GET /api/diagnostics`** — confirma se o `ffmpeg` (via `imageio-ffmpeg`) está disponível nesta instância, e o caminho do binário usado.
+- **`GET /api/diagnostics`** — confirma se o `ffmpeg` (via `static-ffmpeg`) está disponível nesta instância, e o caminho do binário usado.
 
 Ambos não têm autenticação própria (mesmo modelo do resto do app — pensado pra rede local/Umbrel, não pra internet aberta).
 
@@ -189,7 +189,7 @@ Ambos não têm autenticação própria (mesmo modelo do resto do app — pensad
 | **Resiliência a restart** | Cache parcial órfão é descartado e o download reiniciado do zero. | Timeout de download proporcional ao tamanho do arquivo. |
 | **Pausar/retomar/excluir** | Botões na página web, por item, enquanto ele não foi totalmente enviado. Pausar cancela a task ativa; retomar refaz o fetch da mensagem no Telegram. | Download retoma de verdade pelo byte exato (`client.iter_download(offset=...)`). Upload não tem como retomar de onde parou (protocolo do Telegram) — ao retomar, reenvia do zero, mas sem rebaixar (arquivo já em cache). Excluir cancela tudo, limpa cache + mensagem de status, e some da página. |
 | **Mensagem de status no grupo** | Enviada ao começar o download, editada no lugar a cada 20s (baixando → processando → enviando), apagada no sucesso ou trocada por erro/pausado. | Usa `(chat_id, message_id)` salvos no store, não o objeto em memória — assim pausar/excluir também conseguem editá-la/apagá-la de fora do fluxo principal. |
-| **Matroska/.mkv como .mp4** | Detectado pela assinatura EBML; remuxado (`ffmpeg -c copy -movflags +faststart`) para `.web.mp4`. | `ffmpeg` vem via `imageio-ffmpeg` (pip, escopado ao `.venv`); sem ele, degrada para "só funciona em VLC/mpv". |
+| **Matroska/.mkv como .mp4** | Detectado pela assinatura EBML; remuxado (`ffmpeg -c copy -movflags +faststart`) para `.web.mp4`. | `ffmpeg` vem via `static-ffmpeg` (pip, escopado ao `.venv`); sem ele, degrada para "só funciona em VLC/mpv". |
 | **MP4 real com moov no final** | `remux.needs_remux()` também detecta isso (box `moov` não aparece nos primeiros ~8MB) e aplica o mesmo remux com `+faststart` ao final do download. Durante o download, `_try_fetch_moov_tail` busca o `moov` fora de ordem por offset pra viabilizar prévia parcial também nesse caso. | Sem faststart, o navegador nunca fica sabendo que existe mais conteúdo pra buscar no final (por causa do `Content-Range` limitado ao que já existe em disco) e desiste achando que não há vídeo decodificável. A busca fora de ordem só funciona pro layout simples `ftyp → mdat → moov`; fora disso (ou arquivo maior que `MOOV_TAIL_MAX_TOTAL_SIZE`), degrada sem prévia parcial até o download terminar. |
 | **Segurança** | Credenciais lidas de variáveis de ambiente ou `config/config.yaml` (fora do versionamento). | Use `config/config.example.yaml` como template. |
 

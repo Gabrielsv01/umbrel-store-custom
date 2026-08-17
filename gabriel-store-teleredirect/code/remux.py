@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import subprocess
@@ -62,19 +63,39 @@ def needs_remux(path):
     return not mp4_moov_near_front(path)
 
 
-def _ffmpeg_binary():
-    """Prioriza o binário empacotado via imageio-ffmpeg (escopado ao venv
-    do projeto, sem depender de instalação no sistema); cai para o PATH
-    do sistema se o pacote não estiver disponível ou falhar."""
+def _static_ffmpeg_paths():
+    """Busca os binários de ffmpeg E ffprobe via static-ffmpeg (escopado ao
+    venv do projeto, sem depender de instalação no sistema/apt-get). A
+    primeira chamada baixa um zip da plataforma atual; static-ffmpeg
+    mesmo faz o cache em disco (dentro do próprio pacote), então chamadas
+    seguintes são instantâneas. Em produção (Docker), esse download roda
+    no BUILD da imagem (ver Dockerfile), nunca em runtime — o container
+    nunca depende de rede pra ter ffmpeg/ffprobe disponíveis."""
     try:
-        import imageio_ffmpeg
-        return imageio_ffmpeg.get_ffmpeg_exe()
+        import static_ffmpeg.run
+        return static_ffmpeg.run.get_or_fetch_platform_executables_else_raise()
     except Exception:
-        return shutil.which('ffmpeg')
+        return None, None
+
+
+def _ffmpeg_binary():
+    """Cai pro PATH do sistema se static-ffmpeg não estiver disponível ou
+    falhar (ex.: plataforma sem build pré-compilado)."""
+    ffmpeg_path, _ = _static_ffmpeg_paths()
+    return ffmpeg_path or shutil.which('ffmpeg')
+
+
+def _ffprobe_binary():
+    _, ffprobe_path = _static_ffmpeg_paths()
+    return ffprobe_path or shutil.which('ffprobe')
 
 
 def ffmpeg_available():
     return _ffmpeg_binary() is not None
+
+
+def ffprobe_available():
+    return _ffprobe_binary() is not None
 
 
 def remux_to_mp4(src_path, dst_path, timeout=300):
@@ -86,7 +107,7 @@ def remux_to_mp4(src_path, dst_path, timeout=300):
     arquivo parcial/corrompido no lugar do remux."""
     ffmpeg_bin = _ffmpeg_binary()
     if not ffmpeg_bin:
-        raise RuntimeError('ffmpeg não disponível (nem via imageio-ffmpeg, nem no PATH do sistema)')
+        raise RuntimeError('ffmpeg não disponível (nem via static-ffmpeg, nem no PATH do sistema)')
 
     tmp_dst = dst_path + '.tmp'
     try:
@@ -199,6 +220,97 @@ def assemble_sparse_preview_source(src_path, dst_path, up_to_bytes, moov_offset,
             os.remove(tmp_path)
 
 
+def _probe_packets_and_streams(path, timeout=60):
+    """Roda ffprobe sobre `path` e devolve (packets, streams) já
+    desserializados do JSON — usado por find_safe_cut_point_seconds pra
+    decidir um corte seguro sem precisar reimplementar leitura de
+    stco/stsz/stsc na mão (ffprobe já sabe interpretar o moov real)."""
+    ffprobe_bin = _ffprobe_binary()
+    if not ffprobe_bin:
+        raise RuntimeError('ffprobe não disponível (nem via static-ffmpeg, nem no PATH do sistema)')
+
+    result = subprocess.run(
+        [
+            ffprobe_bin, '-v', 'error', '-print_format', 'json',
+            '-show_entries', 'stream=index,codec_type:packet=pts_time,pos,size,flags,stream_index',
+            path,
+        ],
+        capture_output=True, timeout=timeout,
+    )
+    if result.returncode != 0:
+        stderr = result.stderr.decode(errors='replace')[-800:]
+        raise RuntimeError(f"ffprobe falhou (código {result.returncode}): {stderr}")
+
+    data = json.loads(result.stdout)
+    return data.get('packets', []), data.get('streams', [])
+
+
+def find_safe_cut_point_seconds(assembled_path, up_to_bytes):
+    """Acha o maior timestamp (segundos) de um keyframe de vídeo tal que
+    TODOS os pacotes (de qualquer trilha) com pts <= esse tempo já estão
+    inteiramente contidos nos primeiros `up_to_bytes` bytes do arquivo
+    original — ou seja, um ponto de corte GARANTIDAMENTE seguro, sem a
+    corrupção por "buraco esparso" que assemble_sparse_preview_source
+    aceita pra prévia (lá é tolerável; aqui NÃO é, porque o resultado é
+    reenviado definitivamente ao grupo do Telegram).
+
+    `assembled_path` deve ser um arquivo com o moov real já na posição
+    certa (ver assemble_sparse_preview_source) — ffprobe lê a tabela de
+    amostras do moov pra saber a posição/tamanho de cada pacote sem
+    precisar decodificar nenhum byte de mídia, então funciona mesmo com o
+    conteúdo além de `up_to_bytes` ainda inexistente (zerado/esparso).
+
+    Retorna None se não houver nenhum keyframe seguro ainda (ex.: nem o
+    primeiro GOP terminou de baixar), se não houver trilha de vídeo, ou se
+    algum pacote vier sem pts_time válido (nesse caso não dá pra garantir
+    a ordem temporal com segurança — mais vale esperar mais bytes do que
+    arriscar um corte incorreto)."""
+    packets, streams = _probe_packets_and_streams(assembled_path)
+
+    video_stream_indices = {s['index'] for s in streams if s.get('codec_type') == 'video'}
+    if not video_stream_indices:
+        return None
+
+    parsed = []
+    for p in packets:
+        pts_time = p.get('pts_time')
+        if pts_time in (None, 'N/A'):
+            return None  # sem ordenação temporal confiável pra esse pacote — não arrisca.
+        parsed.append({
+            'pts_time': float(pts_time),
+            'pos': int(p['pos']),
+            'size': int(p['size']),
+            'stream_index': p['stream_index'],
+            'is_keyframe': p.get('flags', '').startswith('K'),
+        })
+    parsed.sort(key=lambda p: p['pts_time'])
+
+    safe_time = None
+    running_max_end = 0
+    # Agrupa por pts_time (não só ordena) antes de decidir: dois pacotes de
+    # trilhas diferentes podem empatar no mesmo instante (ex.: vídeo e
+    # áudio), e todos os bytes desse instante — de QUALQUER trilha —
+    # precisam estar cobertos antes de aceitar um keyframe naquele tempo
+    # como seguro. Um sort simples (estável) processaria o keyframe de
+    # vídeo ANTES do pacote de áudio empatado, aceitando o corte cedo
+    # demais — já pego por teste (test_audio_packet_beyond_video_keyframe).
+    i = 0
+    while i < len(parsed):
+        j = i
+        has_safe_video_keyframe_in_group = False
+        while j < len(parsed) and parsed[j]['pts_time'] == parsed[i]['pts_time']:
+            p = parsed[j]
+            running_max_end = max(running_max_end, p['pos'] + p['size'])
+            if p['stream_index'] in video_stream_indices and p['is_keyframe']:
+                has_safe_video_keyframe_in_group = True
+            j += 1
+        if has_safe_video_keyframe_in_group and running_max_end <= up_to_bytes:
+            safe_time = parsed[i]['pts_time']
+        i = j
+
+    return safe_time
+
+
 def remux_partial_with_moov_tail_to_mp4(src_path, dst_path, up_to_bytes, moov_offset, moov_bytes, timeout=300):
     """Como `remux_partial_to_mp4`, mas para um MP4 sem faststart cujo moov
     já foi obtido fora de ordem (ver assemble_sparse_preview_source) —
@@ -213,6 +325,41 @@ def remux_partial_with_moov_tail_to_mp4(src_path, dst_path, up_to_bytes, moov_of
     finally:
         if os.path.exists(snapshot_path):
             os.remove(snapshot_path)
+
+
+def split_segment_to_mp4(src_path, dst_path, start_seconds, duration_seconds=None, timeout=300):
+    """Extrai um trecho de `src_path` (a partir de `start_seconds`, por
+    `duration_seconds` segundos — ou até o fim do arquivo, se None) para
+    `dst_path` em MP4, sem recodificar (stream copy). Usado para dividir um
+    vídeo maior que o limite de tamanho por mensagem do Telegram em partes
+    menores antes do reenvio (ver BotManager._send_file_in_parts).
+
+    `-ss` ANTES de `-i` é a única opção compatível com stream copy: sem
+    reencodar, o ffmpeg só consegue cortar no keyframe mais próximo ANTES
+    do tempo pedido — o início real de cada parte pode ficar um pouco antes
+    do calculado, nunca depois. Isso é aceitável aqui (a precisão do corte
+    não importa, só o tamanho final de cada parte), e é por isso que quem
+    chama esta função já aplica uma margem de segurança no tamanho-alvo
+    (ver SPLIT_SAFETY_FACTOR em bot_manager.py) em vez de confiar num corte
+    exato."""
+    ffmpeg_bin = _ffmpeg_binary()
+    if not ffmpeg_bin:
+        raise RuntimeError('ffmpeg não disponível (nem via static-ffmpeg, nem no PATH do sistema)')
+
+    tmp_dst = dst_path + '.tmp'
+    cmd = [ffmpeg_bin, '-y', '-nostdin', '-ss', str(start_seconds), '-i', src_path]
+    if duration_seconds is not None:
+        cmd += ['-t', str(duration_seconds)]
+    cmd += ['-c', 'copy', '-map', '0', '-movflags', '+faststart', '-f', 'mp4', tmp_dst]
+    try:
+        result = subprocess.run(cmd, capture_output=True, timeout=timeout)
+        if result.returncode != 0:
+            stderr = result.stderr.decode(errors='replace')[-800:]
+            raise RuntimeError(f"ffmpeg falhou ao dividir vídeo (código {result.returncode}): {stderr}")
+        os.replace(tmp_dst, dst_path)
+    finally:
+        if os.path.exists(tmp_dst):
+            os.remove(tmp_dst)
 
 
 def remux_partial_to_mp4(src_path, dst_path, up_to_bytes, timeout=300):

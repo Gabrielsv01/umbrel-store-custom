@@ -2,6 +2,7 @@ import os
 import threading
 import asyncio
 import contextlib
+import math
 import mimetypes
 import struct
 import time
@@ -60,6 +61,27 @@ STATUS_MESSAGE_INTERVAL_SECONDS = 20
 # isso, um item já enviado ao grupo só era limpo quando a PRÓXIMA mensagem
 # do bot chegasse (podia nunca acontecer, se o bot ficasse quieto).
 CLEANUP_INTERVAL_SECONDS = 300
+
+# Tamanho máximo (bytes) de um único arquivo reenviado ao grupo — acima
+# disso, o vídeo é dividido em partes (ver _send_file_in_parts). Default
+# usado quando a instância não passou por __init__ (ex.: BotManager.__new__
+# nos testes) — em runtime normal, config.get_upload_max_part_size_bytes
+# sobrescreve isso por instância no __init__.
+DEFAULT_MAX_PART_SIZE_BYTES = 1900 * 1024 * 1024
+
+# Margem de segurança aplicada ao calcular quantas partes um vídeo precisa:
+# o corte via ffmpeg (-c copy) só alinha no keyframe mais próximo ANTES do
+# tempo pedido (ver remux.split_segment_to_mp4), então o tamanho real de
+# cada parte pode variar um pouco. Dividir a capacidade "efetiva" por essa
+# margem (< 1) força mais partes (cada uma menor) perto do limite, em vez
+# de arriscar uma parte estourando max_part_size_bytes por causa disso.
+SPLIT_SAFETY_FACTOR = 0.9
+
+# EXPERIMENTAL (upload.experimental.streaming_split): de quanto em quanto
+# tempo o cortador/enviador verifica se já dá pra fechar mais uma parte
+# (bytes suficientes + ponto de corte seguro) enquanto o download ainda
+# está em andamento — ver _stream_cut_and_upload_loop.
+STREAM_SPLIT_POLL_INTERVAL_SECONDS = 5
 
 
 def _download_timeout_for(size):
@@ -172,6 +194,12 @@ class _GrowingFileUploadStream:
 
 
 class BotManager:
+    # Defaults de classe (ver DEFAULT_MAX_PART_SIZE_BYTES) — cobrem instâncias
+    # criadas via BotManager.__new__ nos testes, que pulam __init__ de
+    # propósito e nunca setam esses atributos explicitamente.
+    max_part_size_bytes = DEFAULT_MAX_PART_SIZE_BYTES
+    experimental_streaming_split = False
+
     def __init__(self):
         self.data_path = config.DATA_PATH
         self.session_file = os.path.join(self.data_path, 'string.session')
@@ -182,6 +210,9 @@ class BotManager:
         self.api_id, self.api_hash = config.get_telethon_credentials(self.cfg)
         self.base_url = config.get_base_url(self.cfg)
         self.retention_seconds = config.get_cache_retention_seconds(self.cfg)
+        self.max_part_size_bytes = config.get_upload_max_part_size_bytes(self.cfg)
+        self.experimental_streaming_split = config.get_upload_experimental_streaming_split(self.cfg)
+        self._apply_tuning_from_config(self.cfg)
 
         self.store = MediaStore(os.path.join(self.data_path, 'media_store.json'))
         # Um asyncio.Lock por item em remux, pra garantir que a prévia
@@ -203,9 +234,39 @@ class BotManager:
             )
 
         self.loop = asyncio.new_event_loop()
-        self.client = TelegramClient(StringSession(self._load_session()), self.api_id, self.api_hash, loop=self.loop)
+        # connection_retries=None faz o Telethon tentar reconectar
+        # indefinidamente em vez de desistir depois de 5 tentativas (padrão
+        # da lib) e deixar o client morto até o processo ser reiniciado
+        # manualmente — foi o que causou o app ficar ~2 dias offline do
+        # Telegram sem ninguém notar.
+        self.client = TelegramClient(
+            StringSession(self._load_session()), self.api_id, self.api_hash,
+            loop=self.loop, connection_retries=None, retry_delay=5,
+        )
 
         self._start_background()
+
+    @staticmethod
+    def _apply_tuning_from_config(cfg):
+        """Sobrescreve as constantes de módulo (topo do arquivo) com o que
+        estiver em config.yaml/env var, mantendo os valores hardcoded como
+        default. Feito como constantes de MÓDULO (não atributos de
+        instância) de propósito: além das funções livres abaixo
+        (_download_timeout_for etc.) dependerem delas, os testes fazem
+        BotManager.__new__(BotManager) (pulando __init__ de propósito) e
+        fazem monkeypatch direto nelas — atributos de instância quebrariam
+        esse padrão."""
+        global MIN_THROUGHPUT_BYTES_PER_SEC, MIN_UPLOAD_THROUGHPUT_BYTES_PER_SEC
+        global DEFAULT_DOWNLOAD_TIMEOUT_SECONDS, DOWNLOAD_TIMEOUT_GRACE_SECONDS
+        global STATUS_MESSAGE_INTERVAL_SECONDS, CLEANUP_INTERVAL_SECONDS
+        global PARTIAL_REMUX_INTERVAL_SECONDS, PARTIAL_REMUX_MIN_NEW_BYTES
+
+        MIN_THROUGHPUT_BYTES_PER_SEC = config.get_download_throughput_floor_bytes_per_sec(cfg)
+        MIN_UPLOAD_THROUGHPUT_BYTES_PER_SEC = config.get_upload_throughput_floor_bytes_per_sec(cfg)
+        DEFAULT_DOWNLOAD_TIMEOUT_SECONDS, DOWNLOAD_TIMEOUT_GRACE_SECONDS = config.get_download_timeout_defaults(cfg)
+        STATUS_MESSAGE_INTERVAL_SECONDS = config.get_status_message_interval_seconds(cfg)
+        CLEANUP_INTERVAL_SECONDS = config.get_cleanup_interval_seconds(cfg)
+        PARTIAL_REMUX_INTERVAL_SECONDS, PARTIAL_REMUX_MIN_NEW_BYTES = config.get_partial_remux_tuning(cfg)
 
     # ---------- Sessão ----------
     def _load_session(self):
@@ -286,17 +347,24 @@ class BotManager:
         return task
 
     @staticmethod
-    def _build_send_attributes(meta):
+    def _build_send_attributes(meta, filename_override=None, duration_override=None):
         """Reconstrói os atributos de vídeo (duração, dimensões,
         supports_streaming) da mensagem original na hora de reenviar.
         Sem isso, o Telethon não tem como saber que é um vídeo e o
         Telegram trata o reenvio como um arquivo genérico — sem player
         embutido nem streaming — mesmo que o original tivesse essas
-        informações e permitisse tocar durante o próprio download."""
-        attributes = [DocumentAttributeFilename(file_name=meta.get('name') or 'arquivo')]
-        if meta.get('duration'):
+        informações e permitisse tocar durante o próprio download.
+
+        filename_override/duration_override existem pra reenvio em partes
+        (ver _send_file_in_parts): cada parte tem seu próprio nome ("...-
+        Parte N.mp4") e sua própria duração real (menor que a do vídeo
+        original inteiro)."""
+        name = filename_override or meta.get('name') or 'arquivo'
+        attributes = [DocumentAttributeFilename(file_name=name)]
+        duration = meta.get('duration') if duration_override is None else duration_override
+        if duration:
             attributes.append(DocumentAttributeVideo(
-                duration=int(meta['duration']),
+                duration=int(duration),
                 w=meta.get('width') or 0,
                 h=meta.get('height') or 0,
                 supports_streaming=True,
@@ -386,7 +454,17 @@ class BotManager:
                 uploaded = item.get('uploaded_bytes') or 0
                 total = item.get('upload_total_bytes') or item.get('size') or uploaded
                 pct = (uploaded / total * 100) if total else 0
-                text = f"📤 Enviando ao grupo: {name}\n{pct:.0f}% ({self._fmt_mb(uploaded)} / {self._fmt_mb(total)})"
+                part_num = item.get('upload_part')
+                part_count = item.get('upload_part_count')
+                if part_num and part_count:
+                    # Reenvio dividido em partes (ver _send_file_in_parts) —
+                    # mostra qual parte está em andamento, não só o % geral.
+                    text = (
+                        f"📤 Enviando parte {part_num}/{part_count} ao grupo: {name}\n"
+                        f"{pct:.0f}% ({self._fmt_mb(uploaded)} / {self._fmt_mb(total)})"
+                    )
+                else:
+                    text = f"📤 Enviando ao grupo: {name}\n{pct:.0f}% ({self._fmt_mb(uploaded)} / {self._fmt_mb(total)})"
             else:
                 # Estado terminal (FORWARDED/ERROR/PAUSED): quem cuida da
                 # mensagem final é _finalize_status_message, chamado no
@@ -448,11 +526,24 @@ class BotManager:
                 await partial_remux_task
 
         logger.info("Cache concluído: %s", file_path)
+        await self._finish_upload_after_full_download(msg_id, meta, target_group, file_path)
 
+    async def _finish_upload_after_full_download(self, msg_id, meta, target_group, file_path):
+        """Remuxa (se preciso, pro player web) e reenvia ao grupo — chamado
+        só com o arquivo já 100% em disco. Reaproveitado pelo caminho
+        sequencial de sempre e pelo streaming split experimental quando
+        ele desiste cedo (Matroska/moov não obtido): nos dois casos, a
+        partir daqui o resto é idêntico — decidir entre um envio único ou
+        dividido (ver _needs_split) e executar."""
         self.store.set_state(msg_id, READY)
         await self._remux_if_needed(msg_id, file_path)
 
         self.store.set_state(msg_id, UPLOADING)
+
+        if self._needs_split(file_path, meta):
+            await self._send_file_in_parts(msg_id, meta, target_group, file_path)
+            return
+
         description = self._display_name(meta)
 
         def on_upload_progress(current, total):
@@ -465,6 +556,92 @@ class BotManager:
             attributes=self._build_send_attributes(meta),
             progress_callback=on_upload_progress,
         )
+
+    def _needs_split(self, file_path, meta):
+        """Só faz sentido dividir quando dá pra calcular os cortes (precisa
+        saber a duração ORIGINAL do vídeo) e executá-los (precisa de
+        ffmpeg) — sem isso, o envio segue o caminho normal e falha do jeito
+        de sempre se passar do limite do Telegram (mesmo comportamento de
+        antes desta opção existir)."""
+        if not self.can_remux or not meta.get('duration'):
+            return False
+        return os.path.getsize(file_path) > self.max_part_size_bytes
+
+    async def _send_file_in_parts(self, msg_id, meta, target_group, file_path):
+        """Divide um vídeo maior que max_part_size_bytes em N partes
+        (ffmpeg -c copy, sem recodificar — ver remux.split_segment_to_mp4)
+        e reenvia cada uma como mensagem separada, legendada "Parte X/N".
+
+        Só o REENVIO precisa disso — o limite de tamanho é do Telegram pra
+        uma única mensagem, não do download nem do cache local. O arquivo
+        em `file_path` usado pelo player web (/stream) nunca é tocado, só
+        lido; as partes geradas são temporárias e apagadas ao final (êxito
+        ou falha), como o remux parcial em outros pontos deste arquivo."""
+        total_bytes = os.path.getsize(file_path)
+        duration = meta['duration']  # garantido pelo chamador (_needs_split)
+        effective_capacity = int(self.max_part_size_bytes * SPLIT_SAFETY_FACTOR)
+        num_parts = max(2, math.ceil(total_bytes / effective_capacity))
+        segment_seconds = duration / num_parts
+
+        base_name = os.path.splitext(meta.get('name') or 'video')[0]
+        description = self._display_name(meta)
+
+        logger.info(
+            "Arquivo %s (%s) excede o limite de %s por mensagem; dividindo em %d partes",
+            msg_id, self._fmt_mb(total_bytes), self._fmt_mb(self.max_part_size_bytes), num_parts,
+        )
+
+        part_paths = [f"{file_path}.part{i + 1}.mp4" for i in range(num_parts)]
+        try:
+            for i, part_path in enumerate(part_paths):
+                is_last = i == num_parts - 1
+                await asyncio.get_running_loop().run_in_executor(
+                    None, remux.split_segment_to_mp4, file_path, part_path,
+                    i * segment_seconds, None if is_last else segment_seconds,
+                )
+
+            for i, part_path in enumerate(part_paths):
+                is_last = i == num_parts - 1
+                part_duration = duration - segment_seconds * i if is_last else segment_seconds
+                await self._upload_one_part(
+                    msg_id, target_group, part_path, base_name, description, meta,
+                    part_num=i + 1, part_count=num_parts, part_duration=part_duration,
+                )
+        finally:
+            for part_path in part_paths:
+                if os.path.exists(part_path):
+                    os.remove(part_path)
+
+    async def _upload_one_part(
+            self, msg_id, target_group, part_path, base_name, description, meta,
+            part_num, part_count, part_duration,
+    ):
+        """Reenvia UMA parte já cortada e fechada em disco — reaproveitado
+        tanto pelo split de sempre (todas as partes já existem, part_count
+        conhecido de antemão) quanto pelo streaming split experimental
+        (partes vão sendo enviadas conforme o download avança; part_count
+        só é conhecido depois que a última parte foi cortada, daí o
+        parâmetro aceitar None — a legenda cai pra "Parte N" sem o "/N")."""
+        label = f"Parte {part_num}/{part_count}" if part_count else f"Parte {part_num}"
+
+        def on_upload_progress(current, total, _part_num=part_num):
+            self.store.update(
+                msg_id, uploaded_bytes=current, upload_total_bytes=total,
+                upload_part=_part_num, upload_part_count=part_count,
+            )
+
+        await self.client.send_file(
+            target_group,
+            file=part_path,
+            caption=f"🎬 {description} ({label})",
+            attributes=self._build_send_attributes(
+                meta,
+                filename_override=f"{base_name} - {label}.mp4",
+                duration_override=part_duration,
+            ),
+            progress_callback=on_upload_progress,
+        )
+        logger.info("%s de %s enviada", label, msg_id)
 
     async def _download_and_upload_concurrently(
             self, msg, msg_id, meta, target_group, file_path, resume_from_bytes, partial_remux_task,
@@ -542,6 +719,219 @@ class BotManager:
                     t.cancel()
             stream.close()
 
+    # ---------- EXPERIMENTAL: streaming split (upload.experimental.streaming_split) ----------
+    async def _download_and_stream_split_upload(
+            self, msg, msg_id, meta, target_group, file_path, resume_from_bytes, partial_remux_task,
+    ):
+        """Tenta reenviar em partes CONFORME o download avança, em vez de
+        esperar terminar 100% (ver _needs_split/_finish_upload_after_full_download,
+        usado como fallback quando esta tentativa não se aplica ou não
+        consegue achar nenhum ponto de corte seguro a tempo).
+
+        Reaproveita o MESMO padrão de _download_and_upload_concurrently:
+        download roda numa task própria, sem interrupção; uma segunda
+        task (o "cortador/enviador", ver _stream_cut_and_upload_loop) fica
+        de olho no cache crescendo e sobe cada parte fechada UMA DE CADA
+        VEZ (nunca duas ao mesmo tempo) — como o upload costuma ser o
+        lado mais lento (MIN_UPLOAD_THROUGHPUT_BYTES_PER_SEC <
+        MIN_THROUGHPUT_BYTES_PER_SEC), o tempo total ainda fica perto de
+        max(download, upload) em vez de download + upload, mesmo com
+        upload serializado consigo mesmo. As duas tasks são canceladas
+        juntas (pause_download/delete_media) via o mesmo asyncio.gather
+        de sempre — sem precisar generalizar _active_tasks pra N tasks
+        por item.
+
+        Retorna quantas partes foram enviadas (0 = desistiu sem enviar
+        nada — Matroska ou moov não obtido a tempo; quem chamou já
+        encontra o download completo em disco nesse caso, e cai pro
+        caminho de sempre)."""
+        download_done = asyncio.Event()
+        download_error = {}
+
+        async def _run_download():
+            try:
+                await self._download_media_resumable(msg, file_path, resume_from_bytes)
+            finally:
+                download_done.set()
+
+        download_task = asyncio.create_task(_run_download())
+
+        def _capture_download_error(t):
+            if not t.cancelled() and t.exception():
+                download_error['exc'] = t.exception()
+
+        download_task.add_done_callback(_capture_download_error)
+
+        cutter_task = asyncio.create_task(
+            self._stream_cut_and_upload_loop(
+                msg, msg_id, meta, target_group, file_path, download_done, download_error,
+            )
+        )
+
+        try:
+            _, parts_sent = await asyncio.gather(download_task, cutter_task)
+        finally:
+            for t in (download_task, cutter_task):
+                if not t.done():
+                    t.cancel()
+            partial_remux_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await partial_remux_task
+
+        return parts_sent
+
+    async def _stream_cut_and_upload_loop(
+            self, msg, msg_id, meta, target_group, file_path, download_done, download_error,
+    ):
+        """Produtor/consumidor de UMA task só: verifica periodicamente se
+        já dá pra fechar mais uma parte (bytes suficientes desde o último
+        checkpoint + um ponto de corte seguro, ver
+        remux.find_safe_cut_point_seconds) e, se sim, corta e ENVIA na
+        hora — nunca começa a próxima checagem antes do envio atual
+        terminar, o que já garante upload serializado sem precisar de
+        fila/asyncio.Queue.
+
+        Desiste sem enviar nada (retorna 0) se o arquivo não permitir
+        corte adiantado: Matroska (esta técnica não se aplica; só o split
+        pós-download suporta) ou moov não obtido a tempo (layout fora do
+        padrão simples esperado, ou o download terminou antes do moov
+        chegar)."""
+        base_name = os.path.splitext(meta.get('name') or 'video')[0]
+        description = self._display_name(meta)
+
+        # Espera existir arquivo suficiente pra checar a assinatura
+        # Matroska e calcular o offset esperado do moov — ambos só
+        # precisam dos primeiros bytes do arquivo, não dele inteiro.
+        while not (os.path.exists(file_path) and os.path.getsize(file_path) >= 12):
+            if download_error.get('exc') is not None or download_done.is_set():
+                return 0
+            await asyncio.sleep(STREAM_SPLIT_POLL_INTERVAL_SECONDS)
+
+        if remux.is_matroska(file_path):
+            logger.info(
+                "Streaming split não se aplica a %s (Matroska); corte só após o download completo", msg_id,
+            )
+            return 0
+
+        moov_tail = self._read_moov_tail(file_path)
+        while moov_tail is None:
+            if download_error.get('exc') is not None:
+                return 0
+            total_size = meta.get('size')
+            if total_size and total_size <= MOOV_TAIL_MAX_TOTAL_SIZE:
+                await self._try_fetch_moov_tail(msg, file_path)
+            moov_tail = self._read_moov_tail(file_path)
+            if moov_tail is not None:
+                break
+            if os.path.exists(file_path + '.moov_tail.absent'):
+                logger.info(
+                    "Streaming split não se aplica a %s (moov fora do padrão simples esperado)", msg_id,
+                )
+                return 0
+            if download_done.is_set():
+                logger.info(
+                    "Streaming split não se aplica a %s (moov não obtido antes do download terminar)", msg_id,
+                )
+                return 0
+            await asyncio.sleep(STREAM_SPLIT_POLL_INTERVAL_SECONDS)
+
+        moov_offset, moov_bytes = moov_tail
+        logger.info("Streaming split ativo para %s (moov adiantado obtido, offset %d)", msg_id, moov_offset)
+
+        checkpoint_seconds = 0.0
+        checkpoint_bytes = 0
+        parts_sent = 0
+
+        while True:
+            if download_error.get('exc') is not None:
+                return parts_sent  # download vai propagar o erro pelo gather
+
+            current_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+            is_done = download_done.is_set()
+
+            if not is_done and current_size - checkpoint_bytes < self.max_part_size_bytes:
+                await asyncio.sleep(STREAM_SPLIT_POLL_INTERVAL_SECONDS)
+                continue
+
+            part_num = parts_sent + 1
+            part_path = f"{file_path}.streampart{part_num}.mp4"
+
+            if is_done:
+                if current_size <= checkpoint_bytes:
+                    return parts_sent  # nada novo desde a última parte fechada
+                await self._cut_final_stream_part(msg_id, file_path, part_path, checkpoint_seconds)
+                total_duration = meta.get('duration')
+                part_duration = (total_duration - checkpoint_seconds) if total_duration else None
+            else:
+                cut_time = await self._cut_next_stream_part(
+                    msg_id, file_path, part_path, moov_offset, moov_bytes, checkpoint_seconds, current_size,
+                )
+                if cut_time is None:
+                    await asyncio.sleep(STREAM_SPLIT_POLL_INTERVAL_SECONDS)
+                    continue
+                part_duration = cut_time - checkpoint_seconds
+                checkpoint_seconds = cut_time
+                checkpoint_bytes = current_size
+
+            try:
+                await self._upload_one_part(
+                    msg_id, target_group, part_path, base_name, description, meta,
+                    part_num=part_num, part_count=None, part_duration=part_duration,
+                )
+            finally:
+                if os.path.exists(part_path):
+                    os.remove(part_path)
+
+            parts_sent = part_num
+            if is_done:
+                return parts_sent
+
+    async def _cut_next_stream_part(
+            self, msg_id, file_path, part_path, moov_offset, moov_bytes, checkpoint_seconds, current_size,
+    ):
+        """Tenta fechar mais uma parte a partir de `checkpoint_seconds`,
+        usando só os `current_size` bytes já confirmadamente baixados —
+        monta a mesma fonte esparsa da prévia web (prefixo real + moov
+        real adiantado, ver assemble_sparse_preview_source), mas ao
+        contrário da prévia, só aceita um corte cujo ponto de parada
+        (find_safe_cut_point_seconds) garanta que NENHUM byte do buraco
+        esparso foi usado — o resultado aqui é reenviado definitivamente
+        ao grupo, não pode sair com trecho corrompido.
+
+        Devolve o timestamp (segundos) até onde a parte foi cortada, ou
+        None se ainda não existe corte seguro além do checkpoint (quem
+        chamou deve esperar mais bytes e tentar de novo)."""
+        assembled_path = f"{file_path}.cutprobe.mp4"
+        try:
+            async with self._get_remux_lock(msg_id):
+                await asyncio.get_running_loop().run_in_executor(
+                    None, remux.assemble_sparse_preview_source,
+                    file_path, assembled_path, current_size, moov_offset, moov_bytes,
+                )
+                cut_time = await asyncio.get_running_loop().run_in_executor(
+                    None, remux.find_safe_cut_point_seconds, assembled_path, current_size,
+                )
+                if cut_time is None or cut_time <= checkpoint_seconds:
+                    return None
+                await asyncio.get_running_loop().run_in_executor(
+                    None, remux.split_segment_to_mp4, assembled_path, part_path,
+                    checkpoint_seconds, cut_time - checkpoint_seconds,
+                )
+        finally:
+            if os.path.exists(assembled_path):
+                os.remove(assembled_path)
+        return cut_time
+
+    async def _cut_final_stream_part(self, msg_id, file_path, part_path, checkpoint_seconds):
+        """Corta a última parte depois que o download já terminou 100% —
+        o que resta é conteúdo real, sem precisar mais do truque de moov
+        adiantado nem de um "ponto de corte seguro": vai só até o fim de
+        verdade do arquivo completo."""
+        async with self._get_remux_lock(msg_id):
+            await asyncio.get_running_loop().run_in_executor(
+                None, remux.split_segment_to_mp4, file_path, part_path, checkpoint_seconds, None,
+            )
+
     async def _download_to_cache(self, msg, msg_id, meta, target_group, resume_from_bytes=0):
         ext = meta.get('ext', '.file')
         file_path = os.path.join(self.cache_dir, f"{msg_id}{ext}")
@@ -561,8 +951,28 @@ class BotManager:
                 # nos metadados) — o protocolo de upload do Telegram precisa
                 # saber quantas partes esperar. Sem isso (raro — acontece
                 # com alguns tipos de mídia sem essa informação), cai pro
-                # caminho sequencial de sempre.
-                if total_size:
+                # caminho sequencial de sempre. Um arquivo que pode precisar
+                # ser dividido (ver _needs_split) também cai pro sequencial,
+                # mesmo com tamanho conhecido: só dá pra decidir os cortes
+                # com o download JÁ completo em disco, incompatível com
+                # upload simultâneo (que começa a enviar antes disso).
+                use_concurrent = bool(total_size) and total_size <= self.max_part_size_bytes
+                # EXPERIMENTAL (upload.experimental.streaming_split): só
+                # tentado quando o arquivo com certeza vai precisar de
+                # split (senão o caminho concorrente de sempre já resolve
+                # sem essa complexidade extra) e há como cortar (ffmpeg +
+                # ffprobe disponíveis). Pode desistir sem enviar nada (ver
+                # _stream_cut_and_upload_loop) — nesse caso o download já
+                # está completo em disco e cai pro split de sempre abaixo.
+                attempt_streaming_split = (
+                    not use_concurrent
+                    and self.experimental_streaming_split
+                    and bool(total_size)
+                    and total_size > self.max_part_size_bytes
+                    and self.can_remux
+                    and remux.ffprobe_available()
+                )
+                if use_concurrent:
                     logger.info("Baixando e enviando %s simultaneamente...", msg_id)
                     await asyncio.wait_for(
                         self._download_and_upload_concurrently(
@@ -570,6 +980,19 @@ class BotManager:
                         ),
                         timeout=_concurrent_timeout_for(total_size),
                     )
+                elif attempt_streaming_split:
+                    logger.info("Baixando %s com tentativa de streaming split (experimental)...", msg_id)
+                    parts_sent = await asyncio.wait_for(
+                        self._download_and_stream_split_upload(
+                            msg, msg_id, meta, target_group, file_path, resume_from_bytes, partial_remux_task,
+                        ),
+                        timeout=_concurrent_timeout_for(total_size),
+                    )
+                    if not parts_sent:
+                        logger.info(
+                            "Streaming split não se aplicou a %s; caindo pro split após download completo", msg_id,
+                        )
+                        await self._finish_upload_after_full_download(msg_id, meta, target_group, file_path)
                 else:
                     logger.info("Baixando %s para cache...", msg_id)
                     await self._download_then_upload_sequential(

@@ -15,12 +15,15 @@ WORKDIR /app
 # mudanças no código que não tocam em dependências.
 COPY requirements.txt ./code/requirements.txt
 RUN pip install --no-cache-dir -r code/requirements.txt gunicorn gevent
+# ffmpeg e ffprobe vêm via static-ffmpeg (requirements.txt) — sem apt-get.
+# Busca o binário da plataforma AQUI, no build (uma vez, com rede), pra
+# ficar em cache dentro da própria imagem — o container nunca depende de
+# rede pra ter ffmpeg/ffprobe disponíveis em runtime.
+RUN python -c "import static_ffmpeg.run; static_ffmpeg.run.get_or_fetch_platform_executables_else_raise()"
 
 COPY . ./code/
 
 WORKDIR /app/code
-
-# ffmpeg vem embutido via imageio-ffmpeg (requirements.txt) — sem apt-get.
 ENV PORT=5153 \
     PYTHONUNBUFFERED=1
 

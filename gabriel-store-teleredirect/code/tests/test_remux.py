@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import struct
@@ -355,6 +356,113 @@ class RemuxToMp4Tests(unittest.TestCase):
         self.assertFalse(os.path.exists(self.dst))
 
 
+class SplitSegmentToMp4Tests(unittest.TestCase):
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.src = os.path.join(self.tmp_dir, 'src.mp4')
+        self.dst = os.path.join(self.tmp_dir, 'part1.mp4')
+        with open(self.src, 'wb') as f:
+            f.write(b'conteudo-fake-de-video')
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    @mock.patch('remux.subprocess.run')
+    def test_success_replaces_destination_and_cleans_tmp(self, mock_run):
+        def fake_run(cmd, **kwargs):
+            with open(cmd[cmd.index('-f') + 2], 'wb') as f:
+                f.write(b'trecho remuxado fake')
+            return subprocess.CompletedProcess(cmd, 0, stdout=b'', stderr=b'')
+
+        mock_run.side_effect = fake_run
+        remux.split_segment_to_mp4(self.src, self.dst, start_seconds=10, duration_seconds=5)
+
+        self.assertTrue(os.path.exists(self.dst))
+        self.assertFalse(os.path.exists(self.dst + '.tmp'))
+
+    @mock.patch('remux.subprocess.run')
+    def test_uses_stream_copy_and_seeks_before_input(self, mock_run):
+        def fake_run(cmd, **kwargs):
+            with open(cmd[cmd.index('-f') + 2], 'wb') as f:
+                f.write(b'x')
+            return subprocess.CompletedProcess(cmd, 0, stdout=b'', stderr=b'')
+
+        mock_run.side_effect = fake_run
+        remux.split_segment_to_mp4(self.src, self.dst, start_seconds=10, duration_seconds=5)
+
+        cmd = mock_run.call_args[0][0]
+        self.assertIn('-c', cmd)
+        self.assertIn('copy', cmd)
+        # -ss ANTES de -i (seek rápido, único compatível com -c copy)
+        self.assertLess(cmd.index('-ss'), cmd.index('-i'))
+        self.assertIn('-t', cmd)
+        self.assertEqual(cmd[cmd.index('-t') + 1], '5')
+
+    @mock.patch('remux.subprocess.run')
+    def test_no_duration_omits_dash_t_to_go_until_the_end(self, mock_run):
+        def fake_run(cmd, **kwargs):
+            with open(cmd[cmd.index('-f') + 2], 'wb') as f:
+                f.write(b'x')
+            return subprocess.CompletedProcess(cmd, 0, stdout=b'', stderr=b'')
+
+        mock_run.side_effect = fake_run
+        remux.split_segment_to_mp4(self.src, self.dst, start_seconds=10, duration_seconds=None)
+
+        cmd = mock_run.call_args[0][0]
+        self.assertNotIn('-t', cmd)
+
+    @mock.patch('remux.subprocess.run')
+    def test_failure_raises_and_leaves_no_partial_output(self, mock_run):
+        def fake_run(cmd, **kwargs):
+            with open(cmd[cmd.index('-f') + 2], 'wb') as f:
+                f.write(b'saida parcial de uma falha')
+            return subprocess.CompletedProcess(cmd, 1, stdout=b'', stderr=b'erro fatal simulado')
+
+        mock_run.side_effect = fake_run
+
+        with self.assertRaises(RuntimeError):
+            remux.split_segment_to_mp4(self.src, self.dst, start_seconds=0, duration_seconds=5)
+
+        self.assertFalse(os.path.exists(self.dst))
+        self.assertFalse(os.path.exists(self.dst + '.tmp'))
+
+
+@unittest.skipUnless(remux.ffmpeg_available(), 'ffmpeg não está instalado nesta máquina')
+class SplitSegmentToMp4RealFfmpegTests(unittest.TestCase):
+    """Ponta a ponta com ffmpeg de verdade: gera um MP4 de 2s e confirma que
+    dividir em dois trechos de ~1s produz duas partes menores que o
+    original, cobrindo (com a folga de arredondamento no keyframe mais
+    próximo esperada de -c copy) o vídeo inteiro."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.src = os.path.join(self.tmp_dir, 'full.mp4')
+        subprocess.run(
+            [
+                remux._ffmpeg_binary(), '-y', '-f', 'lavfi', '-i', 'testsrc=duration=2:size=64x64:rate=10',
+                '-c:v', 'libx264', '-g', '5', '-f', 'mp4', self.src,
+            ],
+            check=True, capture_output=True,
+        )
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_two_parts_are_each_smaller_than_the_original(self):
+        full_size = os.path.getsize(self.src)
+        part1 = os.path.join(self.tmp_dir, 'part1.mp4')
+        part2 = os.path.join(self.tmp_dir, 'part2.mp4')
+
+        remux.split_segment_to_mp4(self.src, part1, start_seconds=0, duration_seconds=1)
+        remux.split_segment_to_mp4(self.src, part2, start_seconds=1, duration_seconds=None)
+
+        for part in (part1, part2):
+            self.assertTrue(os.path.exists(part))
+            size = os.path.getsize(part)
+            self.assertGreater(size, 0)
+            self.assertLess(size, full_size)
+
+
 @unittest.skipUnless(remux.ffmpeg_available(), 'ffmpeg não está instalado nesta máquina')
 class RemuxToMp4RealFfmpegTests(unittest.TestCase):
     """Só roda se ffmpeg estiver de fato disponível (empacotado via
@@ -441,6 +549,164 @@ class MoovTailRealFfmpegTests(unittest.TestCase):
         self.assertTrue(os.path.exists(preview_path))
         self.assertGreater(os.path.getsize(preview_path), 0)
         self.assertFalse(remux.needs_remux(preview_path), 'preview deveria sair com moov já no início (faststart)')
+
+
+def _fake_probe_result(packets, streams):
+    return subprocess.CompletedProcess(
+        [], 0, stdout=json.dumps({'packets': packets, 'streams': streams}).encode(), stderr=b'',
+    )
+
+
+class FindSafeCutPointSecondsMockedTests(unittest.TestCase):
+    """Casos de borda do cálculo, sem depender de ffprobe de verdade —
+    controla exatamente o JSON que ele devolveria."""
+
+    VIDEO_STREAM = {'index': 0, 'codec_type': 'video'}
+    AUDIO_STREAM = {'index': 1, 'codec_type': 'audio'}
+
+    @mock.patch('remux.subprocess.run')
+    def test_returns_none_when_not_even_the_first_keyframe_is_covered(self, mock_run):
+        packets = [
+            {'stream_index': 0, 'pts_time': '0.000000', 'pos': '0', 'size': '5000', 'flags': 'K__'},
+        ]
+        mock_run.return_value = _fake_probe_result(packets, [self.VIDEO_STREAM])
+        self.assertIsNone(remux.find_safe_cut_point_seconds('qualquer.mp4', up_to_bytes=1000))
+
+    @mock.patch('remux.subprocess.run')
+    def test_returns_largest_keyframe_time_fully_covered(self, mock_run):
+        packets = [
+            {'stream_index': 0, 'pts_time': '0.0', 'pos': '0', 'size': '1000', 'flags': 'K__'},
+            {'stream_index': 0, 'pts_time': '1.0', 'pos': '1000', 'size': '1000', 'flags': 'K__'},
+            {'stream_index': 0, 'pts_time': '2.0', 'pos': '2000', 'size': '1000', 'flags': 'K__'},
+        ]
+        mock_run.return_value = _fake_probe_result(packets, [self.VIDEO_STREAM])
+        # Cobre até o segundo keyframe (pos+size=2000) mas não o terceiro (3000).
+        self.assertEqual(remux.find_safe_cut_point_seconds('qualquer.mp4', up_to_bytes=2500), 1.0)
+
+    @mock.patch('remux.subprocess.run')
+    def test_non_keyframe_packets_beyond_cutoff_do_not_block_an_earlier_safe_keyframe(self, mock_run):
+        packets = [
+            {'stream_index': 0, 'pts_time': '0.0', 'pos': '0', 'size': '1000', 'flags': 'K__'},
+            {'stream_index': 0, 'pts_time': '0.5', 'pos': '1000', 'size': '9000', 'flags': '___'},
+            {'stream_index': 0, 'pts_time': '1.0', 'pos': '10000', 'size': '1000', 'flags': 'K__'},
+        ]
+        mock_run.return_value = _fake_probe_result(packets, [self.VIDEO_STREAM])
+        # O keyframe em 0.0 é seguro (pos+size=1000) mesmo que um pacote NÃO
+        # keyframe logo depois (0.5) já estoure o limite — o corte em 0.0
+        # não depende de nada além do que veio antes/nele.
+        self.assertEqual(remux.find_safe_cut_point_seconds('qualquer.mp4', up_to_bytes=1000), 0.0)
+
+    @mock.patch('remux.subprocess.run')
+    def test_audio_packet_beyond_video_keyframe_blocks_that_keyframe(self, mock_run):
+        packets = [
+            {'stream_index': 0, 'pts_time': '0.0', 'pos': '0', 'size': '500', 'flags': 'K__'},
+            # Pacote de ÁUDIO no mesmo instante do keyframe de vídeo, mas
+            # fisicamente mais adiante no arquivo — precisa contar também,
+            # senão o corte cortaria áudio pela metade.
+            {'stream_index': 1, 'pts_time': '0.0', 'pos': '5000', 'size': '2000', 'flags': 'K__'},
+        ]
+        mock_run.return_value = _fake_probe_result(packets, [self.VIDEO_STREAM, self.AUDIO_STREAM])
+        self.assertIsNone(remux.find_safe_cut_point_seconds('qualquer.mp4', up_to_bytes=1000))
+        self.assertEqual(remux.find_safe_cut_point_seconds('qualquer.mp4', up_to_bytes=7000), 0.0)
+
+    @mock.patch('remux.subprocess.run')
+    def test_returns_none_without_any_video_stream(self, mock_run):
+        packets = [{'stream_index': 1, 'pts_time': '0.0', 'pos': '0', 'size': '500', 'flags': 'K__'}]
+        mock_run.return_value = _fake_probe_result(packets, [self.AUDIO_STREAM])
+        self.assertIsNone(remux.find_safe_cut_point_seconds('qualquer.mp4', up_to_bytes=100000))
+
+    @mock.patch('remux.subprocess.run')
+    def test_returns_none_when_any_packet_lacks_pts_time(self, mock_run):
+        packets = [
+            {'stream_index': 0, 'pts_time': '0.0', 'pos': '0', 'size': '500', 'flags': 'K__'},
+            {'stream_index': 0, 'pts_time': 'N/A', 'pos': '500', 'size': '500', 'flags': '___'},
+        ]
+        mock_run.return_value = _fake_probe_result(packets, [self.VIDEO_STREAM])
+        # Sem pts_time confiável nesse pacote, não dá pra garantir a ordem
+        # temporal — mais vale desistir do que arriscar um corte incorreto.
+        self.assertIsNone(remux.find_safe_cut_point_seconds('qualquer.mp4', up_to_bytes=100000))
+
+    @mock.patch('remux.subprocess.run')
+    def test_ffprobe_failure_raises(self, mock_run):
+        mock_run.return_value = subprocess.CompletedProcess([], 1, stdout=b'', stderr=b'erro fatal simulado')
+        with self.assertRaises(RuntimeError):
+            remux.find_safe_cut_point_seconds('qualquer.mp4', up_to_bytes=100000)
+
+
+@unittest.skipUnless(remux.ffprobe_available(), 'ffprobe não está instalado nesta máquina')
+class FindSafeCutPointSecondsRealFfprobeTests(unittest.TestCase):
+    """Ponta a ponta com ffprobe de verdade: gera um MP4 com vídeo+áudio e
+    keyframes a cada 1s, e confirma que o ponto de corte cresce em degraus
+    exatamente nos keyframes conforme mais bytes "chegam" — a mesma
+    validação feita manualmente antes de escrever a implementação."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmp_dir, 'sample.mp4')
+        subprocess.run(
+            [
+                remux._ffmpeg_binary(), '-y',
+                '-f', 'lavfi', '-i', 'testsrc=duration=3:size=64x64:rate=10',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:duration=3',
+                '-c:v', 'libx264', '-g', '10', '-c:a', 'aac', '-f', 'mp4', self.path,
+            ],
+            check=True, capture_output=True,
+        )
+        self.full_size = os.path.getsize(self.path)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_safe_cut_point_advances_in_keyframe_steps_as_bytes_grow(self):
+        # ffprobe lê a tabela de amostras do moov real — não importa que o
+        # arquivo aqui esteja "completo" (sem buraco esparso): a função só
+        # usa `up_to_bytes` pra decidir até onde é seguro confiar, exatamente
+        # como faria sobre um arquivo ainda parcialmente baixado.
+        very_early = remux.find_safe_cut_point_seconds(self.path, up_to_bytes=200)
+        self.assertIsNone(very_early, 'não deveria achar nem o primeiro keyframe com tão poucos bytes')
+
+        full = remux.find_safe_cut_point_seconds(self.path, up_to_bytes=self.full_size)
+        self.assertIsNotNone(full)
+        self.assertLessEqual(full, 3.0)
+
+        partial = remux.find_safe_cut_point_seconds(self.path, up_to_bytes=self.full_size // 2)
+        self.assertIsNotNone(partial)
+        # Com metade dos bytes, o corte seguro não pode alcançar o mesmo
+        # ponto que com o arquivo inteiro.
+        self.assertLess(partial, full)
+
+    def test_cut_point_is_actually_extractable_from_only_the_downloaded_prefix(self):
+        # Reproduz o uso real: o moov de verdade só existe fora de ordem
+        # (buscado adiantado, ver _try_fetch_moov_tail), o resto do arquivo
+        # além do prefixo baixado é um buraco esparso — exatamente o que
+        # assemble_sparse_preview_source monta. Prova que dá pra extrair de
+        # verdade, via ffmpeg, até o ponto de corte retornado, usando só
+        # esse arquivo montado (nunca o arquivo completo).
+        with open(self.path, 'rb') as f:
+            full_content = f.read()
+        moov_offset = remux.find_moov_expected_offset(self.path)
+        if moov_offset is None:
+            self.skipTest('layout do ffmpeg não bateu com o padrão simples esperado')
+        moov_size = int.from_bytes(full_content[moov_offset:moov_offset + 4], 'big')
+        moov_bytes = full_content[moov_offset:moov_offset + moov_size]
+
+        tested_at_least_one_cut = False
+        for fraction in (0.3, 0.5, 0.7, 0.9):
+            up_to_bytes = int(moov_offset * fraction)  # sempre ANTES do moov real — download ainda em andamento
+            assembled_path = os.path.join(self.tmp_dir, f'assembled_{fraction}.mp4')
+            remux.assemble_sparse_preview_source(self.path, assembled_path, up_to_bytes, moov_offset, moov_bytes)
+
+            cut = remux.find_safe_cut_point_seconds(assembled_path, up_to_bytes)
+            if cut is None:
+                continue
+            tested_at_least_one_cut = True
+
+            output_path = os.path.join(self.tmp_dir, f'cut_{fraction}.mp4')
+            remux.split_segment_to_mp4(assembled_path, output_path, start_seconds=0, duration_seconds=cut)
+            self.assertTrue(os.path.exists(output_path))
+            self.assertGreater(os.path.getsize(output_path), 0)
+
+        self.assertTrue(tested_at_least_one_cut, 'nenhuma fração testada teve bytes suficientes pra um corte seguro')
 
 
 if __name__ == '__main__':

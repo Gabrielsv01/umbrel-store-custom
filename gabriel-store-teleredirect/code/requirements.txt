@@ -3,4 +3,4 @@ flask
 requests
 pyyaml
 qrcode[pil]
-imageio-ffmpeg
+static-ffmpeg

@@ -13,14 +13,69 @@ telethon:
 forward:
   from_bot_id: 1234567890
   to_group_id: -1001122334455
+  # Opcional: de quanto em quanto tempo (segundos) a mensagem de status
+  # enviada ao grupo (baixando/enviando %) é editada no lugar. Um valor
+  # muito baixo pode esbarrar em rate limit do Telegram. Padrão: 20.
+  status_message_interval_seconds: 20
 
 # URL base que o bot envia para o grupo apontando para o proxy de stream.
 # Use o IP da máquina onde a aplicação roda (visível na sua rede local).
 proxy:
-  base_url: "http://localhost:5153"
+  base_url: "http://0.0.0.0:5153"
 
 # Opcional: por quanto tempo (segundos) uma mídia já encaminhada continua
 # disponível em cache local para quem estiver assistindo via /stream antes
 # de ser removida do disco. Padrão: 3600 (1 hora).
 cache:
   retention_seconds: 3600
+  # Opcional: de quanto em quanto tempo (segundos) a varredura de cache
+  # expirado roda em segundo plano, independente de tráfego. Padrão: 300.
+  cleanup_interval_seconds: 300
+
+# Opcional: pisos de throughput (KB/s) usados só para ESTIMAR um timeout de
+# download/upload proporcional ao tamanho do arquivo — não é um limite de
+# velocidade real, é uma rede de segurança contra transferências travadas
+# por queda de conexão. Ajuste para baixo se sua conexão for mais lenta que
+# o padrão (ex.: upload residencial) e downloads/uploads grandes estiverem
+# vencendo o timeout antes de terminar.
+download:
+  min_throughput_kbps: 2000       # padrão: 150
+  default_timeout_seconds: 1800  # timeout mínimo, mesmo p/ arquivos pequenos. Padrão: 1800 (30min)
+  timeout_grace_seconds: 60      # folga somada ao timeout calculado. Padrão: 60
+
+upload:
+  # Banda de subida residencial costuma ser bem mais fraca que a de
+  # download — por isso um piso mais baixo que download.min_throughput_kbps.
+  min_throughput_kbps: 1000        # padrão: 80
+  # Tamanho máximo (MB) de um único arquivo reenviado ao grupo. Acima
+  # disso, o vídeo é dividido em partes (Parte 1/N, Parte 2/N, ...) via
+  # ffmpeg (stream copy, sem recodificar) antes do reenvio — só afeta a
+  # cópia enviada ao grupo; o player web local sempre serve o arquivo
+  # original completo (/stream nunca é dividido).
+  # Contas Telegram normais têm limite de ~2000MB por arquivo (Premium:
+  # ~4000MB) — o padrão fica com folga de segurança abaixo desse teto, já
+  # que o corte só é preciso até o keyframe mais próximo, não exato.
+  # A divisão só é possível quando dá pra saber a duração do vídeo e o
+  # ffmpeg está disponível; sem isso, o envio segue normal (e falha se
+  # passar do limite do Telegram, como seria sem esta opção).
+  max_part_size_mb: 1900        # padrão: 1900
+
+  # EXPERIMENTAL: em vez de esperar o download terminar 100% pra só então
+  # cortar e reenviar em partes, tenta reenviar cada parte assim que ela
+  # fica pronta, enquanto o RESTO do arquivo ainda está sendo baixado (o
+  # download nunca é interrompido — só o envio de cada parte fica em fila,
+  # uma de cada vez). Só se aplica a vídeos MP4 cujo índice de keyframes
+  # (moov) consiga ser obtido adiantado; Matroska ou MP4 fora do padrão
+  # simples esperado caem automaticamente para o comportamento padrão
+  # acima (divide só depois que o download inteiro terminar). Padrão:
+  # false (desligado) — ainda pouco testado em produção.
+  experimental:
+    streaming_split: false
+
+# Opcional: com que frequência o ffmpeg gera uma prévia web parcial enquanto
+# o download de um arquivo ainda está em andamento. Aumente o intervalo (ou
+# o volume mínimo de bytes novos) em hardware mais fraco para reduzir o uso
+# de CPU, ao custo de a prévia demorar mais para atualizar.
+remux:
+  partial_interval_seconds: 20    # padrão: 20
+  partial_min_new_bytes_mb: 8     # padrão: 8
