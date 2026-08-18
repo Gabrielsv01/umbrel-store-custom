@@ -4,7 +4,7 @@ name: 9Router
 tagline: Self-hosted router / proxy manager
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-9router/icon.svg
 category: Networking
-version: "1.0.1"
+version: "1.0.2"
 port: 5151
 description: >-
   9Router is a self-hosted routing and proxy management tool.
