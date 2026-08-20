@@ -4,7 +4,7 @@ name: Metube
 tagline: Download videos from YouTube and other sites with metube
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-metube/icon.svg
 category: Utilities
-version: "1.0.0"
+version: "1.0.1"
 port: 5152
 description: >-
   This app allows you to download videos from YouTube and other sites using metube.
