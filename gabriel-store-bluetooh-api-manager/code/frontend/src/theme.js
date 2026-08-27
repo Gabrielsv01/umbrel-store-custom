@@ -1,4 +1,4 @@
-import { createTheme } from "@mui/material/styles";
+import { createTheme, alpha } from "@mui/material/styles";
 
 // Mirrors the palette that used to live in styles.css (:root vars) so the
 // MUI migration doesn't change the app's visual identity.
@@ -13,7 +13,7 @@ export const theme = createTheme({
     divider: "#2b3a57",
     text: { primary: "#e6ecf5", secondary: "#8ba0c0" },
   },
-  shape: { borderRadius: 10 },
+  shape: { borderRadius: 12 },
   typography: {
     fontFamily: `system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`,
   },
@@ -41,6 +41,24 @@ export const theme = createTheme({
     MuiStack: {
       styleOverrides: {
         root: { minWidth: 0 },
+      },
+    },
+    // A translucent background alone (MUI's default `.Mui-selected` state)
+    // reads as barely-there on a dark surface. A colored left rail makes the
+    // active sidebar section legible at a glance, matching the accent used
+    // for "connected"/"live" state elsewhere in the app.
+    MuiListItemButton: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          borderLeft: "3px solid transparent",
+          "&.Mui-selected": {
+            borderLeftColor: theme.palette.primary.main,
+            backgroundColor: alpha(theme.palette.primary.main, 0.12),
+          },
+          "&.Mui-selected:hover": {
+            backgroundColor: alpha(theme.palette.primary.main, 0.18),
+          },
+        }),
       },
     },
   },

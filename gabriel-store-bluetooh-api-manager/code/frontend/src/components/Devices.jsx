@@ -128,6 +128,7 @@ export default function Devices({ ble, classic, adapter, onChange }) {
 
   return (
     <Box>
+      <Typography variant="h5" gutterBottom>Devices</Typography>
       <Stack direction="row" spacing={2} sx={{ alignItems: "flex-start", flexWrap: "wrap", mb: 2 }}>
         <Typography variant="body2" color="text.secondary" sx={{ flex: 1, minWidth: 240 }}>
           Cada card é um dispositivo físico. <b>LE</b> = Low Energy (dados/GATT),{" "}
