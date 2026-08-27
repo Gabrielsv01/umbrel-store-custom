@@ -334,9 +334,17 @@ class AudioService:
                 continue
             device = self._keepalive_device
             try:
-                result = await self._connect(device)
-                if result == "already" and not await self._a2dp_pcm_available(device):
-                    result = await self._connect(device, force=True)
+                # Discovery can make bluetoothctl select the Alexa's LE
+                # endpoint and abort locally instead of bringing up Classic
+                # A2DP. Match the playback path and stop inquiry first.
+                await ble.pause_scan()
+                await asyncio.sleep(0.5)
+                try:
+                    result = await self._connect(device)
+                    if result == "already" and not await self._a2dp_pcm_available(device):
+                        result = await self._connect(device, force=True)
+                finally:
+                    await ble.resume_scan()
                 bus.publish("audio_keepalive", level="debug", device=device,
                             result=result)
             except Exception as exc:  # noqa: BLE001 - retry on the next interval
