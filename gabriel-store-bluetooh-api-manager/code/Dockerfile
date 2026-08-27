@@ -11,9 +11,8 @@ FROM python:3.12-slim AS runtime
 
 # System deps:
 #  - bluez / bluez-tools: bluetoothctl, obexctl (Classic pairing, OBEX file push)
-#  - dbus: talk to the host's bluetoothd over the system bus
+#  - dbus: provide the private system/session buses used by the app daemons
 #  - ffmpeg: decode/transcode audio for A2DP streaming
-#  - pulseaudio-utils: route audio to a host PulseAudio server (best-effort)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         bluez \
         bluez-tools \

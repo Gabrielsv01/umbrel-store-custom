@@ -4,7 +4,7 @@ name: Bluetooth API Manager
 tagline: Manage Bluetooth devices, stream data and control them over an API
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-bluetooh-api-manager/icon.svg
 category: Utilities
-version: "1.5.11"
+version: "1.5.12"
 port: 5157
 description: >-
   Bluetooth API Manager gives you a single place to see and control the
@@ -23,15 +23,17 @@ description: >-
     to a device and read/write its characteristics.
 
   - Stream any audio file — local upload or a direct URL — to a Bluetooth
-    speaker/headset (A2DP, best-effort, requires an audio server on the host).
+    speaker/headset (A2DP, best-effort, uses the container's bluez-alsa).
 
   - Send files to a device over OBEX Object Push.
 
   - A web interface to watch everything happening on the manager in real time.
 
 
-  Requires a host with a working Bluetooth adapter and the BlueZ stack
-  (bluetoothd). Runs with host networking and access to the system D-Bus.
+  Requires a host with a working Bluetooth adapter. The app runs its own
+  bluetoothd, D-Bus, bluez-alsa and obexd inside the container, so the host's
+  Bluetooth service must be disabled to avoid competing for the adapter.
+  Runs with host networking and privileged access to the adapter.
 developer: Gabriel Vieira
 website: https://github.com/Gabrielsv01/umbrel-store-custom
 submitter: Gabriel Vieira
@@ -40,6 +42,9 @@ repo: https://github.com/Gabrielsv01/umbrel-store-custom
 support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
 gallery: []
 releaseNotes: >-
+  1.5.12: periodically reconnect the last-used speaker while idle, reducing
+  failures after Alexa drops its A2DP link to save power. The interval is
+  configurable with AUDIO_KEEPALIVE_INTERVAL. 1.5.11: improved audio telemetry.
   1.5.10: fewer connect/disconnect chimes — a device now stays "warm" for a
   short window after playing, so a nearby next play reuses the live A2DP link and
   skips the warm-up (only a genuinely cold speaker does the silent warm-up).

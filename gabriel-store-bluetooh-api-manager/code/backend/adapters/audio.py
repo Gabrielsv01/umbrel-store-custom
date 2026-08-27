@@ -45,6 +45,11 @@ A2DP_SETTLE = 2.0
 # timeout so we don't treat a link the speaker already dropped as warm.
 WARM_GRACE_SECONDS = 30.0
 
+# Alexa speakers may drop the Classic/A2DP link after a period without audio.
+# Reconnect periodically after the first successful play so the next track does
+# not have to discover a dead link. Set to 0 to disable this behavior.
+KEEPALIVE_INTERVAL = float(os.getenv("AUDIO_KEEPALIVE_INTERVAL", "20"))
+
 # aplay/bluealsa errors that all mean "A2DP link isn't ready to stream yet": the
 # device is connected at ACL level but the audio transport isn't up, so the PCM
 # is missing OR exists without a valid codec config (hw params won't install).
@@ -79,6 +84,8 @@ class AudioService:
         # reuse the live link and skip it (no glitch, no reconnect chime).
         self._warm_device: Optional[str] = None
         self._warm_until: float = 0.0
+        self._keepalive_task: Optional[asyncio.Task] = None
+        self._keepalive_device: Optional[str] = None
 
     # ---- public API ------------------------------------------------------
     def status(self) -> Dict[str, Any]:
@@ -162,6 +169,15 @@ class AudioService:
             bus.publish("audio_connect", level="warn", device=device,
                         detail=text.strip()[-200:])
         return "connected" if ok else "failed"
+
+    async def _a2dp_pcm_available(self, device: str) -> bool:
+        """Check the audio profile, not just the ACL connection state."""
+        proc = await asyncio.create_subprocess_exec(
+            "aplay", "-L", stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await proc.communicate()
+        return f"bluealsa:DEV={device}".lower().encode() in (out or b"").lower()
 
     async def _pipe(self, ffmpeg_in: List[str], device: str) -> tuple[int, bytes, bytes]:
         """Decode `ffmpeg_in` and stream it to the speaker's bluez-alsa PCM."""
@@ -295,6 +311,7 @@ class AudioService:
             # the warm-up (and its reconnect chime).
             self._warm_device = device
             self._warm_until = time.monotonic() + WARM_GRACE_SECONDS
+            self._start_keepalive(device)
             bus.publish("audio_finished", source=source, device=device,
                         from_cold=cold, attempts=attempts, total_ms=total_ms)
         else:
@@ -302,6 +319,29 @@ class AudioService:
             bus.publish("error", where="audio", source=source, device=device,
                         attempts=attempts, total_ms=total_ms,
                         message=msg or f"aplay exit {code}")
+
+    def _start_keepalive(self, device: str) -> None:
+        if KEEPALIVE_INTERVAL <= 0:
+            return
+        self._keepalive_device = device
+        if self._keepalive_task is None or self._keepalive_task.done():
+            self._keepalive_task = asyncio.create_task(self._keepalive_loop())
+
+    async def _keepalive_loop(self) -> None:
+        while KEEPALIVE_INTERVAL > 0 and self._keepalive_device:
+            await asyncio.sleep(KEEPALIVE_INTERVAL)
+            if self._current is not None:
+                continue
+            device = self._keepalive_device
+            try:
+                result = await self._connect(device)
+                if result == "already" and not await self._a2dp_pcm_available(device):
+                    result = await self._connect(device, force=True)
+                bus.publish("audio_keepalive", level="debug", device=device,
+                            result=result)
+            except Exception as exc:  # noqa: BLE001 - retry on the next interval
+                bus.publish("audio_keepalive", level="warn", device=device,
+                            result="failed", detail=str(exc)[-200:])
 
     async def _kill_current(self, interrupt: bool) -> None:
         self._interrupt = interrupt

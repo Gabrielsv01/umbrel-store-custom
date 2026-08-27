@@ -1,9 +1,7 @@
 version: "3.7"
 services:
   bluetooth-api-manager:
-    # Pre-built image pulled from Docker Hub (Umbrel does not build on-device).
-    # To rebuild locally: `docker build -t gabrielsv01/bluetooth-api-manager:1.5.11 ./code`
-    image: gabrielsv01/bluetooth-api-manager:1.5.11
+    image: gabrielsv01/bluetooth-api-manager:1.5.12
     container_name: bluetooth-api-manager
     environment:
       - PORT=5157
@@ -26,6 +24,8 @@ services:
       # and the real track plays into a still-waking speaker (heard as "the first
       # message didn't play"). Raise toward 5-6s if a first play is still swallowed.
       - AUDIO_COLD_WARMUP=4.0
+      # Reconnect the last-used speaker while idle. Set to 0 to disable.
+      - AUDIO_KEEPALIVE_INTERVAL=20
     # Host networking + privileged give the container direct access to the HCI
     # Bluetooth adapter. The app runs its OWN Bluetooth stack (bluetoothd,
     # bluez-alsa, obexd) so it is fully self-contained — no host audio server or
