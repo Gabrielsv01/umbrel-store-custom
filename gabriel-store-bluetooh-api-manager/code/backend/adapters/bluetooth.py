@@ -15,6 +15,7 @@ from bleak.backends.scanner import AdvertisementData
 from dbus_fast import BusType
 from dbus_fast.aio import MessageBus
 
+from ..core.config import settings
 from ..core.events import bus
 
 
@@ -37,6 +38,9 @@ class BLEManager:
     async def start(self) -> None:
         """Start a continuous background scan so the device list stays live."""
         if self._scanning:
+            return
+        if settings.MOCK_HARDWARE:
+            bus.publish("scan_state", scanning=False, mock=True)
             return
         try:
             self._scanner = BleakScanner(detection_callback=self._on_detection)
@@ -99,6 +103,8 @@ class BLEManager:
         Returns None if no adapter/BlueZ is reachable — which itself is a useful
         signal ("why do I see no devices?").
         """
+        if settings.MOCK_HARDWARE:
+            return None
         try:
             sysbus = await MessageBus(bus_type=BusType.SYSTEM).connect()
         except Exception:  # noqa: BLE001

@@ -1,4 +1,9 @@
 import { useEffect, useState } from "react";
+import {
+  Box, Card, CardContent, Stack, Select, MenuItem, FormControl, InputLabel,
+  TextField, Button, Typography, Alert,
+} from "@mui/material";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import { api } from "../api.js";
 
 export default function Files({ devices }) {
@@ -15,8 +20,8 @@ export default function Files({ devices }) {
   async function send() {
     setError(null);
     setResult(null);
-    if (!address) return setError("Enter a device address.");
-    if (!file) return setError("Choose a file to send.");
+    if (!address) return setError("Informe o endereço do dispositivo.");
+    if (!file) return setError("Escolha um arquivo para enviar.");
     setBusy(true);
     try {
       setResult(await api.sendFile(address, file));
@@ -28,48 +33,49 @@ export default function Files({ devices }) {
   }
 
   return (
-    <section>
-      <p className="hint">
-        Send a file to a paired device over Bluetooth (OBEX Object Push). The
-        device must be paired and accept incoming files.
-      </p>
-      {error && <div className="error">{error}</div>}
+    <Box>
+      <Typography variant="h5" gutterBottom>Files</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Envie um arquivo para um dispositivo pareado via Bluetooth (OBEX Object Push).
+        O dispositivo precisa estar pareado e aceitar arquivos recebidos.
+      </Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
       {result && (
-        <div className={`error ${result.status === "complete" ? "ok-box" : ""}`}>
-          {result.file} → {result.address}: <strong>{result.status}</strong>
-        </div>
+        <Alert severity={result.status === "complete" ? "success" : "info"} sx={{ mb: 2 }}>
+          {result.file} → {result.address}: <b>{result.status}</b>
+        </Alert>
       )}
 
-      <div className="card">
-        <div className="row">
-          <label>Device:&nbsp;</label>
-          {devices.length > 0 ? (
-            <select value={address} onChange={(e) => setAddress(e.target.value)}>
-              {devices.map((d) => (
-                <option key={d.address} value={d.address}>
-                  {d.name} ({d.address})
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              type="text"
-              placeholder="AA:BB:CC:DD:EE:FF"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-            />
-          )}
-        </div>
-        <div className="row">
-          <label>File:&nbsp;</label>
-          <input type="file" onChange={(e) => setFile(e.target.files[0])} />
-        </div>
-        <div className="row">
-          <button onClick={send} disabled={busy}>
-            {busy ? "Sending…" : "Send file"}
-          </button>
-        </div>
-      </div>
-    </section>
+      <Card>
+        <CardContent>
+          <Stack spacing={2}>
+            {devices.length > 0 ? (
+              <FormControl size="small" fullWidth>
+                <InputLabel>Dispositivo</InputLabel>
+                <Select label="Dispositivo" value={address} onChange={(e) => setAddress(e.target.value)}>
+                  {devices.map((d) => (
+                    <MenuItem key={d.address} value={d.address}>{d.name} ({d.address})</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : (
+              <TextField size="small" label="Endereço do dispositivo" placeholder="AA:BB:CC:DD:EE:FF"
+                value={address} onChange={(e) => setAddress(e.target.value)} fullWidth />
+            )}
+
+            <Button component="label" variant="outlined" startIcon={<CloudUploadIcon />}>
+              {file ? file.name : "Escolher arquivo"}
+              <input hidden type="file" onChange={(e) => setFile(e.target.files[0])} />
+            </Button>
+
+            <Box>
+              <Button variant="contained" onClick={send} disabled={busy}>
+                {busy ? "Enviando…" : "Enviar arquivo"}
+              </Button>
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+    </Box>
   );
 }

@@ -1,4 +1,9 @@
 import { useState } from "react";
+import {
+  Box, Card, CardContent, Stack, Chip, IconButton, Button, TextField,
+  Typography, Alert, Tooltip,
+} from "@mui/material";
+import EditIcon from "@mui/icons-material/Edit";
 import { api } from "../api.js";
 
 function signalBars(rssi) {
@@ -70,7 +75,7 @@ export default function Devices({ ble, classic, adapter, onChange }) {
   const groups = unify(ble, classic);
 
   async function rename(addr, current) {
-    const name = window.prompt("Friendly name for this device:", current || "");
+    const name = window.prompt("Nome amigável para este dispositivo:", current || "");
     if (!name) return;
     setBusy(addr);
     setError(null);
@@ -122,110 +127,112 @@ export default function Devices({ ble, classic, adapter, onChange }) {
   }
 
   return (
-    <section>
-      <div className="row">
-        <p className="hint" style={{ margin: 0, flex: 1 }}>
-          Each card is one physical device. <strong>LE</strong> = Low Energy
-          (data/GATT), <strong>Classic</strong> = BR/EDR (audio/files). Put a
-          speaker in pairing mode and Scan to find it.
-        </p>
-        <button onClick={scan} disabled={scanning}>
-          {scanning ? "Scanning…" : "Scan"}
-        </button>
-      </div>
-      {error && <div className="error">{error}</div>}
+    <Box>
+      <Stack direction="row" spacing={2} sx={{ alignItems: "flex-start", flexWrap: "wrap", mb: 2 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ flex: 1, minWidth: 240 }}>
+          Cada card é um dispositivo físico. <b>LE</b> = Low Energy (dados/GATT),{" "}
+          <b>Classic</b> = BR/EDR (áudio/arquivos). Coloque um alto-falante em modo
+          de pareamento e clique em Scan para encontrá-lo.
+        </Typography>
+        <Button variant="outlined" onClick={scan} disabled={scanning}>
+          {scanning ? "Escaneando…" : "Scan"}
+        </Button>
+      </Stack>
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
-      <div className="row" style={{ fontSize: "0.85rem" }}>
-        <label>This Pi&apos;s Bluetooth name:&nbsp;</label>
-        <input
-          type="text"
-          placeholder={adapter?.alias || adapter?.name || "e.g. Umbrel BT"}
-          value={adapterName}
-          onChange={(e) => setAdapterName(e.target.value)}
-          style={{ flex: 1 }}
-        />
-        <button onClick={saveAdapterName}>Save</button>
-      </div>
+      <Card sx={{ mb: 2 }}>
+        <CardContent>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+            <TextField
+              size="small" label="Nome Bluetooth deste Pi"
+              placeholder={adapter?.alias || adapter?.name || "ex: Umbrel BT"}
+              value={adapterName} onChange={(e) => setAdapterName(e.target.value)}
+              sx={{ flex: 1, minWidth: 220 }}
+            />
+            <Button variant="outlined" onClick={saveAdapterName}>Salvar</Button>
+          </Stack>
+        </CardContent>
+      </Card>
 
-      {groups.length === 0 && <p className="empty">No devices yet — scanning…</p>}
+      {groups.length === 0 && (
+        <Typography color="text.secondary" fontStyle="italic">Nenhum dispositivo ainda — escaneando…</Typography>
+      )}
 
-      {groups.map((g) => {
-        const cAddr = g.classic?.address;
-        const leAddr = g.le?.address;
-        return (
-          <div key={g.addresses.join()} className={`card device ${g.connected ? "connected" : ""}`}>
-            <div className="row">
-              <strong>{g.name}</strong>
-              {g.le && <span className="badge le">LE</span>}
-              {g.classic && <span className="badge classic">Classic</span>}
-              {g.connected && <span className="badge on">connected</span>}
-              <button
-                title="Rename"
-                disabled={busy === (cAddr || leAddr)}
-                onClick={() => rename(cAddr || leAddr, g.name)}
-                style={{ marginLeft: "auto" }}
-              >
-                ✎
-              </button>
-              <span className="mono signal">
-                {signalBars(g.rssi)} {g.rssi != null ? `${g.rssi}dBm` : ""}
-              </span>
-            </div>
+      <Stack spacing={2}>
+        {groups.map((g) => {
+          const cAddr = g.classic?.address;
+          const leAddr = g.le?.address;
+          return (
+            <Card key={g.addresses.join()} variant="outlined"
+              sx={{ borderColor: g.connected ? "success.main" : "divider" }}>
+              <CardContent>
+                <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                  <Typography fontWeight={600}>{g.name}</Typography>
+                  {g.le && <Chip size="small" label="LE" variant="outlined" />}
+                  {g.classic && <Chip size="small" label="Classic" color="primary" variant="outlined" />}
+                  {g.connected && <Chip size="small" label="connected" color="success" />}
+                  <Box sx={{ flex: 1 }} />
+                  <Typography variant="caption" className="mono" color="text.secondary">
+                    {signalBars(g.rssi)} {g.rssi != null ? `${g.rssi}dBm` : ""}
+                  </Typography>
+                  <Tooltip title="Renomear">
+                    <IconButton size="small" disabled={busy === (cAddr || leAddr)}
+                      onClick={() => rename(cAddr || leAddr, g.name)}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
 
-            {g.classic && (
-              <div className="row sub">
-                <span className="mono">{cAddr}</span>
-                <span className="props">
-                  Classic · {g.classic.paired ? "paired" : "not paired"}
-                  {g.classic.connected ? " · connected" : ""}
-                </span>
-                <span style={{ marginLeft: "auto" }} className="char-actions">
-                  {!g.classic.connected ? (
-                    <button
-                      disabled={busy === cAddr}
-                      onClick={() => run(cAddr, () => api.classicPairConnect(cAddr))}
-                    >
-                      {busy === cAddr ? "…" : g.classic.paired ? "Connect" : "Pair + Connect"}
-                    </button>
-                  ) : (
-                    <button disabled={busy === cAddr} onClick={() => run(cAddr, () => api.classicDisconnect(cAddr))}>
-                      Disconnect
-                    </button>
-                  )}
-                  {g.classic.paired && (
-                    <button
-                      title="Remove the pairing/link key. Use if audio fails with an authentication error, then Pair + Connect again with the speaker in pairing mode."
-                      disabled={busy === cAddr}
-                      onClick={() => run(cAddr, () => api.classicForget(cAddr))}
-                    >
-                      Forget
-                    </button>
-                  )}
-                </span>
-              </div>
-            )}
+                {g.classic && (
+                  <Stack direction="row" spacing={1.5}
+                    sx={{ alignItems: "center", flexWrap: "wrap", mt: 1.5, pt: 1.5, borderTop: 1, borderColor: "divider" }}>
+                    <Typography variant="caption" className="mono">{cAddr}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Classic · {g.classic.paired ? "pareado" : "não pareado"}
+                      {g.classic.connected ? " · conectado" : ""}
+                    </Typography>
+                    <Box sx={{ flex: 1 }} />
+                    {!g.classic.connected ? (
+                      <Button size="small" disabled={busy === cAddr}
+                        onClick={() => run(cAddr, () => api.classicPairConnect(cAddr))}>
+                        {busy === cAddr ? "…" : g.classic.paired ? "Conectar" : "Parear + Conectar"}
+                      </Button>
+                    ) : (
+                      <Button size="small" disabled={busy === cAddr}
+                        onClick={() => run(cAddr, () => api.classicDisconnect(cAddr))}>
+                        Desconectar
+                      </Button>
+                    )}
+                    {g.classic.paired && (
+                      <Tooltip title="Remove o vínculo/chave de pareamento. Use se o áudio falhar com erro de autenticação, depois pareie de novo com o alto-falante em modo de pareamento.">
+                        <Button size="small" color="warning" disabled={busy === cAddr}
+                          onClick={() => run(cAddr, () => api.classicForget(cAddr))}>
+                          Esquecer
+                        </Button>
+                      </Tooltip>
+                    )}
+                  </Stack>
+                )}
 
-            {g.le && (
-              <div className="row sub">
-                <span className="mono">{leAddr}</span>
-                <span className="props">LE · {g.le.connected ? "connected (GATT)" : "not connected"}</span>
-                <span style={{ marginLeft: "auto" }} className="char-actions">
-                  <button
-                    disabled={busy === leAddr}
-                    onClick={() =>
-                      run(leAddr, () =>
-                        g.le.connected ? api.disconnect(leAddr) : api.connect(leAddr)
-                      )
-                    }
-                  >
-                    {busy === leAddr ? "…" : g.le.connected ? "Disconnect" : "Connect (BLE data)"}
-                  </button>
-                </span>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </section>
+                {g.le && (
+                  <Stack direction="row" spacing={1.5}
+                    sx={{ alignItems: "center", flexWrap: "wrap", mt: 1.5, pt: 1.5, borderTop: 1, borderColor: "divider" }}>
+                    <Typography variant="caption" className="mono">{leAddr}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      LE · {g.le.connected ? "conectado (GATT)" : "não conectado"}
+                    </Typography>
+                    <Box sx={{ flex: 1 }} />
+                    <Button size="small" disabled={busy === leAddr}
+                      onClick={() => run(leAddr, () => (g.le.connected ? api.disconnect(leAddr) : api.connect(leAddr)))}>
+                      {busy === leAddr ? "…" : g.le.connected ? "Desconectar" : "Conectar (BLE)"}
+                    </Button>
+                  </Stack>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </Stack>
+    </Box>
   );
 }

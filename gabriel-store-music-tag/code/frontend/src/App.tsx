@@ -16,8 +16,11 @@ const COLUMNS: { key: string; label: string }[] = [
 
 export default function App() {
   const qc = useQueryClient();
-  const [search, setSearch] = useState("");
-  const [debounced, setDebounced] = useState("");
+  // Lets another app deep-link here with a prefilled search, e.g.
+  // /?search=Some+Song+Title — read once on load, not re-synced afterwards.
+  const initialSearch = new URLSearchParams(window.location.search).get("search") || "";
+  const [search, setSearch] = useState(initialSearch);
+  const [debounced, setDebounced] = useState(initialSearch);
   const [sort, setSort] = useState("artist");
   const [order, setOrder] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);

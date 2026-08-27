@@ -1,6 +1,7 @@
 """Small in-memory Navidrome/Subsonic client for the web UI."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import os
 import secrets
@@ -68,6 +69,11 @@ class NavidromeClient:
     def _stream_url(self, track_id: str) -> str:
         return urljoin(self.base_url, "rest/stream") + "?" + urlencode({**self._auth_params(), "id": track_id})
 
+    def _cover_url(self, cover_id: Optional[str]) -> Optional[str]:
+        if not cover_id:
+            return None
+        return urljoin(self.base_url, "rest/getCoverArt") + "?" + urlencode({**self._auth_params(), "id": cover_id})
+
     def _track(self, item: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "id": item.get("id"),
@@ -76,6 +82,7 @@ class NavidromeClient:
             "album": item.get("album", ""),
             "duration": item.get("duration"),
             "stream_url": self._stream_url(str(item["id"])),
+            "cover_url": self._cover_url(item.get("coverArt") or item.get("id")),
         }
 
     async def search(self, query: str) -> List[Dict[str, Any]]:
@@ -84,10 +91,27 @@ class NavidromeClient:
 
     async def playlists(self) -> List[Dict[str, Any]]:
         result = await self._call("getPlaylists.view")
-        return [
-            {"id": item.get("id"), "name": item.get("name", "Untitled"), "song_count": item.get("songCount", 0)}
-            for item in result.get("playlists", {}).get("playlist", [])
-        ]
+        items = result.get("playlists", {}).get("playlist", [])
+
+        # getPlaylists.view's own songCount can be stale (seen 0 for playlists
+        # that clearly have tracks). getPlaylist.view's entry list is always
+        # accurate, so fetch it for every playlist and use the real count —
+        # capped concurrency so a big library doesn't fire 40+ requests at
+        # once against the Navidrome server.
+        semaphore = asyncio.Semaphore(8)
+
+        async def with_real_count(item: Dict[str, Any]) -> Dict[str, Any]:
+            playlist_id = item.get("id")
+            fallback = item.get("songCount", 0)
+            async with semaphore:
+                try:
+                    detail = await self._call("getPlaylist.view", id=playlist_id)
+                    count = len(detail.get("playlist", {}).get("entry", []))
+                except Exception:  # noqa: BLE001 - keep the list usable even if one lookup fails
+                    count = fallback
+            return {"id": playlist_id, "name": item.get("name", "Untitled"), "song_count": count}
+
+        return list(await asyncio.gather(*(with_real_count(item) for item in items)))
 
     async def playlist(self, playlist_id: str) -> Dict[str, Any]:
         result = await self._call("getPlaylist.view", id=playlist_id)
@@ -102,8 +126,20 @@ class NavidromeClient:
         from .adapters.audio import audio
 
         for track in tracks:
-            audio.enqueue(track["stream_url"], device=device, label=f'{track["artist"]} - {track["title"]}', source_type="navidrome")
+            audio.enqueue(track["stream_url"], device=device, label=f'{track["artist"]} - {track["title"]}',
+                          source_type="navidrome", duration=track.get("duration"),
+                          title=track.get("title"), artist=track.get("artist"),
+                          cover_url=track.get("cover_url"))
         return audio.status()
+
+    async def play_now(self, track: Dict[str, Any], device: str) -> Dict[str, Any]:
+        from .adapters.audio import audio
+
+        return await audio.play_now(track["stream_url"], device=device,
+                                     label=f'{track["artist"]} - {track["title"]}',
+                                     source_type="navidrome", duration=track.get("duration"),
+                                     title=track.get("title"), artist=track.get("artist"),
+                                     cover_url=track.get("cover_url"))
 
 
 navidrome = NavidromeClient()

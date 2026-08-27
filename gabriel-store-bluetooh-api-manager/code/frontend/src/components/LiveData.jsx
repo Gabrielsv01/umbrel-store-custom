@@ -1,4 +1,8 @@
 import { useEffect, useState } from "react";
+import {
+  Box, Grid, Card, CardContent, Stack, Select, MenuItem, FormControl,
+  InputLabel, Button, Typography, Alert, List, ListItem, ListItemText,
+} from "@mui/material";
 import { api } from "../api.js";
 
 export default function LiveData({ devices, gattData }) {
@@ -43,89 +47,99 @@ export default function LiveData({ devices, gattData }) {
 
   const feed = gattData.filter((g) => !selected || g.address === selected);
 
-  return (
-    <section className="live">
-      {connected.length === 0 ? (
-        <p className="empty">
-          No <strong>BLE data</strong> connection. Live Data shows GATT
-          characteristics — connect a device with <strong>“Connect (BLE data)”</strong>
-          in the Devices tab. Audio (Classic) connections, like speakers/headsets,
-          don’t provide GATT data here.
-        </p>
-      ) : (
-        <>
-          <div className="row">
-            <label>Device:&nbsp;</label>
-            <select value={selected} onChange={(e) => setSelected(e.target.value)}>
-              {connected.map((d) => (
-                <option key={d.address} value={d.address}>
-                  {d.name} ({d.address})
-                </option>
-              ))}
-            </select>
-            <button onClick={() => loadServices(selected)}>Refresh</button>
-          </div>
-          {error && <div className="error">{error}</div>}
+  if (connected.length === 0) {
+    return (
+      <Typography color="text.secondary">
+        Nenhuma conexão de <b>dados BLE</b>. Live Data mostra características GATT —
+        conecte um dispositivo com <b>"Conectar (BLE)"</b> na aba Devices. Conexões
+        Classic (alto-falantes/fones) não fornecem dados GATT aqui.
+      </Typography>
+    );
+  }
 
-          <div className="split">
-            <div className="services">
-              <h3>GATT services {loading && "…"}</h3>
+  return (
+    <Box>
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: "center", flexWrap: "wrap", mb: 2 }}>
+        <FormControl size="small" sx={{ minWidth: 220 }}>
+          <InputLabel>Dispositivo</InputLabel>
+          <Select label="Dispositivo" value={selected} onChange={(e) => setSelected(e.target.value)}>
+            {connected.map((d) => (
+              <MenuItem key={d.address} value={d.address}>{d.name} ({d.address})</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <Button variant="outlined" onClick={() => loadServices(selected)}>Atualizar</Button>
+      </Stack>
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 7 }}>
+          <Card>
+            <CardContent>
+              <Typography variant="subtitle1" gutterBottom>
+                Serviços GATT {loading && "…"}
+              </Typography>
               {services.map((s) => (
-                <div key={s.uuid} className="service">
-                  <div className="svc-title mono">{s.description || s.uuid}</div>
+                <Box key={s.uuid} sx={{ mb: 2 }}>
+                  <Typography variant="body2" className="mono" color="primary" gutterBottom>
+                    {s.description || s.uuid}
+                  </Typography>
                   {s.characteristics.map((c) => (
-                    <div key={c.uuid} className="char">
-                      <div className="mono char-uuid">{c.description || c.uuid}</div>
-                      <div className="props">{c.properties.join(", ")}</div>
-                      <div className="char-actions">
+                    <Box key={c.uuid} sx={{ bgcolor: "action.hover", borderRadius: 1.5, p: 1, mb: 1 }}>
+                      <Typography variant="body2" className="mono">{c.description || c.uuid}</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                        {c.properties.join(", ")}
+                      </Typography>
+                      <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
                         {c.properties.includes("read") && (
-                          <button onClick={() => act(() => api.read(selected, c.uuid))}>
-                            Read
-                          </button>
+                          <Button size="small" onClick={() => act(() => api.read(selected, c.uuid))}>Read</Button>
                         )}
-                        {(c.properties.includes("notify") ||
-                          c.properties.includes("indicate")) && (
-                          <button
-                            className={c.notifying ? "on" : ""}
-                            onClick={() =>
-                              act(() => api.notify(selected, c.uuid, !c.notifying))
-                            }
-                          >
-                            {c.notifying ? "Stop notify" : "Notify"}
-                          </button>
+                        {(c.properties.includes("notify") || c.properties.includes("indicate")) && (
+                          <Button size="small" color={c.notifying ? "success" : "primary"}
+                            onClick={() => act(() => api.notify(selected, c.uuid, !c.notifying))}>
+                            {c.notifying ? "Parar notify" : "Notify"}
+                          </Button>
                         )}
-                        {(c.properties.includes("write") ||
-                          c.properties.includes("write-without-response")) && (
+                        {(c.properties.includes("write") || c.properties.includes("write-without-response")) && (
                           <WriteButton addr={selected} uuid={c.uuid} onError={setError} />
                         )}
-                      </div>
-                    </div>
+                      </Stack>
+                    </Box>
                   ))}
-                </div>
+                </Box>
               ))}
-            </div>
+            </CardContent>
+          </Card>
+        </Grid>
 
-            <div className="feed">
-              <h3>Incoming data</h3>
-              {feed.length === 0 && <p className="empty">No data yet.</p>}
-              {feed.map((g, i) => (
-                <div key={i} className="reading">
-                  <span className="mono char-uuid">{g.char.slice(0, 8)}…</span>
-                  <span className="mono">{g.text ?? g.hex}</span>
-                  <span className="len">{g.length}B</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
-    </section>
+        <Grid size={{ xs: 12, md: 5 }}>
+          <Card>
+            <CardContent>
+              <Typography variant="subtitle1" gutterBottom>Dados recebidos</Typography>
+              {feed.length === 0 && (
+                <Typography variant="body2" color="text.secondary">Nenhum dado ainda.</Typography>
+              )}
+              <List dense>
+                {feed.map((g, i) => (
+                  <ListItem key={i} divider>
+                    <ListItemText
+                      primary={<span className="mono">{g.text ?? g.hex}</span>}
+                      secondary={`${g.char.slice(0, 8)}… · ${g.length}B`}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+    </Box>
   );
 }
 
 function WriteButton({ addr, uuid, onError }) {
   async function write() {
-    const text = window.prompt("Value to write (text):");
+    const text = window.prompt("Valor para escrever (texto):");
     if (text == null) return;
     try {
       await api.write(addr, uuid, { text });
@@ -133,5 +147,5 @@ function WriteButton({ addr, uuid, onError }) {
       onError(e.message);
     }
   }
-  return <button onClick={write}>Write</button>;
+  return <Button size="small" onClick={write}>Write</Button>;
 }

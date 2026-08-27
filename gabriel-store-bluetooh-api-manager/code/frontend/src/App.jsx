@@ -1,31 +1,55 @@
 import { useEffect, useState } from "react";
+import {
+  AppBar, Toolbar, Typography, Box, Drawer, List, ListItemButton,
+  ListItemIcon, ListItemText, BottomNavigation, BottomNavigationAction,
+  Paper, Tabs, Tab, Chip, Badge, IconButton, Tooltip, useMediaQuery,
+} from "@mui/material";
+import BluetoothIcon from "@mui/icons-material/Bluetooth";
+import MusicNoteIcon from "@mui/icons-material/MusicNote";
+import RecordVoiceOverIcon from "@mui/icons-material/RecordVoiceOver";
+import EventIcon from "@mui/icons-material/Event";
+import TuneIcon from "@mui/icons-material/Tune";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import { theme } from "./theme.js";
 import { useEventStream } from "./useEventStream.js";
 import { api } from "./api.js";
+import { useAudioStatus } from "./hooks/useAudioStatus.js";
+import NowPlayingBar from "./components/NowPlayingBar.jsx";
+import StatusDialog from "./components/StatusDialog.jsx";
 import Devices from "./components/Devices.jsx";
 import LiveData from "./components/LiveData.jsx";
-import Audio from "./components/Audio.jsx";
+import Musica from "./components/Musica.jsx";
 import Voice from "./components/Voice.jsx";
 import Schedule from "./components/Schedule.jsx";
 import Files from "./components/Files.jsx";
 import Logs from "./components/Logs.jsx";
-import Navidrome from "./components/Navidrome.jsx";
 
-const TABS = [
-  { id: "devices", label: "Devices" },
+const DRAWER_WIDTH = 224;
+
+const SECTIONS = [
+  { id: "devices", label: "Devices", icon: <BluetoothIcon /> },
+  { id: "musica", label: "Música", icon: <MusicNoteIcon /> },
+  { id: "voz", label: "Voz", icon: <RecordVoiceOverIcon /> },
+  { id: "agenda", label: "Agenda", icon: <EventIcon /> },
+  { id: "avancado", label: "Avançado", icon: <TuneIcon /> },
+];
+
+const ADVANCED_TABS = [
   { id: "live", label: "Live Data" },
-  { id: "audio", label: "Audio" },
-  { id: "navidrome", label: "Navidrome" },
-  { id: "voice", label: "Voice" },
-  { id: "schedule", label: "Schedule" },
   { id: "files", label: "Files" },
   { id: "logs", label: "Logs" },
 ];
 
 export default function App() {
-  const [tab, setTab] = useState("devices");
+  const isDesktop = useMediaQuery(theme.breakpoints.up("md"));
+  const [section, setSection] = useState("devices");
+  const [statusOpen, setStatusOpen] = useState(false);
+  const [advancedTab, setAdvancedTab] = useState("live");
   const { connected, devices, log, gattData } = useEventStream();
   const [stats, setStats] = useState(null);
   const [classic, setClassic] = useState([]);
+  const { audioStatus, setAudioStatus, handlePause, handleResume, handleSkip, handleStop } = useAudioStatus();
 
   const bleList = Object.values(devices).sort(
     (a, b) => Number(b.connected) - Number(a.connected) || (b.rssi ?? -999) - (a.rssi ?? -999)
@@ -47,64 +71,115 @@ export default function App() {
   const adapter = stats?.adapter;
   const adapterState =
     adapter == null
-      ? { cls: "off", text: "no adapter" }
+      ? { color: "default", text: "no adapter" }
       : adapter.powered
-      ? { cls: "on", text: `adapter on · ${adapter.address || adapter.name || "hci"}` }
-      : { cls: "off", text: "adapter powered off" };
+      ? { color: "success", text: `adapter on · ${adapter.address || adapter.name || "hci"}` }
+      : { color: "warning", text: "adapter powered off" };
 
   const connectedCount =
     bleList.filter((d) => d.connected).length +
     classic.filter((d) => d.connected).length;
+  const hasErrors = Boolean(stats?.events?.events_by_level?.error);
+
+  const content = (
+    <>
+      {section === "devices" && (
+        <Devices ble={bleList} classic={classic} adapter={adapter} onChange={() => api.classicDevices().then(setClassic).catch(() => {})} />
+      )}
+      {section === "musica" && (
+        <Musica classic={classic} audioStatus={audioStatus} onAudioStatus={setAudioStatus} />
+      )}
+      {section === "voz" && <Voice classic={classic} />}
+      {section === "agenda" && <Schedule classic={classic} />}
+      {section === "avancado" && (
+        <Box>
+          <Tabs value={advancedTab} onChange={(_, v) => setAdvancedTab(v)} sx={{ mb: 2 }}>
+            {ADVANCED_TABS.map((t) => <Tab key={t.id} value={t.id} label={t.label} />)}
+          </Tabs>
+          {advancedTab === "live" && <LiveData devices={bleList} gattData={gattData} />}
+          {advancedTab === "files" && <Files devices={bleList} />}
+          {advancedTab === "logs" && <Logs log={log} />}
+        </Box>
+      )}
+    </>
+  );
 
   return (
-    <div className="app">
-      <header>
-        <h1>🔵 Bluetooth API Manager</h1>
-        <span className={`status ${connected ? "on" : "off"}`}>
-          {connected ? "live" : "reconnecting…"}
-        </span>
-        <a className="apilink" href="/docs" target="_blank" rel="noreferrer">
-          API docs ↗
-        </a>
-      </header>
+    <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+      {/* AppBar + Now Playing stick together as one unit at the top of the
+          page (position:"sticky" on the wrapper, not "fixed" on the AppBar
+          alone) — that way they always reserve their real, current height in
+          the layout instead of relying on a manually-guessed spacer height,
+          which broke as soon as the header wrapped to more lines (chip row
+          wrapping on narrow screens) than the spacer accounted for. */}
+      <Box sx={{ position: "sticky", top: 0, zIndex: (t) => t.zIndex.drawer + 1 }}>
+        <AppBar position="static">
+          <Toolbar variant="dense" sx={{ gap: 0.5 }}>
+            <Typography variant="h6" noWrap sx={{ flex: 1, minWidth: 0 }}>
+              🔵 Bluetooth API Manager
+            </Typography>
+            <Chip size="small" label={connected ? "live" : "reconnecting…"} color={connected ? "success" : "warning"} />
+            <Tooltip title="Status do sistema">
+              <IconButton color="inherit" size="small" onClick={() => setStatusOpen(true)}>
+                <Badge color="error" variant="dot" invisible={!hasErrors}>
+                  <InfoOutlinedIcon fontSize="small" />
+                </Badge>
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="API docs">
+              <IconButton color="inherit" size="small" component="a" href="/docs" target="_blank" rel="noreferrer">
+                <OpenInNewIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Toolbar>
+        </AppBar>
+        <NowPlayingBar status={audioStatus} onPause={handlePause} onResume={handleResume} onSkip={handleSkip} onStop={handleStop} />
+      </Box>
 
-      <div className="statusbar">
-        <span className={`chip ${adapterState.cls}`}>{adapterState.text}</span>
-        <span className="chip">{stats?.devices_seen ?? 0} seen</span>
-        <span className={`chip ${connectedCount ? "on" : ""}`}>{connectedCount} connected</span>
-        <span className={`chip ${stats?.audio?.playing ? "on" : ""}`}>
-          {stats?.audio?.playing ? "audio ▶" : "audio idle"}
-        </span>
-        <span className="chip">{stats?.events?.total_events ?? 0} events</span>
-        {stats?.events?.events_by_level?.error ? (
-          <span className="chip err">{stats.events.events_by_level.error} errors</span>
-        ) : null}
-      </div>
-
-      <nav className="tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            className={tab === t.id ? "active" : ""}
-            onClick={() => setTab(t.id)}
+      <Box sx={{ display: "flex", flex: 1, minHeight: 0 }}>
+        {isDesktop && (
+          <Drawer
+            variant="permanent"
+            sx={{
+              width: DRAWER_WIDTH,
+              flexShrink: 0,
+              [`& .MuiDrawer-paper`]: { width: DRAWER_WIDTH, boxSizing: "border-box", position: "relative" },
+            }}
           >
-            {t.label}
-          </button>
-        ))}
-      </nav>
-
-      <main>
-        {tab === "devices" && (
-          <Devices ble={bleList} classic={classic} adapter={adapter} onChange={() => api.classicDevices().then(setClassic).catch(() => {})} />
+            <List>
+              {SECTIONS.map((s) => (
+                <ListItemButton key={s.id} selected={section === s.id} onClick={() => setSection(s.id)}>
+                  <ListItemIcon>{s.icon}</ListItemIcon>
+                  <ListItemText primary={s.label} />
+                </ListItemButton>
+              ))}
+            </List>
+          </Drawer>
         )}
-        {tab === "live" && <LiveData devices={bleList} gattData={gattData} />}
-        {tab === "audio" && <Audio classic={classic} />}
-        {tab === "navidrome" && <Navidrome classic={classic} />}
-        {tab === "voice" && <Voice classic={classic} />}
-        {tab === "schedule" && <Schedule classic={classic} />}
-        {tab === "files" && <Files devices={bleList} />}
-        {tab === "logs" && <Logs log={log} />}
-      </main>
-    </div>
+
+        <Box component="main" sx={{ flexGrow: 1, minWidth: 0, pb: isDesktop ? 2 : 9 }}>
+          <Box sx={{ p: 2 }}>{content}</Box>
+        </Box>
+      </Box>
+
+      {!isDesktop && (
+        <Paper elevation={8} sx={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: (t) => t.zIndex.drawer + 1 }}>
+          <BottomNavigation showLabels value={section} onChange={(_, v) => setSection(v)}>
+            {SECTIONS.map((s) => (
+              <BottomNavigationAction key={s.id} value={s.id} label={s.label} icon={s.icon} sx={{ minWidth: 0, px: 0.5 }} />
+            ))}
+          </BottomNavigation>
+        </Paper>
+      )}
+
+      <StatusDialog
+        open={statusOpen}
+        onClose={() => setStatusOpen(false)}
+        adapterState={adapterState}
+        stats={stats}
+        connectedCount={connectedCount}
+        audioStatus={audioStatus}
+      />
+    </Box>
   );
 }

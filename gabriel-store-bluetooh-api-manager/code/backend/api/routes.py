@@ -75,6 +75,11 @@ class NavidromeAddBody(BaseModel):
     tracks: list[dict]
 
 
+class NavidromePlayNowBody(BaseModel):
+    device: str
+    track: dict
+
+
 @router.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
@@ -296,9 +301,59 @@ async def audio_play(
         raise HTTPException(status_code=502, detail=str(exc))
 
 
+@router.post("/audio/play-now")
+async def audio_play_now(
+    device: str = Form(...),
+    url: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+) -> dict:
+    """Like /audio/play, but jumps the queue and preempts whatever is
+    currently playing so this track starts immediately."""
+    if (file is None) == (url is None):
+        raise HTTPException(status_code=400, detail="Provide exactly one of 'file' or 'url'")
+    source = url if url is not None else await _save_upload("audio", file)
+    try:
+        return await audio.play_now(source, device=device)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
 @router.post("/audio/skip")
 async def audio_skip() -> dict:
     return await audio.skip()
+
+
+@router.post("/audio/pause")
+async def audio_pause() -> dict:
+    return await audio.pause()
+
+
+@router.post("/audio/resume")
+async def audio_resume() -> dict:
+    return await audio.resume()
+
+
+@router.post("/audio/previous")
+async def audio_previous() -> dict:
+    return await audio.previous()
+
+
+@router.post("/audio/seek")
+async def audio_seek(position: float = Form(...)) -> dict:
+    return await audio.seek(position)
+
+
+@router.post("/audio/repeat")
+async def audio_repeat(mode: str = Form(...)) -> dict:
+    try:
+        return audio.set_repeat(mode)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/audio/shuffle")
+async def audio_shuffle(enabled: bool = Form(...)) -> dict:
+    return audio.set_shuffle(enabled)
 
 
 @router.delete("/audio/queue/{item_id}")
@@ -317,6 +372,12 @@ async def audio_move(item_id: int, body: QueueMoveBody) -> dict:
         return audio.move(item_id, body.direction)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
+# ---- Music Tag (external app link) --------------------------------------
+@router.get("/music-tag/status")
+async def music_tag_status() -> dict:
+    return {"configured": bool(settings.MUSIC_TAG_URL), "url": settings.MUSIC_TAG_URL}
 
 
 # ---- Navidrome ----------------------------------------------------------
@@ -367,6 +428,14 @@ async def navidrome_playlist(playlist_id: str) -> dict:
 async def navidrome_queue(body: NavidromeAddBody) -> dict:
     try:
         return await navidrome.add_tracks(body.tracks, body.device)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/navidrome/play-now")
+async def navidrome_play_now(body: NavidromePlayNowBody) -> dict:
+    try:
+        return await navidrome.play_now(body.track, body.device)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=str(exc))
 

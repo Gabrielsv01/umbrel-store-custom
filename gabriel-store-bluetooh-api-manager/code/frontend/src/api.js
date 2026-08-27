@@ -118,6 +118,24 @@ export const api = {
   audioQueue: () => request("/audio/queue"),
   audioSkip: () => request("/audio/skip", { method: "POST" }),
   audioStop: () => request("/audio/stop", { method: "POST" }),
+  audioPause: () => request("/audio/pause", { method: "POST" }),
+  audioResume: () => request("/audio/resume", { method: "POST" }),
+  audioPrevious: () => request("/audio/previous", { method: "POST" }),
+  audioSeek: (position) => {
+    const fd = new FormData();
+    fd.append("position", position);
+    return upload("/audio/seek", fd);
+  },
+  audioRepeat: (mode) => {
+    const fd = new FormData();
+    fd.append("mode", mode);
+    return upload("/audio/repeat", fd);
+  },
+  audioShuffle: (enabled) => {
+    const fd = new FormData();
+    fd.append("enabled", enabled);
+    return upload("/audio/shuffle", fd);
+  },
   audioRemove: (id) => request(`/audio/queue/${id}`, { method: "DELETE" }),
   audioMove: (id, direction) => request(`/audio/queue/${id}/move`, {
     method: "POST", body: JSON.stringify({ direction }),
@@ -129,7 +147,15 @@ export const api = {
     if (url) fd.append("url", url);
     return upload("/audio/play", fd);
   },
+  audioPlayNow: ({ device, file, url }) => {
+    const fd = new FormData();
+    fd.append("device", device);
+    if (file) fd.append("file", file);
+    if (url) fd.append("url", url);
+    return upload("/audio/play-now", fd);
+  },
 
+  musicTagStatus: () => request("/music-tag/status"),
   navidromeStatus: () => request("/navidrome/status"),
   navidromeConfigure: (body) => request("/navidrome/configure", {
     method: "POST", body: JSON.stringify(body),
@@ -140,6 +166,9 @@ export const api = {
   navidromePlaylist: (id) => request(`/navidrome/playlists/${encodeURIComponent(id)}`),
   navidromeQueue: (device, tracks) => request("/navidrome/queue", {
     method: "POST", body: JSON.stringify({ device, tracks }),
+  }),
+  navidromePlayNow: (device, track) => request("/navidrome/play-now", {
+    method: "POST", body: JSON.stringify({ device, track }),
   }),
 
   // Files (Phase 3)

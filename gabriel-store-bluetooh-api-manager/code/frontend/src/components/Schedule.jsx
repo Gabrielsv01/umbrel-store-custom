@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
+import {
+  Box, Card, CardContent, Stack, TextField, Select, MenuItem, InputLabel,
+  FormControl, Button, Typography, Alert, List, ListItem, ListItemText,
+  IconButton, Tooltip,
+} from "@mui/material";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { api } from "../api.js";
-
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+import WeekdayPicker, { WEEKDAYS } from "./WeekdayPicker.jsx";
+import TimeRepeatRow from "./TimeRepeatRow.jsx";
 
 export default function Schedule({ classic }) {
   const [data, setData] = useState({ now: "", tz: "", items: [] });
@@ -35,16 +43,12 @@ export default function Schedule({ classic }) {
     if (!device && connectedSpeakers.length) setDevice(connectedSpeakers[0].address);
   }, [connectedSpeakers, device]);
 
-  function toggleDay(i) {
-    setDays((d) => (d.includes(i) ? d.filter((x) => x !== i) : [...d, i]));
-  }
-
   async function create() {
     setError(null);
-    if (!device) return setError("Choose a speaker.");
-    if (!file && !url) return setError("Choose a file or paste a URL.");
-    if (repeat === "once" && !date) return setError("Pick a date for a one-time schedule.");
-    if (repeat === "weekly" && days.length === 0) return setError("Pick at least one weekday.");
+    if (!device) return setError("Escolha um alto-falante.");
+    if (!file && !url) return setError("Escolha um arquivo ou cole uma URL.");
+    if (repeat === "once" && !date) return setError("Escolha uma data.");
+    if (repeat === "weekly" && days.length === 0) return setError("Escolha pelo menos um dia da semana.");
     try {
       await api.scheduleCreate({
         device, time, repeat,
@@ -63,95 +67,88 @@ export default function Schedule({ classic }) {
   }
 
   function describe(s) {
-    if (s.repeat === "once") return `once on ${s.date} at ${s.time}`;
-    if (s.repeat === "daily") return `every day at ${s.time}`;
-    return `${s.days.map((d) => WEEKDAYS[d]).join(", ")} at ${s.time}`;
+    if (s.repeat === "once") return `uma vez em ${s.date} às ${s.time}`;
+    if (s.repeat === "daily") return `todo dia às ${s.time}`;
+    return `${s.days.map((d) => WEEKDAYS[d]).join(", ")} às ${s.time}`;
   }
 
   return (
-    <section>
-      <p className="hint">
-        Schedule a track to play on a speaker. Fires by the <strong>server clock</strong>:
-        <strong> {data.now}</strong> ({data.tz}). Set TZ in the app config if this is wrong.
-      </p>
-      {error && <div className="error">{error}</div>}
+    <Box>
+      <Typography variant="h5" gutterBottom>Agenda</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Agende uma faixa para tocar num alto-falante. Dispara pelo{" "}
+        <b>relógio do servidor</b>: <b>{data.now}</b> ({data.tz}). Ajuste o TZ na
+        configuração do app se estiver errado.
+      </Typography>
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
-      <div className="card">
-        <div className="row">
-          <label>Title:&nbsp;</label>
-          <input type="text" placeholder="(optional) e.g. Morning alarm" value={title}
-                 onChange={(e) => setTitle(e.target.value)} style={{ flex: 1 }} />
-        </div>
-        <div className="row">
-          <label>Speaker:&nbsp;</label>
-          {connectedSpeakers.length > 0 && (
-            <select value={device} onChange={(e) => setDevice(e.target.value)}>
-              {connectedSpeakers.map((c) => (
-                <option key={c.address} value={c.address}>{c.name} ({c.address})</option>
-              ))}
-            </select>
+      <Card sx={{ mb: 2 }}>
+        <CardContent>
+          <Stack spacing={2}>
+            <TextField label="Título (opcional)" placeholder="ex: Alarme da manhã" size="small"
+              value={title} onChange={(e) => setTitle(e.target.value)} fullWidth />
+
+            <FormControl size="small" fullWidth>
+              <InputLabel>Alto-falante</InputLabel>
+              <Select label="Alto-falante" value={device} onChange={(e) => setDevice(e.target.value)}>
+                {connectedSpeakers.map((c) => (
+                  <MenuItem key={c.address} value={c.address}>{c.name} ({c.address})</MenuItem>
+                ))}
+                {!connectedSpeakers.length && <MenuItem value="" disabled>Nenhum conectado</MenuItem>}
+              </Select>
+            </FormControl>
+
+            <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: "wrap" }}>
+              <Button component="label" variant="outlined" startIcon={<CloudUploadIcon />}>
+                {file ? file.name : "Escolher arquivo"}
+                <input id="sched-file" hidden type="file" accept="audio/*"
+                  onChange={(e) => setFile(e.target.files[0])} />
+              </Button>
+              <TextField label="ou URL" placeholder="https://exemplo.com/musica.mp3" size="small"
+                value={url} onChange={(e) => setUrl(e.target.value)} sx={{ flex: 1, minWidth: 220 }} />
+            </Stack>
+
+            <TimeRepeatRow time={time} onTimeChange={setTime} repeat={repeat} onRepeatChange={setRepeat}
+              date={date} onDateChange={setDate} />
+            {repeat === "weekly" && <WeekdayPicker days={days} onChange={setDays} />}
+
+            <Box>
+              <Button variant="contained" onClick={create}>➕ Agendar</Button>
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <Typography variant="subtitle1" gutterBottom>Agendados ({data.items.length})</Typography>
+          {data.items.length === 0 && (
+            <Typography variant="body2" color="text.secondary">Nenhuma agenda ainda.</Typography>
           )}
-          <input type="text" placeholder="AA:BB:CC:DD:EE:FF" value={device}
-                 onChange={(e) => setDevice(e.target.value)} style={{ flex: 1 }} />
-        </div>
-        <div className="row">
-          <label>File:&nbsp;</label>
-          <input id="sched-file" type="file" accept="audio/*" onChange={(e) => setFile(e.target.files[0])} />
-        </div>
-        <div className="row">
-          <label>or URL:&nbsp;</label>
-          <input type="text" placeholder="https://example.com/song.mp3" value={url}
-                 onChange={(e) => setUrl(e.target.value)} style={{ flex: 1 }} />
-        </div>
-        <div className="row">
-          <label>Time:&nbsp;</label>
-          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-          <label>&nbsp;Repeat:&nbsp;</label>
-          <select value={repeat} onChange={(e) => setRepeat(e.target.value)}>
-            <option value="once">Once</option>
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-          </select>
-          {repeat === "once" && (
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          )}
-        </div>
-        {repeat === "weekly" && (
-          <div className="row">
-            {WEEKDAYS.map((w, i) => (
-              <button key={w} className={days.includes(i) ? "on" : ""} onClick={() => toggleDay(i)}>
-                {w}
-              </button>
+          <List dense>
+            {data.items.map((s) => (
+              <ListItem key={s.id} divider
+                secondaryAction={
+                  <Stack direction="row" spacing={0.5}>
+                    <Tooltip title={s.enabled ? "Desativar" : "Ativar"}>
+                      <IconButton size="small" onClick={() => api.scheduleToggle(s.id, !s.enabled).then(refresh)}>
+                        <PowerSettingsNewIcon fontSize="small" color={s.enabled ? "success" : "disabled"} />
+                      </IconButton>
+                    </Tooltip>
+                    <IconButton size="small" onClick={() => api.scheduleDelete(s.id).then(refresh)}>
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
+                }>
+                <ListItemText
+                  primary={`${s.title || describe(s)} · ${s.device}`}
+                  secondary={`${s.title ? describe(s) + " · " : ""}${s.label}${s.last_fired ? ` · disparou pela última vez em ${s.last_fired}` : ""}`}
+                />
+              </ListItem>
             ))}
-          </div>
-        )}
-        <div className="row">
-          <button onClick={create}>➕ Schedule</button>
-        </div>
-      </div>
-
-      <div className="card">
-        <h3 style={{ marginTop: 0 }}>Scheduled ({data.items.length})</h3>
-        {data.items.length === 0 && <p className="empty">No schedules yet.</p>}
-        {data.items.map((s) => (
-          <div key={s.id} className="char">
-            <div className="row" style={{ margin: 0 }}>
-              <span>{s.enabled ? "🟢" : "⚪"} <strong>{s.title || describe(s)}</strong></span>
-              <span className="mono props" style={{ marginLeft: "auto" }}>{s.device}</span>
-            </div>
-            <div className="props">
-              {s.title ? `${describe(s)} · ` : ""}{s.label}
-              {s.last_fired ? ` · last fired ${s.last_fired}` : ""}
-            </div>
-            <div className="char-actions">
-              <button onClick={() => api.scheduleToggle(s.id, !s.enabled).then(refresh)}>
-                {s.enabled ? "Disable" : "Enable"}
-              </button>
-              <button onClick={() => api.scheduleDelete(s.id).then(refresh)}>Delete</button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
+          </List>
+        </CardContent>
+      </Card>
+    </Box>
   );
 }
