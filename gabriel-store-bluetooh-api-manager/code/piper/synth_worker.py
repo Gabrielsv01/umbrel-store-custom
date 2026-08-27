@@ -12,7 +12,7 @@ import json
 import sys
 import wave
 
-from piper import PiperVoice
+from piper import PiperVoice, SynthesisConfig
 
 # Sane clamps so a bad env/request can't produce broken audio.
 _CLAMPS = {
@@ -31,9 +31,27 @@ def main() -> int:
         if key in _CLAMPS and value is not None:
             lo, hi = _CLAMPS[key]
             kwargs[key] = max(lo, min(hi, float(value)))
+    sentence_silence = kwargs.pop("sentence_silence", 0.0)
+    if "noise_w" in kwargs:
+        kwargs["noise_w_scale"] = kwargs.pop("noise_w")
+    syn_config = SynthesisConfig(**kwargs)
     voice = PiperVoice.load(model_path)
     with wave.open(out_path, "wb") as wav:
-        voice.synthesize(req["text"], wav, **kwargs)
+        chunks = iter(voice.synthesize(req["text"], syn_config=syn_config))
+        try:
+            chunk = next(chunks)
+        except StopIteration:
+            return 0
+        wav.setframerate(chunk.sample_rate)
+        wav.setsampwidth(chunk.sample_width)
+        wav.setnchannels(chunk.sample_channels)
+        for next_chunk in chunks:
+            wav.writeframes(chunk.audio_int16_bytes)
+            if sentence_silence:
+                silence_frames = int(chunk.sample_rate * sentence_silence)
+                wav.writeframes(b"\x00" * silence_frames * chunk.sample_width * chunk.sample_channels)
+            chunk = next_chunk
+        wav.writeframes(chunk.audio_int16_bytes)
     return 0
 
 

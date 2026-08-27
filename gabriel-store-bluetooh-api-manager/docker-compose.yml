@@ -48,8 +48,8 @@ services:
   # the main image. Downloads the pt-BR Razo voice into the voices volume on
   # first run. Host network so the main app reaches it at 127.0.0.1:5158.
   piper:
-    # To rebuild locally: `docker build -t gabrielsv01/piper-tts-box:1.0.2 ./code/piper`
-    image: gabrielsv01/piper-tts-box:1.0.2
+    # To rebuild locally: `docker build -t gabrielsv01/piper-tts-box:1.0.3 ./code/piper`
+    image: gabrielsv01/piper-tts-box:1.0.3
     container_name: bluetooth-piper-tts
     environment:
       - PORT=5158
