@@ -8,11 +8,13 @@ import Voice from "./components/Voice.jsx";
 import Schedule from "./components/Schedule.jsx";
 import Files from "./components/Files.jsx";
 import Logs from "./components/Logs.jsx";
+import Navidrome from "./components/Navidrome.jsx";
 
 const TABS = [
   { id: "devices", label: "Devices" },
   { id: "live", label: "Live Data" },
   { id: "audio", label: "Audio" },
+  { id: "navidrome", label: "Navidrome" },
   { id: "voice", label: "Voice" },
   { id: "schedule", label: "Schedule" },
   { id: "files", label: "Files" },
@@ -97,6 +99,7 @@ export default function App() {
         )}
         {tab === "live" && <LiveData devices={bleList} gattData={gattData} />}
         {tab === "audio" && <Audio classic={classic} />}
+        {tab === "navidrome" && <Navidrome classic={classic} />}
         {tab === "voice" && <Voice classic={classic} />}
         {tab === "schedule" && <Schedule classic={classic} />}
         {tab === "files" && <Files devices={bleList} />}

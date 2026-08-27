@@ -23,6 +23,7 @@ from ..core.events import bus
 from ..cleanup import cleanup
 from ..scheduler import scheduler
 from ..tts import tts
+from ..navidrome import DEFAULT_URL, navidrome
 
 router = APIRouter(prefix="/api", tags=["bluetooth"])
 
@@ -57,6 +58,21 @@ class CharBody(BaseModel):
 
 class NameBody(BaseModel):
     name: str
+
+
+class QueueMoveBody(BaseModel):
+    direction: int
+
+
+class NavidromeConfig(BaseModel):
+    url: str
+    username: str
+    password: str
+
+
+class NavidromeAddBody(BaseModel):
+    device: str
+    tracks: list[dict]
 
 
 @router.get("/health")
@@ -283,6 +299,76 @@ async def audio_play(
 @router.post("/audio/skip")
 async def audio_skip() -> dict:
     return await audio.skip()
+
+
+@router.delete("/audio/queue/{item_id}")
+async def audio_remove(item_id: int) -> dict:
+    try:
+        return audio.remove(item_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post("/audio/queue/{item_id}/move")
+async def audio_move(item_id: int, body: QueueMoveBody) -> dict:
+    if body.direction not in (-1, 1):
+        raise HTTPException(status_code=400, detail="direction must be -1 or 1")
+    try:
+        return audio.move(item_id, body.direction)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+# ---- Navidrome ----------------------------------------------------------
+@router.get("/navidrome/status")
+async def navidrome_status() -> dict:
+    return {"configured": navidrome.configured, "url": navidrome.base_url or DEFAULT_URL}
+
+
+@router.post("/navidrome/configure")
+async def navidrome_configure(body: NavidromeConfig) -> dict:
+    try:
+        return await navidrome.configure(body.url, body.username, body.password)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/navidrome/disconnect")
+async def navidrome_disconnect() -> dict:
+    navidrome.clear()
+    return {"ok": True}
+
+
+@router.get("/navidrome/search")
+async def navidrome_search(q: str = "") -> list[dict]:
+    try:
+        return await navidrome.search(q)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/navidrome/playlists")
+async def navidrome_playlists() -> list[dict]:
+    try:
+        return await navidrome.playlists()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/navidrome/playlists/{playlist_id}")
+async def navidrome_playlist(playlist_id: str) -> dict:
+    try:
+        return await navidrome.playlist(playlist_id)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/navidrome/queue")
+async def navidrome_queue(body: NavidromeAddBody) -> dict:
+    try:
+        return await navidrome.add_tracks(body.tracks, body.device)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 # ---- Scheduler (play at a given time/day) -------------------------------

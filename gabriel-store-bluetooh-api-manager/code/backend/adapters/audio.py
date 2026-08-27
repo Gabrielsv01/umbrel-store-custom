@@ -96,10 +96,12 @@ class AudioService:
             "queue_length": len(self._pending),
         }
 
-    def enqueue(self, source: str, device: str) -> Dict[str, Any]:
+    def enqueue(self, source: str, device: str, label: Optional[str] = None,
+                source_type: str = "url") -> Dict[str, Any]:
         self._counter += 1
         item = {"id": self._counter, "source": source, "device": device,
-                "label": os.path.basename(source) if "://" not in source else source}
+                "label": label or (os.path.basename(source) if "://" not in source else source),
+                "source_type": source_type}
         self._pending.append(item)
         bus.publish("audio_enqueued", **item)
         self._ensure_loop()
@@ -121,6 +123,27 @@ class AudioService:
 
     def clear_queue(self) -> Dict[str, Any]:
         self._pending.clear()
+        return self.status()
+
+    def remove(self, item_id: int) -> Dict[str, Any]:
+        for index, item in enumerate(self._pending):
+            if item["id"] == item_id:
+                self._pending.pop(index)
+                bus.publish("audio_removed", **item)
+                break
+        else:
+            raise KeyError("queued item not found")
+        return self.status()
+
+    def move(self, item_id: int, direction: int) -> Dict[str, Any]:
+        index = next((i for i, item in enumerate(self._pending) if item["id"] == item_id), None)
+        if index is None:
+            raise KeyError("queued item not found")
+        new_index = index + direction
+        if not 0 <= new_index < len(self._pending):
+            return self.status()
+        self._pending[index], self._pending[new_index] = self._pending[new_index], self._pending[index]
+        bus.publish("audio_reordered", item_id=item_id, direction=direction)
         return self.status()
 
     # ---- internals -------------------------------------------------------

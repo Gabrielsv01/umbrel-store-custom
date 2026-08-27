@@ -4,7 +4,7 @@ name: Bluetooth API Manager
 tagline: Manage Bluetooth devices, stream data and control them over an API
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-bluetooh-api-manager/icon.svg
 category: Utilities
-version: "1.5.12"
+version: "1.6.0"
 port: 5157
 description: >-
   Bluetooth API Manager gives you a single place to see and control the
@@ -42,7 +42,8 @@ repo: https://github.com/Gabrielsv01/umbrel-store-custom
 support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
 gallery: []
 releaseNotes: >-
-  1.5.12: periodically reconnect the last-used speaker while idle, reducing
+  1.6.0: adds Navidrome integration with library search, playlist queueing and
+  queue reorder/remove controls. 1.5.12: periodically reconnect the last-used speaker while idle, reducing
   failures after Alexa drops its A2DP link to save power. The interval is
   configurable with AUDIO_KEEPALIVE_INTERVAL. 1.5.11: improved audio telemetry.
   1.5.10: fewer connect/disconnect chimes — a device now stays "warm" for a

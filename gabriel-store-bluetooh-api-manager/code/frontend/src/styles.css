@@ -58,6 +58,7 @@ main { padding-top: 1rem; }
 
 .hint { color: var(--muted); font-size: 0.85rem; margin-top: 0; }
 .empty { color: var(--muted); font-style: italic; }
+.muted { color: var(--muted); }
 .error {
   background: rgba(248, 113, 113, 0.12);
   border: 1px solid var(--err);

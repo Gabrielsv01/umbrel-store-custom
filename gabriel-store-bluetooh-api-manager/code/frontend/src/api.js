@@ -118,6 +118,10 @@ export const api = {
   audioQueue: () => request("/audio/queue"),
   audioSkip: () => request("/audio/skip", { method: "POST" }),
   audioStop: () => request("/audio/stop", { method: "POST" }),
+  audioRemove: (id) => request(`/audio/queue/${id}`, { method: "DELETE" }),
+  audioMove: (id, direction) => request(`/audio/queue/${id}/move`, {
+    method: "POST", body: JSON.stringify({ direction }),
+  }),
   audioPlay: ({ device, file, url }) => {
     const fd = new FormData();
     fd.append("device", device);
@@ -125,6 +129,18 @@ export const api = {
     if (url) fd.append("url", url);
     return upload("/audio/play", fd);
   },
+
+  navidromeStatus: () => request("/navidrome/status"),
+  navidromeConfigure: (body) => request("/navidrome/configure", {
+    method: "POST", body: JSON.stringify(body),
+  }),
+  navidromeDisconnect: () => request("/navidrome/disconnect", { method: "POST" }),
+  navidromeSearch: (query) => request(`/navidrome/search?q=${encodeURIComponent(query)}`),
+  navidromePlaylists: () => request("/navidrome/playlists"),
+  navidromePlaylist: (id) => request(`/navidrome/playlists/${encodeURIComponent(id)}`),
+  navidromeQueue: (device, tracks) => request("/navidrome/queue", {
+    method: "POST", body: JSON.stringify({ device, tracks }),
+  }),
 
   // Files (Phase 3)
   sendFile: (address, file) => {
