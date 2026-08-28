@@ -21,10 +21,22 @@ const SESSION_KEY = "agent_session_id";
 // decodable so play() actually resolves, arming the <audio> element.
 const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
 
+// crypto.randomUUID() only exists in secure contexts (HTTPS or localhost) —
+// this app is also reached over plain HTTP on the LAN (e.g. http://10.0.0.x:5157/),
+// where the browser leaves it undefined, so it can't be relied on here.
+function genId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 function getSessionId() {
   let id = localStorage.getItem(SESSION_KEY);
   if (!id) {
-    id = crypto.randomUUID();
+    id = genId();
     localStorage.setItem(SESSION_KEY, id);
   }
   return id;
@@ -322,7 +334,7 @@ export default function Agent() {
           if (rawId) skippedIdsRef.current.add(rawId);
           return;
         }
-        const msgId = rawId || crypto.randomUUID();
+        const msgId = rawId || genId();
         const content = data.payload?.content || "";
         setMessages((cur) => [...cur, { id: msgId, role: "agent", content }]);
         maybeSpeak(msgId, content, data.payload);
@@ -369,7 +381,7 @@ export default function Agent() {
   }, [messages, typing]);
 
   function newSession() {
-    const id = crypto.randomUUID();
+    const id = genId();
     localStorage.setItem(SESSION_KEY, id);
     setMessages([]);
     setTyping(false);
@@ -395,7 +407,7 @@ export default function Agent() {
     const content = text.trim();
     if (!content || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     unlockAudioForAutoplay();
-    const id = crypto.randomUUID();
+    const id = genId();
     setMessages((cur) => [...cur, { id, role: "user", content }]);
     wsRef.current.send(JSON.stringify({
       type: "message.send", id, session_id: sessionId, payload: { content },
