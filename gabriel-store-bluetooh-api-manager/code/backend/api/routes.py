@@ -24,6 +24,7 @@ from ..cleanup import cleanup
 from ..scheduler import scheduler
 from ..tts import tts
 from ..navidrome import DEFAULT_URL, navidrome
+from ..music_tag import music_tag
 
 router = APIRouter(prefix="/api", tags=["bluetooth"])
 
@@ -374,10 +375,47 @@ async def audio_move(item_id: int, body: QueueMoveBody) -> dict:
         raise HTTPException(status_code=404, detail=str(exc))
 
 
-# ---- Music Tag (external app link) --------------------------------------
+# ---- Music Tag (proxied — its API has no CORS for cross-origin fetches) --
+class MusicTagPatchBody(BaseModel):
+    """Mirrors Music Tag's own TrackPatch: unset fields are left unchanged."""
+    title: Optional[str] = None
+    artist: Optional[str] = None
+    album: Optional[str] = None
+    albumartist: Optional[str] = None
+    year: Optional[str] = None
+    genre: Optional[str] = None
+    track_no: Optional[str] = None
+    disc_no: Optional[str] = None
+
+
 @router.get("/music-tag/status")
 async def music_tag_status() -> dict:
     return {"configured": bool(settings.MUSIC_TAG_URL), "url": settings.MUSIC_TAG_URL}
+
+
+@router.get("/music-tag/search")
+async def music_tag_search(q: str = "") -> list[dict]:
+    try:
+        return await music_tag.search(q)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/music-tag/tracks/{track_id}")
+async def music_tag_get_track(track_id: int) -> dict:
+    try:
+        return await music_tag.get_track(track_id)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.patch("/music-tag/tracks/{track_id}")
+async def music_tag_update_track(track_id: int, body: MusicTagPatchBody) -> dict:
+    changes = body.model_dump(exclude_unset=True)
+    try:
+        return await music_tag.update_track(track_id, changes)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 # ---- Navidrome ----------------------------------------------------------

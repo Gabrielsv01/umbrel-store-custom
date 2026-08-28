@@ -156,6 +156,11 @@ export const api = {
   },
 
   musicTagStatus: () => request("/music-tag/status"),
+  musicTagSearch: (q) => request(`/music-tag/search?q=${encodeURIComponent(q)}`),
+  musicTagGetTrack: (id) => request(`/music-tag/tracks/${id}`),
+  musicTagUpdateTrack: (id, changes) => request(`/music-tag/tracks/${id}`, {
+    method: "PATCH", body: JSON.stringify(changes),
+  }),
   navidromeStatus: () => request("/navidrome/status"),
   navidromeConfigure: (body) => request("/navidrome/configure", {
     method: "POST", body: JSON.stringify(body),

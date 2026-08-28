@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import {
   Box, AppBar, Toolbar, IconButton, Typography, Drawer, List, ListItem,
   ListItemButton, ListItemIcon, ListItemText, Divider, Slider, Stack,
-  Alert, Snackbar, CircularProgress,
+  Alert, Snackbar, CircularProgress, Dialog, DialogTitle, DialogContent,
+  DialogActions, TextField, Button,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -46,6 +47,16 @@ export default function PlayerPage() {
   const [sheet, setSheet] = useState(null); // null | "playlists" | "search"
   const [dragValue, setDragValue] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [noticeSeverity, setNoticeSeverity] = useState("error");
+
+  function setSuccessNotice(message) {
+    setNoticeSeverity("success");
+    setNotice(message);
+  }
+  function setErrorNotice(message) {
+    setNoticeSeverity("error");
+    setNotice(message);
+  }
   const [artBroken, setArtBroken] = useState(false);
   const [musicTagUrl, setMusicTagUrl] = useState("");
   const [navidromeConnected, setNavidromeConnected] = useState(false);
@@ -134,20 +145,74 @@ export default function PlayerPage() {
     // while this page stays open.
   }, [menuOpen]);
 
-  function openMusicTag() {
-    const query = title ? `?search=${encodeURIComponent(title)}` : "";
-    window.open(`${musicTagUrl}/${query}`, "_blank", "noopener,noreferrer");
+  // ---- Edit metadata via Music Tag (in-app modal, not a new tab) ---------
+  const [editOpen, setEditOpen] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState(null);
+  const [editCandidates, setEditCandidates] = useState(null);
+  const [editTrack, setEditTrack] = useState(null);
+  const [editForm, setEditForm] = useState(null);
+
+  async function openEditModal() {
     setMenuOpen(false);
+    setEditOpen(true);
+    setEditError(null);
+    setEditTrack(null);
+    setEditForm(null);
+    setEditCandidates(null);
+    setEditLoading(true);
+    try {
+      const results = await api.musicTagSearch(title);
+      if (results.length === 0) {
+        setEditError("Nenhuma música correspondente encontrada no Music Tag. A biblioteca pode ainda não ter escaneado esse arquivo.");
+      } else if (results.length === 1) {
+        selectEditCandidate(results[0]);
+      } else {
+        const narrowed = artist
+          ? results.filter((r) => (r.artist || "").toLowerCase() === artist.toLowerCase())
+          : [];
+        if (narrowed.length === 1) selectEditCandidate(narrowed[0]);
+        else setEditCandidates(results);
+      }
+    } catch (e) {
+      setEditError(e.message);
+    } finally {
+      setEditLoading(false);
+    }
+  }
+
+  function selectEditCandidate(track) {
+    setEditCandidates(null);
+    setEditTrack(track);
+    setEditForm({
+      title: track.title || "", artist: track.artist || "", album: track.album || "",
+      albumartist: track.albumartist || "", year: track.year || "", genre: track.genre || "",
+      track_no: track.track_no || "", disc_no: track.disc_no || "",
+    });
+  }
+
+  async function saveEdit() {
+    setEditLoading(true);
+    setEditError(null);
+    try {
+      await api.musicTagUpdateTrack(editTrack.id, editForm);
+      setEditOpen(false);
+      setSuccessNotice("Informações da música atualizadas no Music Tag.");
+    } catch (e) {
+      setEditError(e.message);
+    } finally {
+      setEditLoading(false);
+    }
   }
 
   async function queueAction(action) {
-    try { setAudioStatus(await action()); } catch (e) { setNotice(e.message); }
+    try { setAudioStatus(await action()); } catch (e) { setErrorNotice(e.message); }
   }
 
   function requireDevice() {
     const device = current?.device || connectedSpeaker?.address;
     if (!device) {
-      setNotice("Nenhum alto-falante Bluetooth conectado. Conecte um na aba Devices.");
+      setErrorNotice("Nenhum alto-falante Bluetooth conectado. Conecte um na aba Devices.");
       return null;
     }
     return device;
@@ -157,19 +222,19 @@ export default function PlayerPage() {
     const device = requireDevice();
     if (!device) return;
     try { setAudioStatus(await api.navidromeQueue(device, tracks)); }
-    catch (e) { setNotice(e.message); }
+    catch (e) { setErrorNotice(e.message); }
   }
 
   async function handlePlayNow(track) {
     const device = requireDevice();
     if (!device) return;
     try { setAudioStatus(await api.navidromePlayNow(device, track)); }
-    catch (e) { setNotice(e.message); }
+    catch (e) { setErrorNotice(e.message); }
   }
 
   async function disconnectNavidrome() {
     try { await api.navidromeDisconnect(); setMenuOpen(false); navigate("/"); }
-    catch (e) { setNotice(e.message); }
+    catch (e) { setErrorNotice(e.message); }
   }
 
   return (
@@ -325,9 +390,9 @@ export default function PlayerPage() {
           <Divider sx={{ my: 1 }} />
           <List>
             {musicTagUrl && current && (
-              <ListItemButton onClick={openMusicTag}>
+              <ListItemButton onClick={openEditModal}>
                 <ListItemIcon><EditIcon /></ListItemIcon>
-                <ListItemText primary="Editar informações da música" secondary="Abre o Music Tag" />
+                <ListItemText primary="Editar informações da música" secondary="Título, artista, álbum…" />
               </ListItemButton>
             )}
             {navidromeConnected && (
@@ -367,7 +432,7 @@ export default function PlayerPage() {
           <Box sx={{ width: 36, height: 4, borderRadius: 2, bgcolor: "divider" }} />
         </Box>
         <Box sx={{ px: 2, pb: 2, overflowY: "auto", flex: 1, minHeight: 0 }}>
-          <PlaylistsPanel onAdd={handleAdd} onPlayNow={handlePlayNow} onError={setNotice} showHeading={false} />
+          <PlaylistsPanel onAdd={handleAdd} onPlayNow={handlePlayNow} onError={setErrorNotice} showHeading={false} />
         </Box>
       </Drawer>
 
@@ -379,13 +444,68 @@ export default function PlayerPage() {
             <Typography variant="h6" sx={{ flex: 1 }}>Buscar</Typography>
             <IconButton size="small" onClick={() => setSheet(null)}><CloseIcon fontSize="small" /></IconButton>
           </Stack>
-          <SearchSheet onAdd={handleAdd} onPlayNow={handlePlayNow} onError={setNotice} />
+          <SearchSheet onAdd={handleAdd} onPlayNow={handlePlayNow} onError={setErrorNotice} />
         </Box>
       )}
 
       <Snackbar open={Boolean(notice)} autoHideDuration={4000} onClose={() => setNotice(null)}>
-        <Alert severity="error" onClose={() => setNotice(null)}>{notice}</Alert>
+        <Alert severity={noticeSeverity} onClose={() => setNotice(null)}>{notice}</Alert>
       </Snackbar>
+
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>Editar informações da música</DialogTitle>
+        <DialogContent>
+          {editLoading && (
+            <Stack alignItems="center" sx={{ py: 3 }}><CircularProgress size={28} /></Stack>
+          )}
+          {!editLoading && editError && <Alert severity="error">{editError}</Alert>}
+          {!editLoading && editCandidates && (
+            <>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                Mais de uma correspondência — escolha a faixa certa:
+              </Typography>
+              <List dense>
+                {editCandidates.map((c) => (
+                  <ListItemButton key={c.id} onClick={() => selectEditCandidate(c)}>
+                    <ListItemText primary={c.title || c.filename}
+                      secondary={`${c.artist || ""}${c.album ? " · " + c.album : ""}`} />
+                  </ListItemButton>
+                ))}
+              </List>
+            </>
+          )}
+          {!editLoading && editTrack && editForm && (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <TextField label="Título" size="small" value={editForm.title}
+                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} fullWidth />
+              <TextField label="Artista" size="small" value={editForm.artist}
+                onChange={(e) => setEditForm({ ...editForm, artist: e.target.value })} fullWidth />
+              <TextField label="Álbum" size="small" value={editForm.album}
+                onChange={(e) => setEditForm({ ...editForm, album: e.target.value })} fullWidth />
+              <TextField label="Artista do álbum" size="small" value={editForm.albumartist}
+                onChange={(e) => setEditForm({ ...editForm, albumartist: e.target.value })} fullWidth />
+              <Stack direction="row" spacing={2}>
+                <TextField label="Ano" size="small" value={editForm.year}
+                  onChange={(e) => setEditForm({ ...editForm, year: e.target.value })} fullWidth />
+                <TextField label="Gênero" size="small" value={editForm.genre}
+                  onChange={(e) => setEditForm({ ...editForm, genre: e.target.value })} fullWidth />
+              </Stack>
+              <Stack direction="row" spacing={2}>
+                <TextField label="Faixa" size="small" value={editForm.track_no}
+                  onChange={(e) => setEditForm({ ...editForm, track_no: e.target.value })} fullWidth />
+                <TextField label="Disco" size="small" value={editForm.disc_no}
+                  onChange={(e) => setEditForm({ ...editForm, disc_no: e.target.value })} fullWidth />
+              </Stack>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditOpen(false)}>Cancelar</Button>
+          {editTrack && (
+            <Button variant="contained" onClick={saveEdit} disabled={editLoading}>Salvar</Button>
+          )}
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
