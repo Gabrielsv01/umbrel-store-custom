@@ -69,20 +69,28 @@ export const api = {
   setAdapterName: (name) =>
     request(`/adapter/name`, { method: "POST", body: JSON.stringify({ name }) }),
 
-  // Text-to-speech (Piper)
-  ttsVoices: () => request("/tts/voices"),
+  // Text-to-speech (Piper / Kokoro)
+  ttsEngines: () => request("/tts/engines"),
+  ttsVoices: (engine = "piper") => request(`/tts/voices?engine=${engine}`),
   ttsStatus: () => request("/tts"),
-  ttsSubmit: ({ text, voice, device, mode, length_scale, noise_scale, noise_w,
-                sentence_silence, time, repeat, days, date, title }) => {
+  ttsSubmit: ({ text, voice, device, mode, engine, length_scale, noise_scale, noise_w,
+                sentence_silence, speed, volume_multiplier, allow_voice_tags, ssml,
+                normalization_options, time, repeat, days, date, title }) => {
     const fd = new FormData();
     fd.append("text", text);
     fd.append("voice", voice);
-    fd.append("device", device);
+    if (device) fd.append("device", device);
     fd.append("mode", mode);
+    if (engine) fd.append("engine", engine);
     if (length_scale) fd.append("length_scale", length_scale);
     if (noise_scale) fd.append("noise_scale", noise_scale);
     if (noise_w) fd.append("noise_w", noise_w);
     if (sentence_silence) fd.append("sentence_silence", sentence_silence);
+    if (speed) fd.append("speed", speed);
+    if (volume_multiplier) fd.append("volume_multiplier", volume_multiplier);
+    if (allow_voice_tags) fd.append("allow_voice_tags", "true");
+    if (ssml) fd.append("ssml", "true");
+    if (normalization_options) fd.append("normalization_options", JSON.stringify(normalization_options));
     if (time) fd.append("time", time);
     if (repeat) fd.append("repeat", repeat);
     if (days) fd.append("days", days);
@@ -90,6 +98,13 @@ export const api = {
     if (title) fd.append("title", title);
     return upload("/tts", fd);
   },
+  ttsJobAudioUrl: (id) => `/api/tts/jobs/${id}/audio`,
+  ttsPlayJob: (id, device) => {
+    const fd = new FormData();
+    fd.append("device", device);
+    return upload(`/tts/jobs/${id}/play`, fd);
+  },
+  ttsDeleteJob: (id) => request(`/tts/jobs/${id}`, { method: "DELETE" }),
 
   // Storage / cleanup
   storage: () => request("/storage"),

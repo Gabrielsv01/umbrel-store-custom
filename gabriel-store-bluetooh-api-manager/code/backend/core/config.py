@@ -25,5 +25,11 @@ class Settings:
     # internal one. Empty disables the menu item.
     MUSIC_TAG_URL: str = os.getenv("MUSIC_TAG_URL", "").strip().rstrip("/")
 
+    # Base URL of a separately-running Kokoro TTS container (OpenAI-compatible
+    # API), offered as an alternative voice engine alongside Piper on the Voz
+    # tab. Container-internal address is fine — the backend calls it directly,
+    # unlike MUSIC_TAG_URL. Empty disables the Kokoro option.
+    KOKORO_URL: str = os.getenv("KOKORO_URL", "").strip().rstrip("/")
+
 
 settings = Settings()
