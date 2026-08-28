@@ -15,6 +15,7 @@ import VolumeUpIcon from "@mui/icons-material/VolumeUp";
 import SpeakerIcon from "@mui/icons-material/Speaker";
 import { api } from "../api.js";
 import { useVoiceEngine } from "../hooks/useVoiceEngine.js";
+import { useKeyboardOpen } from "../hooks/useKeyboardOpen.js";
 import VoiceEngineFields from "./VoiceEngineFields.jsx";
 
 const SESSION_KEY = "agent_session_id";
@@ -176,6 +177,7 @@ export default function Agent() {
   // Per-message audio indicator: message id -> "generating" | "playing" | "sent".
   const [audioState, setAudioState] = useState({});
   const ve = useVoiceEngine("voice_engine_agent");
+  const keyboardOpen = useKeyboardOpen();
   const wsRef = useRef(null);
   const listRef = useRef(null);
   const audioRef = useRef(null);
@@ -515,6 +517,7 @@ export default function Agent() {
           </MenuItem>
         </Menu>
 
+        {!keyboardOpen && (
         <Accordion sx={{ flexShrink: 0, mt: 1.5 }}>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Typography variant="body2">
@@ -558,6 +561,7 @@ export default function Agent() {
             </Stack>
           </AccordionDetails>
         </Accordion>
+        )}
         </>
       )}
     </Box>

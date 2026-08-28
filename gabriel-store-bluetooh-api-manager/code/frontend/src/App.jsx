@@ -179,7 +179,11 @@ export default function App() {
             rendered hidden behind the fixed bottom nav on shorter screens.
             Other sections get an auto-height wrapper so main measures their
             true rendered height and scrolls correctly when needed. */}
-        <Box component="main" sx={{ flexGrow: 1, minWidth: 0, minHeight: 0, overflowY: "auto", pb: isDesktop ? 2 : 9 }}>
+        {/* pb reserves clearance for the fixed bottom nav — it's static CSS,
+            so it doesn't shrink on its own just because the nav unmounts
+            (keyboardOpen); drop it explicitly then, or that space is left
+            behind as a dead gap where the nav used to be. */}
+        <Box component="main" sx={{ flexGrow: 1, minWidth: 0, minHeight: 0, overflowY: "auto", pb: isDesktop || keyboardOpen ? 2 : 9 }}>
           <Box sx={{ p: 2, height: section === "agente" ? "100%" : "auto" }}>{content}</Box>
         </Box>
       </Box>
