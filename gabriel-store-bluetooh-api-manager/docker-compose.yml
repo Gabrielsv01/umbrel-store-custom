@@ -15,7 +15,7 @@ services:
       # directly by the backend (not the browser), so a container-internal or
       # localhost address works fine — adjust the port to match your Kokoro
       # container. Leave empty to hide the Kokoro option.
-      - KOKORO_URL=http://10.0.0.214:5142/
+      - KOKORO_URL=http://0.0.0.0:5142/
       # Default Navidrome URL (can be changed here per installation).
       - NAVIDROME_URL=http://0.0.0.0:4533/
       # Base URL of the "Music Tag" app (gabriel-store-music-tag), used to build
