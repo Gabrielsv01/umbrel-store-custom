@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   bluetooth-api-manager:
-    image: gabrielsv01/bluetooth-api-manager:1.6.5
+    image: gabrielsv01/bluetooth-api-manager:1.6.6
     container_name: bluetooth-api-manager
     environment:
       - PORT=5157

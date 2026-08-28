@@ -116,13 +116,11 @@ export default function App() {
     // whose content is taller than this still just overflow the page and
     // scroll normally, same as before.
     <Box sx={{ display: "flex", flexDirection: "column", height: "100dvh" }}>
-      {/* AppBar + Now Playing stick together as one unit at the top of the
-          page (position:"sticky" on the wrapper, not "fixed" on the AppBar
-          alone) — that way they always reserve their real, current height in
-          the layout instead of relying on a manually-guessed spacer height,
-          which broke as soon as the header wrapped to more lines (chip row
-          wrapping on narrow screens) than the spacer accounted for. */}
-      <Box sx={{ position: "sticky", top: 0, zIndex: (t) => t.zIndex.drawer + 1 }}>
+      {/* AppBar + Now Playing sit outside the scrolling region below (main
+          has overflowY:auto — see below), so they're simply always visible,
+          never needing position:sticky/a spacer height: nothing in their own
+          flex column ever scrolls past them. */}
+      <Box sx={{ flexShrink: 0 }}>
         <AppBar position="static">
           <Toolbar variant="dense" sx={{ gap: 0.5 }}>
             <Typography variant="h6" noWrap sx={{ flex: 1, minWidth: 0 }}>
@@ -167,12 +165,20 @@ export default function App() {
           </Drawer>
         )}
 
-        <Box component="main" sx={{ flexGrow: 1, minWidth: 0, pb: isDesktop ? 2 : 9 }}>
-          {/* height:"100%" lets a section (e.g. Agent's chat) fill exactly the
-              space between the sticky header and the bottom nav via flexbox
-              stretch — sections that don't need it just render at their
-              natural height as before, so this is a no-op for them. */}
-          <Box sx={{ p: 2, height: "100%" }}>{content}</Box>
+        {/* main is the ONLY scrolling region in the app: header/footer are
+            fixed siblings outside it, so content never passes "under" them —
+            it scrolls within its own bounded box instead. height:"100%" on
+            the inner Box is ONLY for sections that manage their own internal
+            scroll (currently just Agent) — forcing it on every section made
+            content even slightly taller than the available height silently
+            overflow into main's own bottom-nav clearance padding without
+            triggering a scrollbar (main's scrollHeight stayed <= its own
+            height, since the overflow was smaller than that padding), so it
+            rendered hidden behind the fixed bottom nav on shorter screens.
+            Other sections get an auto-height wrapper so main measures their
+            true rendered height and scrolls correctly when needed. */}
+        <Box component="main" sx={{ flexGrow: 1, minWidth: 0, minHeight: 0, overflowY: "auto", pb: isDesktop ? 2 : 9 }}>
+          <Box sx={{ p: 2, height: section === "agente" ? "100%" : "auto" }}>{content}</Box>
         </Box>
       </Box>
 
