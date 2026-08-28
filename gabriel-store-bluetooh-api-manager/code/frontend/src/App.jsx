@@ -16,6 +16,7 @@ import { theme } from "./theme.js";
 import { useEventStream } from "./useEventStream.js";
 import { api } from "./api.js";
 import { useAudioStatus } from "./hooks/useAudioStatus.js";
+import { useKeyboardOpen } from "./hooks/useKeyboardOpen.js";
 import NowPlayingBar from "./components/NowPlayingBar.jsx";
 import StatusDialog from "./components/StatusDialog.jsx";
 import Devices from "./components/Devices.jsx";
@@ -53,6 +54,7 @@ export default function App() {
   const [stats, setStats] = useState(null);
   const [classic, setClassic] = useState([]);
   const { audioStatus, setAudioStatus, handlePause, handleResume, handleSkip, handleStop } = useAudioStatus();
+  const keyboardOpen = useKeyboardOpen();
 
   const bleList = Object.values(devices).sort(
     (a, b) => Number(b.connected) - Number(a.connected) || (b.rssi ?? -999) - (a.rssi ?? -999)
@@ -182,7 +184,7 @@ export default function App() {
         </Box>
       </Box>
 
-      {!isDesktop && (
+      {!isDesktop && !keyboardOpen && (
         <Paper elevation={8} sx={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: (t) => t.zIndex.drawer + 1 }}>
           <BottomNavigation showLabels value={section} onChange={(_, v) => setSection(v)}>
             {SECTIONS.map((s) => (

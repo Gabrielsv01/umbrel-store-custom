@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Box, Card, CardContent, Stack, TextField, IconButton, Typography, Alert,
-  Chip, Avatar, Tooltip, Accordion, AccordionSummary, AccordionDetails,
+  Avatar, Accordion, AccordionSummary, AccordionDetails,
   FormControl, InputLabel, Select, MenuItem, CircularProgress,
+  Menu, ListItemIcon, ListItemText, Divider, Checkbox,
 } from "@mui/material";
 import SendIcon from "@mui/icons-material/Send";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import PersonIcon from "@mui/icons-material/Person";
 import AddCommentIcon from "@mui/icons-material/AddComment";
-import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import VolumeUpIcon from "@mui/icons-material/VolumeUp";
 import SpeakerIcon from "@mui/icons-material/Speaker";
@@ -168,6 +169,7 @@ export default function Agent() {
   const [error, setError] = useState(null);
   const [sessionId, setSessionId] = useState(getSessionId);
   const [autoSend, setAutoSend] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState(null);
   const [classic, setClassic] = useState([]);
   const [playbackTarget, setPlaybackTarget] = useState("off"); // off | browser | speaker
   const [ttsDevice, setTtsDevice] = useState("");
@@ -419,21 +421,6 @@ export default function Agent() {
 
   return (
     <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 2, flexShrink: 0 }}>
-        <Typography variant="h5" sx={{ flex: 1 }}>Agente</Typography>
-        {configured && (
-          <>
-            <Chip size="small" label={connected ? "conectado" : "reconectando…"}
-              color={connected ? "success" : "warning"} />
-            <Tooltip title="Nova conversa">
-              <IconButton size="small" onClick={newSession}>
-                <AddCommentIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </>
-        )}
-      </Stack>
-
       {!configured ? (
         <Alert severity="info">
           Nenhum agente configurado. Defina <code>PICOCLAW_URL</code> e <code>PICOCLAW_TOKEN</code> para
@@ -441,49 +428,6 @@ export default function Agent() {
         </Alert>
       ) : (
         <>
-        <Accordion sx={{ flexShrink: 0, mb: 1.5 }}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography variant="body2">
-              Reproduzir resposta em voz: {
-                playbackTarget === "off" ? "desativado"
-                : playbackTarget === "browser" ? "navegador"
-                : "alto-falante"
-              }
-            </Typography>
-          </AccordionSummary>
-          <AccordionDetails sx={{ maxHeight: 340, overflowY: "auto" }}>
-            <Stack spacing={1.5}>
-              <FormControl size="small" sx={{ maxWidth: 240 }}>
-                <InputLabel>Reproduzir resposta em</InputLabel>
-                <Select label="Reproduzir resposta em" value={playbackTarget}
-                  onChange={(e) => setPlaybackTarget(e.target.value)}>
-                  <MenuItem value="off">Não reproduzir</MenuItem>
-                  <MenuItem value="browser">Navegador</MenuItem>
-                  <MenuItem value="speaker">Alto-falante</MenuItem>
-                </Select>
-              </FormControl>
-
-              {playbackTarget !== "off" && (
-                <>
-                  <VoiceEngineFields ve={ve} />
-                  {playbackTarget === "speaker" && (
-                    <FormControl size="small" sx={{ minWidth: 180, maxWidth: 260 }}>
-                      <InputLabel>Alto-falante</InputLabel>
-                      <Select label="Alto-falante" value={ttsDevice} onChange={(e) => setTtsDevice(e.target.value)}>
-                        {classic.filter((c) => c.connected).map((c) => (
-                          <MenuItem key={c.address} value={c.address}>{c.name}</MenuItem>
-                        ))}
-                        {!classic.filter((c) => c.connected).length && (
-                          <MenuItem value="" disabled>Nenhum conectado</MenuItem>
-                        )}
-                      </Select>
-                    </FormControl>
-                  )}
-                </>
-              )}
-            </Stack>
-          </AccordionDetails>
-        </Accordion>
         <Card sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
           <CardContent sx={{
             flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
@@ -526,13 +470,9 @@ export default function Agent() {
             </Box>
 
             <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
-              <Tooltip title={autoSend
-                ? "Envio automático ativado — usa o ditado do teclado; envia quando parar de digitar/falar (experimental)"
-                : "Ativar envio automático (experimental) — pra usar com o ditado do teclado do celular"}>
-                <IconButton color={autoSend ? "primary" : "default"} onClick={() => setAutoSend((v) => !v)}>
-                  <AutoAwesomeIcon />
-                </IconButton>
-              </Tooltip>
+              <IconButton onClick={(e) => setMenuAnchor(e.currentTarget)}>
+                <MoreVertIcon />
+              </IconButton>
               <TextField fullWidth size="small" placeholder="Escreva uma mensagem…" value={text}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
@@ -551,6 +491,73 @@ export default function Agent() {
               }} />
           </CardContent>
         </Card>
+
+        <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
+          <MenuItem sx={{ cursor: "default", "&:hover": { bgcolor: "transparent" } }}>
+            <ListItemIcon>
+              <Box sx={{
+                width: 10, height: 10, borderRadius: "50%",
+                bgcolor: connected ? "success.main" : "warning.main",
+              }} />
+            </ListItemIcon>
+            <ListItemText>{connected ? "Conectado" : "Reconectando…"}</ListItemText>
+          </MenuItem>
+          <Divider />
+          <MenuItem onClick={() => { newSession(); setMenuAnchor(null); }}>
+            <ListItemIcon><AddCommentIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>Nova conversa</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => { setAutoSend((v) => !v); setMenuAnchor(null); }}>
+            <ListItemIcon>
+              <Checkbox edge="start" size="small" checked={autoSend} sx={{ p: 0 }} />
+            </ListItemIcon>
+            <ListItemText>Envio automático (experimental)</ListItemText>
+          </MenuItem>
+        </Menu>
+
+        <Accordion sx={{ flexShrink: 0, mt: 1.5 }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography variant="body2">
+              Reproduzir resposta em voz: {
+                playbackTarget === "off" ? "desativado"
+                : playbackTarget === "browser" ? "navegador"
+                : "alto-falante"
+              }
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails sx={{ maxHeight: 340, overflowY: "auto" }}>
+            <Stack spacing={1.5}>
+              <FormControl size="small" sx={{ maxWidth: 240 }}>
+                <InputLabel>Reproduzir resposta em</InputLabel>
+                <Select label="Reproduzir resposta em" value={playbackTarget}
+                  onChange={(e) => setPlaybackTarget(e.target.value)}>
+                  <MenuItem value="off">Não reproduzir</MenuItem>
+                  <MenuItem value="browser">Navegador</MenuItem>
+                  <MenuItem value="speaker">Alto-falante</MenuItem>
+                </Select>
+              </FormControl>
+
+              {playbackTarget !== "off" && (
+                <>
+                  <VoiceEngineFields ve={ve} />
+                  {playbackTarget === "speaker" && (
+                    <FormControl size="small" sx={{ minWidth: 180, maxWidth: 260 }}>
+                      <InputLabel>Alto-falante</InputLabel>
+                      <Select label="Alto-falante" value={ttsDevice} onChange={(e) => setTtsDevice(e.target.value)}>
+                        {classic.filter((c) => c.connected).map((c) => (
+                          <MenuItem key={c.address} value={c.address}>{c.name}</MenuItem>
+                        ))}
+                        {!classic.filter((c) => c.connected).length && (
+                          <MenuItem value="" disabled>Nenhum conectado</MenuItem>
+                        )}
+                      </Select>
+                    </FormControl>
+                  )}
+                </>
+              )}
+            </Stack>
+          </AccordionDetails>
+        </Accordion>
         </>
       )}
     </Box>
