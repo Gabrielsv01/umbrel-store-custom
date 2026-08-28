@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- interactive-widget=resizes-content: on Android Chrome, makes dvh units
+         (and the visualViewport) actually shrink when the on-screen keyboard
+         opens, instead of staying sized to the pre-keyboard layout viewport.
+         iOS Safari already does this natively; the directive is a no-op there. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <title>Bluetooth API Manager</title>
   </head>
   <body>

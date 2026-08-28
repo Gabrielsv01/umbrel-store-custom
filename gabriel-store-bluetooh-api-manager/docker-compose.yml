@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   bluetooth-api-manager:
-    image: gabrielsv01/bluetooth-api-manager:1.6.4
+    image: gabrielsv01/bluetooth-api-manager:1.6.5
     container_name: bluetooth-api-manager
     environment:
       - PORT=5157
@@ -10,6 +10,8 @@ services:
       - TZ=${TZ:-UTC}
       # Piper TTS worker (the piper service below, on the host network).
       - PIPER_URL=http://127.0.0.1:5158
+      - PICOCLAW_URL=http://0.0.0.0:5144
+      - PICOCLAW_TOKEN=YOUR_PICO_TOKEN
       # Optional alternative TTS engine: a separately-running Kokoro container
       # (OpenAI-compatible API), offered next to Piper on the Voz tab. Called
       # directly by the backend (not the browser), so a container-internal or
@@ -23,7 +25,7 @@ services:
       # opened by the USER'S BROWSER, so it must be an address it can reach —
       # your Umbrel device's LAN hostname/IP, not a container-internal one.
       # Leave empty to hide that menu item.
-      - MUSIC_TAG_URL=http://umbrel.local:5150
+      - MUSIC_TAG_URL=http://0.0.0.0:5150/
       # Auto-delete generated/uploaded audio older than this many days
       # (files referenced by a schedule are always kept).
       - AUDIO_RETENTION_DAYS=1

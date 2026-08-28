@@ -171,6 +171,7 @@ export const api = {
   },
 
   musicTagStatus: () => request("/music-tag/status"),
+  agentStatus: () => request("/agent/status"),
   musicTagSearch: (q) => request(`/music-tag/search?q=${encodeURIComponent(q)}`),
   musicTagGetTrack: (id) => request(`/music-tag/tracks/${id}`),
   musicTagUpdateTrack: (id, changes) => request(`/music-tag/tracks/${id}`, {

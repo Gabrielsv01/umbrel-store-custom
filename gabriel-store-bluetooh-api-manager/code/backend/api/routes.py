@@ -395,6 +395,11 @@ async def music_tag_status() -> dict:
     return {"configured": bool(settings.MUSIC_TAG_URL), "url": settings.MUSIC_TAG_URL}
 
 
+@router.get("/agent/status")
+async def agent_status() -> dict:
+    return {"configured": bool(settings.PICOCLAW_URL and settings.PICOCLAW_TOKEN)}
+
+
 @router.get("/music-tag/search")
 async def music_tag_search(q: str = "") -> list[dict]:
     try:

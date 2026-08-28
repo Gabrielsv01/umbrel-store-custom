@@ -31,5 +31,12 @@ class Settings:
     # unlike MUSIC_TAG_URL. Empty disables the Kokoro option.
     KOKORO_URL: str = os.getenv("KOKORO_URL", "").strip().rstrip("/")
 
+    # Base HTTP(S) URL of a separately-running PicoClaw agent gateway
+    # (github.com/sipeed/picoclaw) — its "Pico Protocol" WebSocket channel,
+    # proxied server-side so PICOCLAW_TOKEN never reaches the browser. Empty
+    # disables the Agente tab.
+    PICOCLAW_URL: str = os.getenv("PICOCLAW_URL", "").strip().rstrip("/")
+    PICOCLAW_TOKEN: str = os.getenv("PICOCLAW_TOKEN", "").strip()
+
 
 settings = Settings()

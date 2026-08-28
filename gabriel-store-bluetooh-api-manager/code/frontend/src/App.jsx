@@ -8,6 +8,7 @@ import BluetoothIcon from "@mui/icons-material/Bluetooth";
 import MusicNoteIcon from "@mui/icons-material/MusicNote";
 import RecordVoiceOverIcon from "@mui/icons-material/RecordVoiceOver";
 import EventIcon from "@mui/icons-material/Event";
+import SmartToyIcon from "@mui/icons-material/SmartToy";
 import TuneIcon from "@mui/icons-material/Tune";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
@@ -21,6 +22,7 @@ import Devices from "./components/Devices.jsx";
 import LiveData from "./components/LiveData.jsx";
 import Musica from "./components/Musica.jsx";
 import Voice from "./components/Voice.jsx";
+import Agent from "./components/Agent.jsx";
 import Schedule from "./components/Schedule.jsx";
 import Files from "./components/Files.jsx";
 import Logs from "./components/Logs.jsx";
@@ -31,6 +33,7 @@ const SECTIONS = [
   { id: "devices", label: "Devices", icon: <BluetoothIcon /> },
   { id: "musica", label: "Música", icon: <MusicNoteIcon /> },
   { id: "voz", label: "Voz", icon: <RecordVoiceOverIcon /> },
+  { id: "agente", label: "Agente", icon: <SmartToyIcon /> },
   { id: "agenda", label: "Agenda", icon: <EventIcon /> },
   { id: "avancado", label: "Avançado", icon: <TuneIcon /> },
 ];
@@ -90,6 +93,7 @@ export default function App() {
         <Musica classic={classic} audioStatus={audioStatus} onAudioStatus={setAudioStatus} />
       )}
       {section === "voz" && <Voice classic={classic} />}
+      {section === "agente" && <Agent />}
       {section === "agenda" && <Schedule classic={classic} />}
       {section === "avancado" && (
         <Box>
@@ -105,7 +109,13 @@ export default function App() {
   );
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+    // height (not minHeight): 100dvh tracks the actual visible viewport, so
+    // it shrinks when the on-screen keyboard opens instead of staying sized
+    // to the pre-keyboard layout viewport — needed for the Agent chat's
+    // flex:1 regions below to size correctly with the keyboard open. Tabs
+    // whose content is taller than this still just overflow the page and
+    // scroll normally, same as before.
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100dvh" }}>
       {/* AppBar + Now Playing stick together as one unit at the top of the
           page (position:"sticky" on the wrapper, not "fixed" on the AppBar
           alone) — that way they always reserve their real, current height in
@@ -158,7 +168,11 @@ export default function App() {
         )}
 
         <Box component="main" sx={{ flexGrow: 1, minWidth: 0, pb: isDesktop ? 2 : 9 }}>
-          <Box sx={{ p: 2 }}>{content}</Box>
+          {/* height:"100%" lets a section (e.g. Agent's chat) fill exactly the
+              space between the sticky header and the bottom nav via flexbox
+              stretch — sections that don't need it just render at their
+              natural height as before, so this is a no-op for them. */}
+          <Box sx={{ p: 2, height: "100%" }}>{content}</Box>
         </Box>
       </Box>
 
