@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Box, AppBar, Toolbar, IconButton, Typography, Drawer, List, ListItem,
   ListItemButton, ListItemIcon, ListItemText, Divider, Slider, Stack,
-  Alert, Snackbar,
+  Alert, Snackbar, CircularProgress,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -49,6 +49,7 @@ export default function PlayerPage() {
   const [artBroken, setArtBroken] = useState(false);
   const [musicTagUrl, setMusicTagUrl] = useState("");
   const [navidromeConnected, setNavidromeConnected] = useState(false);
+  const [classicDevices, setClassicDevices] = useState([]);
   const [sheetHeightVh, setSheetHeightVh] = useState(50);
   const dragRef = useRef(null);
 
@@ -65,6 +66,26 @@ export default function PlayerPage() {
     dragRef.current = null;
   }
 
+  // Seeking/skipping/going-previous all restart the backend's live audio
+  // pipe, which takes ~0.5s+ (it has to pause BLE scanning and settle before
+  // resuming) — during that window the polled position is stale/transitional
+  // and would otherwise flash back to the old value before jumping to the
+  // right one. `syncing` holds the UI at the target (spinner on the play
+  // button) until the poll actually confirms it, instead of showing that
+  // flicker.
+  const [syncing, setSyncing] = useState(false);
+  const syncTimerRef = useRef(null);
+
+  function beginSync(targetPosition, timeoutMs) {
+    setDragValue(targetPosition);
+    setSyncing(true);
+    clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      setSyncing(false);
+      setDragValue(null);
+    }, timeoutMs);
+  }
+
   const current = audioStatus.current;
   const queue = audioStatus.queue || [];
   const duration = current?.duration || 0;
@@ -72,11 +93,37 @@ export default function PlayerPage() {
   const title = current?.title || current?.label || "";
   const artist = current?.artist || "";
 
+  // Clear the sync lock as soon as the poll actually confirms we're near the
+  // target — no need to wait out the full safety-net timeout when the real
+  // state catches up sooner.
+  useEffect(() => {
+    if (!syncing || dragValue == null) return;
+    if (Math.abs(audioStatus.position - dragValue) < 1.5) {
+      clearTimeout(syncTimerRef.current);
+      setSyncing(false);
+      setDragValue(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioStatus.position]);
+
+  useEffect(() => () => clearTimeout(syncTimerRef.current), []);
+
   useEffect(() => {
     api.musicTagStatus()
       .then((s) => setMusicTagUrl(s.configured ? s.url : ""))
       .catch(() => {});
   }, []);
+
+  // PlayerPage has no speaker picker of its own — it either reuses whatever
+  // device is already playing, or (nothing loaded yet) falls back to a
+  // currently-connected classic Bluetooth speaker, same as the Música tab.
+  useEffect(() => {
+    const tick = () => api.classicDevices().then(setClassicDevices).catch(() => {});
+    tick();
+    const t = setInterval(tick, 4000);
+    return () => clearInterval(t);
+  }, []);
+  const connectedSpeaker = classicDevices.find((d) => d.connected);
 
   useEffect(() => {
     api.navidromeStatus()
@@ -98,9 +145,9 @@ export default function PlayerPage() {
   }
 
   function requireDevice() {
-    const device = current?.device;
+    const device = current?.device || connectedSpeaker?.address;
     if (!device) {
-      setNotice("Toque algo na aba Música primeiro, pra escolher o alto-falante.");
+      setNotice("Nenhum alto-falante Bluetooth conectado. Conecte um na aba Devices.");
       return null;
     }
     return device;
@@ -184,7 +231,7 @@ export default function PlayerPage() {
                 max={duration || 1}
                 disabled={!duration}
                 onChange={(_, v) => setDragValue(v)}
-                onChangeCommitted={(_, v) => { handleSeek(v); setDragValue(null); }}
+                onChangeCommitted={(_, v) => { beginSync(v, 3000); handleSeek(v); }}
               />
               <Stack direction="row" sx={{ justifyContent: "space-between", width: "100%" }}>
                 <Typography variant="caption" color="text.secondary">{fmtTime(position)}</Typography>
@@ -199,17 +246,22 @@ export default function PlayerPage() {
               >
                 <ShuffleIcon />
               </IconButton>
-              <IconButton size="large" disabled={!audioStatus.has_previous} onClick={handlePrevious}>
+              <IconButton size="large" disabled={!audioStatus.has_previous || syncing}
+                onClick={() => { beginSync(0, 3000); handlePrevious(); }}>
                 <SkipPreviousIcon fontSize="large" />
               </IconButton>
               <IconButton
-                size="large" color="primary"
-                sx={{ bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" }, width: 64, height: 64 }}
+                size="large" color="primary" disabled={syncing}
+                sx={{ bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" },
+                  "&.Mui-disabled": { bgcolor: "primary.main", opacity: 0.7 }, width: 64, height: 64 }}
                 onClick={() => (audioStatus.paused ? handleResume() : handlePause())}
               >
-                {audioStatus.paused ? <PlayArrowIcon fontSize="large" /> : <PauseIcon fontSize="large" />}
+                {syncing || audioStatus.priming
+                  ? <CircularProgress size={28} sx={{ color: "primary.contrastText" }} />
+                  : (audioStatus.paused ? <PlayArrowIcon fontSize="large" /> : <PauseIcon fontSize="large" />)}
               </IconButton>
-              <IconButton size="large" disabled={queue.length === 0} onClick={handleSkip}>
+              <IconButton size="large" disabled={queue.length === 0 || syncing}
+                onClick={() => { beginSync(0, 3000); handleSkip(); }}>
                 <SkipNextIcon fontSize="large" />
               </IconButton>
               <IconButton
