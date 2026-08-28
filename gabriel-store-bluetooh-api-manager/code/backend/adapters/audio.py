@@ -228,6 +228,16 @@ class AudioService:
         if self._current is None:
             return self.status()
         self._seek_offset = max(0.0, position)
+        # Report the target position immediately and freeze the clock there
+        # (rather than leaving the old _track_started_at running) — otherwise
+        # _current_elapsed() keeps climbing from the OLD position for the
+        # ~0.5-1s the restart takes (BLE scan pause + settle + reconnect),
+        # and a poll landing in that window shows a confusing third value
+        # between "where it was" and "where I dragged to" before finally
+        # settling. _play_locked sets these same two fields again once the
+        # real segment actually starts, so there's no visible jump either way.
+        self._elapsed_base = self._seek_offset
+        self._track_started_at = None
         for proc in (self._aplay, self._ffmpeg):
             if proc is not None and proc.returncode is None:
                 proc.kill()
@@ -594,6 +604,13 @@ class AudioService:
         self._interrupt = interrupt
         self._interrupt_reason = reason
         self._paused = False
+        # Same reasoning as seek(): freeze the reported position at 0 right
+        # away instead of leaving the old clock running through the
+        # skip/stop/previous restart delay — the next track (or previous()'s
+        # resurrected one) always starts at 0 anyway, so this can't disagree
+        # with what _play_locked sets moments later.
+        self._elapsed_base = 0.0
+        self._track_started_at = None
         for proc in (self._aplay, self._ffmpeg):
             if proc is not None and proc.returncode is None:
                 proc.kill()

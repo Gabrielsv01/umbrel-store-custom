@@ -48,6 +48,19 @@ class ClassicManager:
         return "authenticationfailed" in low or "authentication failed" in low \
             or "status 0x05" in low
 
+    @staticmethod
+    def _has_failure(text: str) -> bool:
+        """bluetoothctl's output is a running transcript, not a final result:
+        e.g. a failed `pair` still logs a transient `Connected: yes` while it
+        opens the link before authentication is attempted and rejected. A bare
+        substring search for success markers over the whole blob can therefore
+        say `ok: true` for a call that ends in `Failed to pair: ...`. Check for
+        an explicit failure marker first and let it override any success text
+        that appeared earlier in the transcript.
+        """
+        low = text.lower()
+        return "org.bluez.error" in low or re.search(r"failed to \w+", low) is not None
+
     async def scan(self, seconds: int = 15) -> List[Dict[str, Any]]:
         """Run a timed BR/EDR + LE inquiry, then return everything known."""
         bus.publish("classic_scan", state="start", seconds=seconds)
@@ -72,7 +85,7 @@ class ClassicManager:
 
     async def _action(self, verb: str, address: str) -> Dict[str, Any]:
         text = await _btctl(verb, address, timeout=30)
-        ok = any(
+        ok = not self._has_failure(text) and any(
             s in text
             for s in ("successful", "already", "Changing", "Connected: yes")
         )
