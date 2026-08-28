@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   bluetooth-api-manager:
-    image: gabrielsv01/bluetooth-api-manager:1.6.3
+    image: gabrielsv01/bluetooth-api-manager:1.6.4
     container_name: bluetooth-api-manager
     environment:
       - PORT=5157
@@ -10,6 +10,12 @@ services:
       - TZ=${TZ:-UTC}
       # Piper TTS worker (the piper service below, on the host network).
       - PIPER_URL=http://127.0.0.1:5158
+      # Optional alternative TTS engine: a separately-running Kokoro container
+      # (OpenAI-compatible API), offered next to Piper on the Voz tab. Called
+      # directly by the backend (not the browser), so a container-internal or
+      # localhost address works fine — adjust the port to match your Kokoro
+      # container. Leave empty to hide the Kokoro option.
+      - KOKORO_URL=http://10.0.0.214:5142/
       # Default Navidrome URL (can be changed here per installation).
       - NAVIDROME_URL=http://0.0.0.0:4533/
       # Base URL of the "Music Tag" app (gabriel-store-music-tag), used to build
