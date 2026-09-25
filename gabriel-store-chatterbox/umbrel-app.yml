@@ -4,7 +4,7 @@ name: Chatterbox TTS (pt-BR)
 tagline: Text-to-speech API with Swagger docs, tuned for Brazilian Portuguese
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-chatterbox/icon.svg
 category: ai
-version: "1.0.0"
+version: "1.0.1"
 port: 5158
 description: >-
   A self-hosted REST API around Resemble AI's Chatterbox multilingual
