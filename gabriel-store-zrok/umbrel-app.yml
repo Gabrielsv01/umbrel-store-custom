@@ -4,7 +4,7 @@ name: Zrok Tunnel
 tagline: Expose your Umbrel to the internet with zrok
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-zrok/icon.svg
 category: Utilities
-version: "1.0.0"
+version: "1.0.1"
 port: 5024
 description: >-
   This app creates a secure tunnel to a local port using zrok.
