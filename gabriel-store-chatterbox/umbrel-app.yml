@@ -4,8 +4,8 @@ name: Chatterbox TTS (pt-BR)
 tagline: Text-to-speech API with Swagger docs, tuned for Brazilian Portuguese
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-chatterbox/icon.svg
 category: ai
-version: "1.0.1"
-port: 5158
+version: "1.0.2"
+port: 5160
 description: >-
   A self-hosted REST API around Resemble AI's Chatterbox multilingual
   text-to-speech model, running the ResembleAI/Chatterbox-Multilingual-pt-br
@@ -13,8 +13,8 @@ description: >-
   external API key required.
 
 
-  ⚙️ Interactive Swagger/OpenAPI docs live at "umbrel.local:5158/docs" — every
-  endpoint can be called directly from the browser.
+  ⚙️ A web UI to try every endpoint lives at "umbrel.local:5160/" — Swagger/
+  OpenAPI docs are at "umbrel.local:5160/docs".
 
 
   Endpoints:
@@ -46,12 +46,18 @@ repo: https://github.com/resemble-ai/chatterbox
 support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
 gallery: []
 releaseNotes: >-
+  1.0.2: moved off port 5158 (collided with
+  gabriel-store-bluetooh-api-manager's "piper" helper, which binds that port
+  in host networking) to port 5160 — no image change. 1.0.1: async /tts/jobs +
+  GET /tts/jobs/{id} for progress polling, /outputs history (auto-cleaned via
+  OUTPUT_RETENTION_DAYS), a built-in web UI to drive the whole API, and a fix
+  for the default voice getting stuck on the last voice-cloned request.
   1.0.0: first release. FastAPI wrapper (Swagger UI at /docs) around the
   ResembleAI/Chatterbox-Multilingual-pt-br checkpoint, with a /tts endpoint
   exposing exaggeration, cfg_weight, temperature, repetition_penalty, min_p,
   top_p, seed and voice cloning (one-off upload or saved /voices), plus
   /languages and /health. CPU-only image.
 dependencies: []
-path: "/docs"
+path: "/"
 defaultUsername: ""
 defaultPassword: ""

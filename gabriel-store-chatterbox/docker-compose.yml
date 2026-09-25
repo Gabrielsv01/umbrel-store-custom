@@ -13,7 +13,11 @@ services:
       # Saved reference voices (/data/voices) are never touched.
       - OUTPUT_RETENTION_DAYS=1
     ports:
-      - 5158:5158
+      # Host 5160 -> container 5158. Host side moved off 5158 because
+      # gabriel-store-bluetooh-api-manager's "piper" service already binds
+      # that port in network_mode: host; container-internal port/PORT stay
+      # 5158 so no image rebuild is needed for this.
+      - 5160:5158
     volumes:
       # Model weights (downloaded once, ~5GB) and saved reference voices.
       - ${APP_DATA_DIR:-./data}/data:/data

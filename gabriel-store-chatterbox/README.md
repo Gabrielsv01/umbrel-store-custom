@@ -4,7 +4,11 @@ FastAPI wrapper around Resemble AI's Chatterbox multilingual TTS model,
 loading the `ResembleAI/Chatterbox-Multilingual-pt-br` checkpoint (Chatterbox
 fine-tuned for Brazilian Portuguese). CPU-only.
 
-Swagger/OpenAPI docs: `http://umbrel.local:5158/docs`
+Web UI: `http://umbrel.local:5160/` · Swagger/OpenAPI docs: `http://umbrel.local:5160/docs`
+
+Host port 5160 maps to container port 5158 (kept as-is internally; moved off
+5158 on the host side because gabriel-store-bluetooh-api-manager's "piper"
+helper already binds 5158 via `network_mode: host` on the same Umbrel).
 
 ## How the checkpoint is assembled
 
@@ -59,7 +63,7 @@ raising `repetition_penalty` further before anything else.
 ```
 cd code
 make build-version VERSION=1.0.0
-docker run --rm -p 5158:5158 -v $(pwd)/../data:/data chatterbox-tts-ptbr:1.0.0
+docker run --rm -p 5160:5158 -v $(pwd)/../data:/data chatterbox-tts-ptbr:1.0.0
 ```
 
 ## Release
