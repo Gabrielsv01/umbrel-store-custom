@@ -65,10 +65,12 @@ app = FastAPI(
         "Every /tts response is also saved under /data/outputs and listed at "
         "GET /outputs, so generated audio survives beyond the HTTP response; "
         "it is auto-deleted after OUTPUT_RETENTION_DAYS (default 1 day, saved "
-        "voices are never touched). If IDLE_UNLOAD_ENABLED is set, the model "
-        "is freed from RAM after IDLE_UNLOAD_MINUTES of no generation activity "
-        "and reloaded automatically on the next request (see /health status "
-        "'idle' vs 'loading' vs 'ready'). Interactive docs are this same page; "
+        "voices are never touched). With LAZY_LOAD_ENABLED / "
+        "IDLE_UNLOAD_ENABLED, the model loads on first use and unloads after "
+        "idle, reloading automatically on the next request. /health status is "
+        "'idle' (not in memory, nothing wrong), 'downloading' (first-ever "
+        "install, fetching ~5GB), 'loading' (routine reload from local cache, "
+        "fast), 'ready', or 'error'. Interactive docs are this same page; "
         "try requests directly below."
     ),
     version="1.0.0",

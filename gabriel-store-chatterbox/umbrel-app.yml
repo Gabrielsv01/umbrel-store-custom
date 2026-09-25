@@ -4,7 +4,7 @@ name: Chatterbox TTS (pt-BR)
 tagline: Text-to-speech API with Swagger docs, tuned for Brazilian Portuguese
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-chatterbox/icon.svg
 category: ai
-version: "1.0.4"
+version: "1.0.5"
 port: 5160
 description: >-
   A self-hosted REST API around Resemble AI's Chatterbox multilingual
@@ -69,7 +69,7 @@ repo: https://github.com/resemble-ai/chatterbox
 support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
 gallery: []
 releaseNotes: >-
-  1.0.4: LAZY_LOAD_ENABLED (default true) — the model no longer loads at
+  1.0.5: LAZY_LOAD_ENABLED (default true) — the model no longer loads at
   container startup, only on the first /tts/jobs request, so the UI/Swagger
   are usable at ~350MB RAM until then. Combined with 1.0.3's idle-unload
   (also now on by default), the ~6.5GB model is only ever in RAM while

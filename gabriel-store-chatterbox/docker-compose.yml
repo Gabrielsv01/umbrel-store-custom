@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   chatterbox-tts-ptbr:
-    image: gabrielsv01/chatterbox-tts-ptbr:1.0.4
+    image: gabrielsv01/chatterbox-tts-ptbr:1.0.5
     container_name: chatterbox-tts-ptbr
     environment:
       - PORT=5158

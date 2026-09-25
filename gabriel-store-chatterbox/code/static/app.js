@@ -15,29 +15,37 @@
 
   // ---------- Health polling ----------
   let modelReady = false;
+  let currentStatus = "loading";
+
+  const STATUS_LABELS = {
+    ready: "modelo pronto",
+    downloading: "baixando modelo (1ª vez)…",
+    loading: "carregando modelo…",
+    idle: "modelo em espera",
+  };
 
   async function pollHealth() {
     try {
       const res = await fetch("/health");
       const data = await res.json();
+      currentStatus = data.status;
+      modelReady = data.status === "ready";
+
       const dot = $("status-dot");
       const text = $("status-text");
-      dot.classList.remove("ready", "error");
-      if (data.status === "ready") {
-        dot.classList.add("ready");
-        text.textContent = "modelo pronto";
-        modelReady = true;
-      } else if (data.status === "error") {
+      dot.classList.remove("ready", "error", "idle", "downloading");
+
+      if (data.status === "error") {
         dot.classList.add("error");
         text.textContent = `erro: ${data.error || "falha ao carregar"}`;
-        modelReady = false;
       } else {
-        text.textContent = "carregando modelo…";
-        modelReady = false;
+        dot.classList.add(data.status);
+        text.textContent = STATUS_LABELS[data.status] || data.status;
       }
     } catch (err) {
-      $("status-text").textContent = "sem conexão com a API";
+      currentStatus = "unreachable";
       modelReady = false;
+      $("status-text").textContent = "sem conexão com a API";
     }
   }
 
@@ -214,6 +222,33 @@
   // ---------- Generate (async job + progress polling) ----------
   const POLL_INTERVAL_MS = 600;
 
+  // POST /tts/jobs is also what actually tells the backend to start loading
+  // a cold/idle model (GET /health only reports status, it never triggers a
+  // load) — so "waiting for the model" means retrying this same POST until
+  // it stops 503'ing, not just polling /health on the side.
+  async function submitJobWaitingForModel(form) {
+    const bar = $("progress-bar");
+    const statusEl = $("progress-status");
+    bar.classList.add("indeterminate");
+    $("progress-pct").textContent = "";
+
+    while (true) {
+      const res = await fetch("/tts/jobs", { method: "POST", body: form });
+      if (res.ok) return await res.json();
+      if (res.status !== 503) {
+        throw new Error(await readError(res));
+      }
+      if (currentStatus === "error") {
+        throw new Error("O modelo falhou ao carregar. Veja /health para detalhes.");
+      }
+      statusEl.textContent =
+        currentStatus === "downloading"
+          ? "Baixando modelo pela primeira vez (pode levar alguns minutos)…"
+          : "Acordando o modelo…";
+      await sleep(1500);
+    }
+  }
+
   async function pollJob(jobId) {
     const bar = $("progress-bar");
     const statusEl = $("progress-status");
@@ -256,8 +291,8 @@
     const bar = $("progress-bar");
     errorEl.hidden = true;
 
-    if (!modelReady) {
-      errorEl.textContent = "O modelo ainda está carregando. Aguarde o status ficar \"modelo pronto\".";
+    if (currentStatus === "error") {
+      errorEl.textContent = "O modelo falhou ao carregar. Veja /health para detalhes.";
       errorEl.hidden = false;
       return;
     }
@@ -290,14 +325,10 @@
     $("progress-pct").textContent = "";
 
     try {
-      const startRes = await fetch("/tts/jobs", { method: "POST", body: form });
-      if (!startRes.ok) {
-        errorEl.textContent = await readError(startRes);
-        errorEl.hidden = false;
-        return;
-      }
+      const job = await submitJobWaitingForModel(form);
+      $("progress-status").textContent = "Na fila…";
+      $("progress-pct").textContent = "";
 
-      const job = await startRes.json();
       const finished = await pollJob(job.job_id);
       const filename = finished.filename;
       const url = `/outputs/${encodeURIComponent(filename)}`;

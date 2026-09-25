@@ -16,6 +16,7 @@ import os
 import shutil
 import threading
 import time
+import traceback
 from pathlib import Path
 from typing import Optional
 
@@ -83,6 +84,12 @@ _lock = threading.Lock()
 _model: Optional[ChatterboxMultilingualTTS] = None
 _load_error: Optional[str] = None
 _loading = False
+# True only while actually fetching missing checkpoint files from Hugging
+# Face (first install, or the volume was wiped) — distinct from _loading,
+# which also covers the much faster "just read the local cache back into
+# RAM" path, so the UI can tell "downloading ~5GB, this'll take a while"
+# apart from a routine reload.
+_downloading = False
 # Untouched copy of the built-in default voice conditioning, kept aside so
 # a "no reference" request can be reset to it explicitly (see
 # reset_to_default_voice() below).
@@ -99,13 +106,25 @@ _last_used = time.time()
 
 
 def _prepare_checkpoint_dir() -> Path:
+    global _downloading
     CKPT_DIR.mkdir(parents=True, exist_ok=True)
-    for local_name, (repo_id, remote_name) in CHECKPOINT_FILES.items():
-        dst = CKPT_DIR / local_name
-        if dst.exists():
-            continue
-        src = hf_hub_download(repo_id=repo_id, filename=remote_name, cache_dir=str(HF_CACHE_DIR))
-        shutil.copy(src, dst)
+    missing = [
+        (local_name, repo_id, remote_name)
+        for local_name, (repo_id, remote_name) in CHECKPOINT_FILES.items()
+        if not (CKPT_DIR / local_name).exists()
+    ]
+    if not missing:
+        return CKPT_DIR
+
+    with _lock:
+        _downloading = True
+    try:
+        for local_name, repo_id, remote_name in missing:
+            src = hf_hub_download(repo_id=repo_id, filename=remote_name, cache_dir=str(HF_CACHE_DIR))
+            shutil.copy(src, CKPT_DIR / local_name)
+    finally:
+        with _lock:
+            _downloading = False
     return CKPT_DIR
 
 
@@ -125,7 +144,7 @@ def get_status() -> str:
     if _model is not None:
         return "ready"
     if _loading:
-        return "loading"
+        return "downloading" if _downloading else "loading"
     if _load_error:
         return "error"
     # Covers both idle-unloaded and "never loaded yet" (LAZY_LOAD_ENABLED,
@@ -253,6 +272,12 @@ def _load() -> None:
     except Exception as exc:  # noqa: BLE001 - surfaced via /health
         with _lock:
             _load_error = str(exc)
+        # /health only ever shows the latest attempt's error, and a
+        # subsequent retry (start_loading() is safe to call again after a
+        # failure) overwrites it — print the full traceback so a transient
+        # failure is still diagnosable from `docker logs` afterwards.
+        print("Model load failed:")
+        traceback.print_exc()
     finally:
         with _lock:
             _loading = False
