@@ -1,3 +1,8 @@
-# Local model weights + Hugging Face cache (multi-GB, re-downloaded
-# automatically on first run — never commit this).
-data/
+# Local model weights, Hugging Face cache and generated audio (multi-GB /
+# ephemeral, re-created automatically) — never commit these. Saved reference
+# voices (data/data/voices) are the one thing under here worth versioning, so
+# they're explicitly re-included below.
+data/*
+!data/data
+data/data/*
+!data/data/voices
