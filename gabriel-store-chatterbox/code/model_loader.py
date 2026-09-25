@@ -10,9 +10,12 @@ ChatterboxMultilingualTTS.from_local() that tolerates the s3gen state_dict
 gap noted at S3GEN_ALLOWED_MISSING_KEYS).
 """
 import copy
+import ctypes
+import gc
 import os
 import shutil
 import threading
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -85,6 +88,15 @@ _loading = False
 # reset_to_default_voice() below).
 _default_conds = None
 
+# Idle-unload: free the (several-GB) model from RAM after a period of no
+# generation activity, reloading it automatically on the next request.
+# Disabled by default — matches the original "always loaded" behavior; opt
+# in on RAM-constrained hosts (e.g. a Raspberry Pi) via IDLE_UNLOAD_ENABLED.
+IDLE_UNLOAD_ENABLED = os.environ.get("IDLE_UNLOAD_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
+IDLE_UNLOAD_MINUTES = float(os.environ.get("IDLE_UNLOAD_MINUTES", "30"))
+_IDLE_CHECK_INTERVAL_SECONDS = 60
+_last_used = time.time()
+
 
 def _prepare_checkpoint_dir() -> Path:
     CKPT_DIR.mkdir(parents=True, exist_ok=True)
@@ -109,19 +121,78 @@ def get_error() -> Optional[str]:
     return _load_error
 
 
+def get_status() -> str:
+    if _model is not None:
+        return "ready"
+    if _loading:
+        return "loading"
+    if _load_error:
+        return "error"
+    # Covers both idle-unloaded and "never loaded yet" (LAZY_LOAD_ENABLED,
+    # nobody has called /tts since startup) — either way, not in memory right
+    # now, and the next /tts call triggers a load.
+    return "idle"
+
+
 def get_model() -> ChatterboxMultilingualTTS:
     if _model is None:
         raise RuntimeError("Model not loaded yet")
     return _model
 
 
+def touch() -> None:
+    """Call whenever the model is actually used (i.e. a generation runs), to
+    reset the idle timer. Health-check polling should NOT call this."""
+    global _last_used
+    _last_used = time.time()
+
+
 def start_loading() -> None:
+    """Idempotent: also what wakes the model back up after an idle-unload,
+    since at that point _loading is False and _model is None again."""
     global _loading
     with _lock:
         if _loading or _model is not None:
             return
         _loading = True
     threading.Thread(target=_load, daemon=True).start()
+
+
+def start_idle_unload_watcher() -> None:
+    if IDLE_UNLOAD_ENABLED:
+        threading.Thread(target=_idle_unload_loop, daemon=True).start()
+
+
+def _idle_unload_loop() -> None:
+    while True:
+        time.sleep(_IDLE_CHECK_INTERVAL_SECONDS)
+        with _lock:
+            idle_seconds = time.time() - _last_used
+            should_unload = (
+                _model is not None
+                and not _loading
+                and idle_seconds >= IDLE_UNLOAD_MINUTES * 60
+            )
+        if should_unload:
+            _unload()
+
+
+def _unload() -> None:
+    global _model
+    with _lock:
+        if _model is None:
+            return
+        _model = None
+    gc.collect()
+    # Ask glibc to actually return freed heap memory to the OS. Without this,
+    # RSS often stays high after freeing a multi-GB object graph even though
+    # Python considers it garbage-collected (the allocator just keeps the
+    # memory around for reuse within the process). Linux/glibc only; a
+    # missing libc call here is harmless, just a smaller RAM win.
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _load_checkpoint(ckpt_dir: Path, device: str) -> ChatterboxMultilingualTTS:
@@ -165,13 +236,20 @@ def _load_checkpoint(ckpt_dir: Path, device: str) -> ChatterboxMultilingualTTS:
 
 
 def _load() -> None:
-    global _model, _load_error, _loading, _default_conds
+    global _model, _load_error, _loading, _default_conds, _last_used
+    with _lock:
+        _load_error = None
     try:
         ckpt_dir = _prepare_checkpoint_dir()
         model = _load_checkpoint(ckpt_dir, get_device())
         with _lock:
             _model = model
             _default_conds = copy.deepcopy(model.conds) if model.conds is not None else None
+            # Otherwise a short IDLE_UNLOAD_MINUTES can unload the model
+            # again the moment it finishes loading (before anyone gets to
+            # use it), since _last_used would still reflect whenever the
+            # process started or last actually generated something.
+            _last_used = time.time()
     except Exception as exc:  # noqa: BLE001 - surfaced via /health
         with _lock:
             _load_error = str(exc)

@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   chatterbox-tts-ptbr:
-    image: gabrielsv01/chatterbox-tts-ptbr:1.0.1
+    image: gabrielsv01/chatterbox-tts-ptbr:1.0.4
     container_name: chatterbox-tts-ptbr
     environment:
       - PORT=5158
@@ -12,6 +12,15 @@ services:
       # Auto-delete generated audio (/data/outputs) older than this many days.
       # Saved reference voices (/data/voices) are never touched.
       - OUTPUT_RETENTION_DAYS=1
+      # The loaded model uses ~6.5GB of RAM. With both of these on, the app
+      # sits at ~350MB (just Swagger/web UI/API) until the first /tts, which
+      # loads the model on demand (that first request gets a 503 while it
+      # loads/reloads, same as right after container startup) and frees it
+      # again after IDLE_UNLOAD_MINUTES of no generation activity. Set either
+      # to "false" if you'd rather it load once at startup and stay loaded.
+      - LAZY_LOAD_ENABLED=true
+      - IDLE_UNLOAD_ENABLED=true
+      - IDLE_UNLOAD_MINUTES=1
     ports:
       # Host 5160 -> container 5158. Host side moved off 5158 because
       # gabriel-store-bluetooh-api-manager's "piper" service already binds

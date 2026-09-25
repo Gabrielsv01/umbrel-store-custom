@@ -4,13 +4,20 @@ name: Chatterbox TTS (pt-BR)
 tagline: Text-to-speech API with Swagger docs, tuned for Brazilian Portuguese
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-chatterbox/icon.svg
 category: ai
-version: "1.0.2"
+version: "1.0.4"
 port: 5160
 description: >-
   A self-hosted REST API around Resemble AI's Chatterbox multilingual
   text-to-speech model, running the ResembleAI/Chatterbox-Multilingual-pt-br
   checkpoint (Chatterbox fine-tuned for Brazilian Portuguese). CPU-only, no
   external API key required.
+
+
+  ⚠️ The model uses ~6.5GB of RAM when loaded. By default this app only loads
+  it on the first /tts request and frees it again after 30 minutes idle (the
+  UI/Swagger stay usable the whole time at ~350MB) — see LAZY_LOAD_ENABLED /
+  IDLE_UNLOAD_ENABLED below to change that. First run also downloads ~5GB of
+  weights from Hugging Face.
 
 
   ⚙️ A web UI to try every endpoint lives at "umbrel.local:5160/" — Swagger/
@@ -31,9 +38,25 @@ description: >-
 
   - GET /languages — list of supported language codes.
 
-  - GET /health — model load status (the first request after install
-    downloads ~5GB of weights from Hugging Face and caches them under the
-    app's data folder, so /tts returns 503 until that finishes).
+  - POST /tts/jobs and GET /tts/jobs/{id} — same parameters as /tts, but
+    async with a live progress percentage; used by the web UI's progress bar.
+
+  - GET /outputs, GET/DELETE /outputs/{filename} — history of generated
+    audio, auto-deleted after OUTPUT_RETENTION_DAYS (default 1 day).
+
+  - GET /health — status is "loading" (downloading ~5GB on first ever load,
+    otherwise just reading the cached checkpoint back into RAM), "ready",
+    "idle" (not currently loaded — either never used yet or freed after being
+    idle), or "error".
+
+
+  ⚙️ LAZY_LOAD_ENABLED (default true): don't load the model at container
+  startup, only on the first /tts/POST /tts/jobs request. IDLE_UNLOAD_ENABLED
+  (default true) + IDLE_UNLOAD_MINUTES (default 30): free it again after that
+  long with no generation activity. Either request after a cold/idle state
+  gets a 503 while it (re)loads, same as a fresh install. Set either to
+  "false" in the app's environment to keep the model loaded at all times
+  instead.
 
 
   Quality is best for Portuguese; other languages are inherited from the base
@@ -46,7 +69,14 @@ repo: https://github.com/resemble-ai/chatterbox
 support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
 gallery: []
 releaseNotes: >-
-  1.0.2: moved off port 5158 (collided with
+  1.0.4: LAZY_LOAD_ENABLED (default true) — the model no longer loads at
+  container startup, only on the first /tts/jobs request, so the UI/Swagger
+  are usable at ~350MB RAM until then. Combined with 1.0.3's idle-unload
+  (also now on by default), the ~6.5GB model is only ever in RAM while
+  actually being used. 1.0.3: optional IDLE_UNLOAD_ENABLED/IDLE_UNLOAD_MINUTES to free the model
+  (~6.5GB RAM) after a period of inactivity, reloading automatically on the
+  next request — useful on RAM-constrained hosts. Off by default; no image
+  change needed to opt out. 1.0.2: moved off port 5158 (collided with
   gabriel-store-bluetooh-api-manager's "piper" helper, which binds that port
   in host networking) to port 5160 — no image change. 1.0.1: async /tts/jobs +
   GET /tts/jobs/{id} for progress polling, /outputs history (auto-cleaned via

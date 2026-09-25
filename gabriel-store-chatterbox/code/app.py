@@ -32,6 +32,13 @@ VOICE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 OUTPUT_RETENTION_DAYS = float(os.environ.get("OUTPUT_RETENTION_DAYS", "1"))
 _CLEANUP_INTERVAL_SECONDS = 3600
 
+# If set, skip loading the (~6.5GB) model at container startup; the web UI,
+# Swagger, /voices and /outputs all work immediately either way, and the
+# model loads lazily on the first /tts or /tts/jobs call instead (that first
+# request gets a 503 while it loads). Off by default so /tts works right
+# away post-install, matching the original behavior.
+LAZY_LOAD_ENABLED = os.environ.get("LAZY_LOAD_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
+
 
 def _cleanup_old_outputs() -> None:
     cutoff = time.time() - OUTPUT_RETENTION_DAYS * 86400
@@ -58,8 +65,11 @@ app = FastAPI(
         "Every /tts response is also saved under /data/outputs and listed at "
         "GET /outputs, so generated audio survives beyond the HTTP response; "
         "it is auto-deleted after OUTPUT_RETENTION_DAYS (default 1 day, saved "
-        "voices are never touched). Interactive docs are this same page; try "
-        "requests directly below."
+        "voices are never touched). If IDLE_UNLOAD_ENABLED is set, the model "
+        "is freed from RAM after IDLE_UNLOAD_MINUTES of no generation activity "
+        "and reloaded automatically on the next request (see /health status "
+        "'idle' vs 'loading' vs 'ready'). Interactive docs are this same page; "
+        "try requests directly below."
     ),
     version="1.0.0",
 )
@@ -67,7 +77,9 @@ app = FastAPI(
 
 @app.on_event("startup")
 def _startup() -> None:
-    ml.start_loading()
+    if not LAZY_LOAD_ENABLED:
+        ml.start_loading()
+    ml.start_idle_unload_watcher()
     threading.Thread(target=_cleanup_loop, daemon=True).start()
 
 
@@ -95,7 +107,7 @@ class OutputInfo(BaseModel):
 @app.get("/health", response_model=HealthResponse, tags=["System"], summary="Model load status")
 def health():
     return HealthResponse(
-        status="ready" if ml.is_ready() else ("error" if ml.get_error() else "loading"),
+        status=ml.get_status(),
         device=ml.get_device(),
         error=ml.get_error(),
     )
@@ -170,6 +182,9 @@ def delete_output(filename: str):
 
 def _validate_ready_and_language(language_id: str) -> str:
     if not ml.is_ready():
+        # No-op if already loading/loaded; kicks off a reload if the model
+        # was idle-unloaded (see IDLE_UNLOAD_ENABLED in model_loader.py).
+        ml.start_loading()
         detail = "Model is still loading, retry shortly. Check /health."
         if ml.get_error():
             detail = f"Model failed to load: {ml.get_error()}"
@@ -214,6 +229,7 @@ def _generate_core(
     """Runs model.generate() and saves the result under OUTPUTS_DIR. Returns
     the filename. Raises AssertionError/ValueError as chatterbox itself does;
     callers translate those into the right response shape."""
+    ml.touch()
     if seed is not None:
         torch.manual_seed(seed)
 

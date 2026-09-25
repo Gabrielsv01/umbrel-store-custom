@@ -46,17 +46,74 @@ reliably reaches a natural end-of-utterance stop instead. If you still get
 suspiciously short audio, that guard is almost certainly the reason — try
 raising `repetition_penalty` further before anything else.
 
+A shared model instance means "no reference" requests must explicitly reset
+to the built-in default voice before generating — otherwise
+`ChatterboxMultilingualTTS.generate()` just reuses whatever voice the last
+caller (anyone) left conditioned, since it only recomputes conditioning when
+given `audio_prompt_path`. See `reset_to_default_voice()`.
+
+## Resource usage
+
+The loaded model uses **~6.5GB of RAM** (measured: 6.45GiB peak). Plan
+accordingly — this rules out a 4GB Raspberry Pi, and an 8GB one will be very
+tight once you add OS + Docker + anything else running. 16GB is comfortable.
+
+By default (`LAZY_LOAD_ENABLED=true` + `IDLE_UNLOAD_ENABLED=true`, see below)
+the app only actually holds the model in RAM while it's being used —
+otherwise it sits at ~350MB (just FastAPI/the web UI). Set either to
+`false` to keep it loaded at all times instead (skips the load/reload delay
+on the first request after a cold start or idle period).
+
+First run also downloads ~5GB of weights from Hugging Face into `/data`
+(cached after that — see the checkpoint table above).
+
 ## API
 
-- `POST /tts` — generate speech. Form fields: `text`, `language_id` (default
-  `pt`), `voice_name`, `exaggeration`, `cfg_weight`, `temperature`,
-  `repetition_penalty`, `min_p`, `top_p`, `seed`; optional `audio_prompt` file
-  upload for one-off voice cloning. Returns a WAV file.
-- `POST /voices` / `GET /voices` / `DELETE /voices/{name}` — save a reference
-  clip once, reuse it by name.
+- `POST /tts` — generate speech, blocking until the WAV is ready. Form
+  fields: `text`, `language_id` (default `pt`), `voice_name`, `exaggeration`,
+  `cfg_weight`, `temperature`, `repetition_penalty`, `min_p`, `top_p`,
+  `seed`; optional `audio_prompt` file upload for one-off voice cloning.
+- `POST /tts/jobs` + `GET /tts/jobs/{job_id}` — same fields as `/tts`, but
+  async: returns a `job_id` immediately, poll for `status`
+  (`queued`/`running`/`done`/`error`) and a real `progress` percentage
+  (tracked from T3's speech-token sampling loop). Once `done`, fetch the
+  result from `GET /outputs/{filename}`. This is what the web UI uses to
+  show a progress bar instead of blocking the whole request.
+- `POST /voices` / `GET /voices` / `GET /voices/{name}` / `DELETE /voices/{name}`
+  — save a reference clip once, reuse it by name, preview or remove it later.
+- `GET /outputs` / `GET /outputs/{filename}` / `DELETE /outputs/{filename}` —
+  every `/tts` or `/tts/jobs` result is also saved here; auto-deleted after
+  `OUTPUT_RETENTION_DAYS` (default 1 day).
 - `GET /languages` — supported language codes.
-- `GET /health` — model load status (`loading` until the ~5GB download
-  finishes, then `ready`).
+- `GET /health` — `{status, device, error}`; status is `loading` (initial
+  load or reload), `ready`, `idle` (deliberately unloaded, see below), or
+  `error`.
+
+Only one generation actually runs at a time (`jobs.generation_lock`) — extra
+`/tts`/`/tts/jobs` calls queue rather than racing on the shared model.
+
+### Lazy load + idle unload
+
+Two independent env vars, both **on by default** in `docker-compose.yml`
+(the code itself defaults both to off, for anyone reusing it elsewhere):
+
+- `LAZY_LOAD_ENABLED` — skip loading the model at container startup; it
+  loads on the first `/tts`/`/tts/jobs` call instead. The web UI, Swagger,
+  `/voices` and `/outputs` all work immediately either way.
+- `IDLE_UNLOAD_ENABLED` (+ `IDLE_UNLOAD_MINUTES`, default 30) — a background
+  thread frees the model from RAM after that long with no generation
+  activity (health-check polling doesn't count), calling `gc.collect()` +
+  glibc `malloc_trim(0)` to actually shrink RSS instead of just letting
+  Python consider it garbage.
+
+Either path means the *next* `/tts`/`/tts/jobs` call transparently triggers
+a (re)load — a few seconds to ~1 minute depending on disk speed, no
+re-download since the checkpoint is already cached — and returns 503 in the
+meantime. `/health` reports `idle` while the model isn't loaded (never
+loaded yet, or freed after being idle) and `loading` while a (re)load is in
+progress.
+
+Set either to `false` in the environment to go back to "always loaded."
 
 ## Local build
 
