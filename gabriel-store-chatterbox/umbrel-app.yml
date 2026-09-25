@@ -1,0 +1,57 @@
+manifestVersion: 1
+id: gabriel-store-chatterbox
+name: Chatterbox TTS (pt-BR)
+tagline: Text-to-speech API with Swagger docs, tuned for Brazilian Portuguese
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-chatterbox/icon.svg
+category: ai
+version: "1.0.0"
+port: 5158
+description: >-
+  A self-hosted REST API around Resemble AI's Chatterbox multilingual
+  text-to-speech model, running the ResembleAI/Chatterbox-Multilingual-pt-br
+  checkpoint (Chatterbox fine-tuned for Brazilian Portuguese). CPU-only, no
+  external API key required.
+
+
+  ⚙️ Interactive Swagger/OpenAPI docs live at "umbrel.local:5158/docs" — every
+  endpoint can be called directly from the browser.
+
+
+  Endpoints:
+
+  - POST /tts — generate speech from text. Exposed parameters: text,
+    language_id (defaults to "pt", any of the 23 languages the base model
+    supports), exaggeration (emotion intensity), cfg_weight (guidance
+    strength), temperature, repetition_penalty, min_p, top_p, seed
+    (for reproducible output), plus an optional audio_prompt file or a
+    saved voice_name for zero-shot voice cloning. Returns a WAV file.
+
+  - POST /voices and GET/DELETE /voices — save a short reference clip once
+    and reuse it by name in later /tts calls instead of re-uploading it.
+
+  - GET /languages — list of supported language codes.
+
+  - GET /health — model load status (the first request after install
+    downloads ~5GB of weights from Hugging Face and caches them under the
+    app's data folder, so /tts returns 503 until that finishes).
+
+
+  Quality is best for Portuguese; other languages are inherited from the base
+  multilingual model and may vary.
+developer: Resemble AI
+website: https://www.resemble.ai/chatterbox/
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/resemble-ai/chatterbox
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+releaseNotes: >-
+  1.0.0: first release. FastAPI wrapper (Swagger UI at /docs) around the
+  ResembleAI/Chatterbox-Multilingual-pt-br checkpoint, with a /tts endpoint
+  exposing exaggeration, cfg_weight, temperature, repetition_penalty, min_p,
+  top_p, seed and voice cloning (one-off upload or saved /voices), plus
+  /languages and /health. CPU-only image.
+dependencies: []
+path: "/docs"
+defaultUsername: ""
+defaultPassword: ""

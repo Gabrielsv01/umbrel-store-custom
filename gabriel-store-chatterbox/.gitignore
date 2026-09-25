@@ -1,0 +1,3 @@
+# Local model weights + Hugging Face cache (multi-GB, re-downloaded
+# automatically on first run — never commit this).
+data/

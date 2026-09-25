@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chatterbox TTS · pt-BR</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">◆</span>
+        <div>
+          <h1>Chatterbox TTS</h1>
+          <p class="subtitle">Multilingual · pt-BR</p>
+        </div>
+      </div>
+      <div class="status" id="status">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">verificando…</span>
+      </div>
+    </header>
+
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-tab="generate">Gerar</button>
+      <button class="tab" data-tab="voices">Vozes</button>
+      <button class="tab" data-tab="history">Histórico</button>
+    </nav>
+
+    <main>
+      <!-- GENERATE -->
+      <section class="panel active" id="panel-generate">
+        <div class="grid">
+          <form id="generate-form" class="card">
+            <label class="field">
+              <span>Texto</span>
+              <textarea id="text" name="text" rows="4" maxlength="2000" placeholder="Digite o texto a ser convertido em voz…" required></textarea>
+              <span class="hint"><span id="text-count">0</span>/2000</span>
+            </label>
+
+            <div class="field-row">
+              <label class="field">
+                <span>Idioma</span>
+                <select id="language_id" name="language_id"></select>
+              </label>
+
+              <label class="field">
+                <span>Voz</span>
+                <select id="voice_source">
+                  <option value="">Padrão (sem referência)</option>
+                  <option value="saved">Voz salva…</option>
+                  <option value="upload">Enviar áudio agora…</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="field" id="voice-saved-field" hidden>
+              <span>Escolha a voz salva</span>
+              <select id="voice_name"></select>
+            </label>
+
+            <label class="field" id="voice-upload-field" hidden>
+              <span>Áudio de referência (alguns segundos, voz limpa)</span>
+              <input type="file" id="audio_prompt" accept="audio/*">
+            </label>
+
+            <details class="advanced">
+              <summary>Parâmetros avançados</summary>
+              <div class="sliders">
+                <label class="slider">
+                  <span>Exaggeration <output id="out-exaggeration">0.50</output></span>
+                  <input type="range" id="exaggeration" min="0" max="2" step="0.05" value="0.5">
+                </label>
+                <label class="slider">
+                  <span>CFG weight <output id="out-cfg_weight">0.50</output></span>
+                  <input type="range" id="cfg_weight" min="0" max="1" step="0.05" value="0.5">
+                </label>
+                <label class="slider">
+                  <span>Temperature <output id="out-temperature">0.80</output></span>
+                  <input type="range" id="temperature" min="0.05" max="2" step="0.05" value="0.8">
+                </label>
+                <label class="slider">
+                  <span>Repetition penalty <output id="out-repetition_penalty">2.00</output></span>
+                  <input type="range" id="repetition_penalty" min="1" max="3" step="0.1" value="2.0">
+                </label>
+                <label class="slider">
+                  <span>Min P <output id="out-min_p">0.05</output></span>
+                  <input type="range" id="min_p" min="0" max="1" step="0.01" value="0.05">
+                </label>
+                <label class="slider">
+                  <span>Top P <output id="out-top_p">1.00</output></span>
+                  <input type="range" id="top_p" min="0" max="1" step="0.01" value="1.0">
+                </label>
+              </div>
+              <label class="field seed-field">
+                <span>Seed (opcional)</span>
+                <input type="number" id="seed" placeholder="aleatório">
+              </label>
+            </details>
+
+            <button type="submit" class="btn primary" id="generate-btn">
+              <span class="btn-label">Gerar áudio</span>
+            </button>
+
+            <div class="progress-wrap" id="progress-wrap" hidden>
+              <div class="progress-track">
+                <div class="progress-bar" id="progress-bar"></div>
+              </div>
+              <div class="progress-label">
+                <span id="progress-status">Na fila…</span>
+                <span id="progress-pct">0%</span>
+              </div>
+            </div>
+
+            <p class="error" id="generate-error" hidden></p>
+          </form>
+
+          <div class="card result-card">
+            <h2>Resultado</h2>
+            <div id="result-empty" class="empty">O áudio gerado vai aparecer aqui.</div>
+            <div id="result-player" hidden>
+              <audio id="result-audio" controls></audio>
+              <div class="result-actions">
+                <a id="result-download" class="btn ghost" download>Baixar WAV</a>
+                <span class="hint" id="result-meta"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VOICES -->
+      <section class="panel" id="panel-voices">
+        <div class="grid">
+          <form id="voice-form" class="card">
+            <h2>Salvar voz de referência</h2>
+            <label class="field">
+              <span>Nome</span>
+              <input type="text" id="voice-name" placeholder="ex: minha_voz" pattern="[A-Za-z0-9_-]+" required>
+              <span class="hint">Letras, números, "-" e "_"</span>
+            </label>
+            <label class="field">
+              <span>Arquivo de áudio</span>
+              <input type="file" id="voice-file" accept="audio/*" required>
+            </label>
+            <button type="submit" class="btn primary">Salvar voz</button>
+            <p class="error" id="voice-error" hidden></p>
+          </form>
+
+          <div class="card">
+            <div class="list-header">
+              <h2>Vozes salvas</h2>
+              <button class="btn ghost small" id="refresh-voices">Atualizar</button>
+            </div>
+            <ul class="item-list" id="voices-list"></ul>
+            <div class="empty" id="voices-empty">Nenhuma voz salva ainda.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- HISTORY -->
+      <section class="panel" id="panel-history">
+        <div class="card">
+          <div class="list-header">
+            <h2>Áudios gerados</h2>
+            <button class="btn ghost small" id="refresh-outputs">Atualizar</button>
+          </div>
+          <p class="hint">Apagados automaticamente após o período de retenção configurado (padrão: 1 dia).</p>
+          <ul class="item-list" id="outputs-list"></ul>
+          <div class="empty" id="outputs-empty">Nenhum áudio gerado ainda.</div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <a href="/docs" target="_blank" rel="noopener">Documentação da API (Swagger)</a>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

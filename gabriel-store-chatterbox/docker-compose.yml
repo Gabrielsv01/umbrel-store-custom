@@ -1,0 +1,21 @@
+version: "3.7"
+services:
+  chatterbox-tts-ptbr:
+    # To rebuild locally: `make -C code release VERSION=1.0.0`
+    image: gabrielsv01/chatterbox-tts-ptbr:1.0.0
+    container_name: chatterbox-tts-ptbr
+    environment:
+      - PORT=5158
+      # CPU-only build. Leave as-is unless you built a custom CUDA image.
+      - DEVICE=cpu
+      # Hard cap on characters accepted per /tts request.
+      - MAX_TEXT_LENGTH=2000
+      # Auto-delete generated audio (/data/outputs) older than this many days.
+      # Saved reference voices (/data/voices) are never touched.
+      - OUTPUT_RETENTION_DAYS=1
+    ports:
+      - 5158:5158
+    volumes:
+      # Model weights (downloaded once, ~5GB) and saved reference voices.
+      - ${APP_DATA_DIR:-./data}/data:/data
+    restart: unless-stopped
