@@ -1,9 +1,30 @@
 version: "3.7"
 
 services:
+  # A imagem openziti/zrok roda como usuário não-root "ziggy" (uid/gid 2171).
+  # O diretório ${APP_DATA_DIR}/zrok é criado pelo umbrelOS no host e não
+  # pertence a esse uid, então o zrok não consegue gravar em .zrok sem essa
+  # correção de dono, feita aqui por um container temporário rodando como root.
+  zrok-init:
+    image: busybox:latest
+    container_name: zrok_init
+    user: root
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mkdir -p /home/ziggy/.zrok
+        chown -R 2171:2171 /home/ziggy/.zrok
+    volumes:
+      - ${APP_DATA_DIR}/zrok:/home/ziggy/.zrok
+    restart: "no"
+
   zrok:
     image: openziti/zrok:latest
     container_name: zrok_tunnel
+    depends_on:
+      zrok-init:
+        condition: service_completed_successfully
     tty: true
     stdin_open: true
     entrypoint:
