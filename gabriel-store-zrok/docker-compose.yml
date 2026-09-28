@@ -41,16 +41,16 @@ services:
           zrok enable $$ZROK_ENABLE_TOKEN --headless
         fi
 
-        # 2. Só reserva se a reserva 'domain-reserved' ainda não existir
-        if zrok overview 2>/dev/null | grep -q "domain-reserved"; then
-          echo "Reserva 'domain-reserved' já existe, pulando reserve."
+        # 2. Só reserva se a reserva 'domainreserved' ainda não existir
+        if zrok overview 2>/dev/null | grep -q "domainreserved"; then
+          echo "Reserva 'domainreserved' já existe, pulando reserve."
         else
-          echo "Criando reserva 'domain-reserved'..."
-          zrok reserve public localhost:5124 --backend-mode proxy --unique-name domain-reserved
+          echo "Criando reserva 'domainreserved'..."
+          zrok reserve public localhost:5124 --backend-mode proxy --unique-name domainreserved
         fi
 
         # 3. Abre o túnel definitivo
-        exec zrok share reserved domain-reserved --headless
+        exec zrok share reserved domainreserved --headless
     environment:
       - ZROK_ENABLE_TOKEN=secret_token_here
     volumes:
