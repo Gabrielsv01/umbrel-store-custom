@@ -10,5 +10,5 @@ services:
     environment:
       - 'YTDL_OPTIONS={"nocheckcertificate": true}'
     volumes:
-      - "${UMBREL_ROOT}/home/Downloads:/downloads"
+      - "${UMBREL_ROOT}/home/Downloads/metube:/downloads"
       
