@@ -1,59 +1,24 @@
 version: "3.7"
 
 services:
-  # A imagem openziti/zrok roda como usuário não-root "ziggy" (uid/gid 2171).
-  # O diretório ${APP_DATA_DIR}/zrok é criado pelo umbrelOS no host e não
-  # pertence a esse uid, então o zrok não consegue gravar em .zrok sem essa
-  # correção de dono, feita aqui por um container temporário rodando como root.
-  zrok-init:
-    image: busybox:latest
-    container_name: zrok_init
-    user: root
-    entrypoint:
-      - /bin/sh
-      - -c
-      - |
-        mkdir -p /home/ziggy/.zrok
-        chown -R 2171:2171 /home/ziggy/.zrok
-    volumes:
-      - ${APP_DATA_DIR}/zrok:/home/ziggy/.zrok
-    restart: "no"
-
   zrok:
     image: openziti/zrok:latest
     container_name: zrok_tunnel
-    depends_on:
-      zrok-init:
-        condition: service_completed_successfully
     tty: true
     stdin_open: true
+    environment:
+      - ZROK_ENABLE_TOKEN=secret_token_here
+    network_mode: host
+    restart: unless-stopped
     entrypoint:
       - /bin/sh
       - -c
       - |
-        set -e
-
-        # 1. Só ativa o ambiente se ainda não existir (evita criar identidades novas a cada restart)
-        if [ -f "$$HOME/.zrok/environment.json" ]; then
-          echo "Ambiente zrok já habilitado, pulando enable."
-        else
-          echo "Habilitando ambiente zrok..."
-          zrok enable $$ZROK_ENABLE_TOKEN --headless
-        fi
-
-        # 2. Só reserva se a reserva 'domainreserved' ainda não existir
-        if zrok overview 2>/dev/null | grep -q "domainreserved"; then
-          echo "Reserva 'domainreserved' já existe, pulando reserve."
-        else
-          echo "Criando reserva 'domainreserved'..."
-          zrok reserve public localhost:5124 --backend-mode proxy --unique-name domainreserved
-        fi
-
+        # 1. Ativa o ambiente (se já estiver ativo, ignora)
+        zrok enable $$ZROK_ENABLE_TOKEN --headless || true
+        
+        # 2. Reserva usando apenas letras minúsculas e números (sem hífen)
+        zrok reserve public localhost:5124 --backend-mode proxy --unique-name domainreserved || true
+        
         # 3. Abre o túnel definitivo
-        exec zrok share reserved domainreserved --headless
-    environment:
-      - ZROK_ENABLE_TOKEN=secret_token_here
-    volumes:
-      - ${APP_DATA_DIR}/zrok:/home/ziggy/.zrok
-    network_mode: host
-    restart: unless-stopped
+        zrok share reserved domainreserved --headless
