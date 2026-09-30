@@ -1,5 +1,4 @@
-version: "3.7"
-
+version: '3.7'
 services:
   zrok:
     image: openziti/zrok:latest
@@ -12,13 +11,19 @@ services:
     restart: unless-stopped
     entrypoint:
       - /bin/sh
-      - -c
-      - |
+      - '-c'
+      - >
         # 1. Ativa o ambiente (se já estiver ativo, ignora)
+
         zrok enable $$ZROK_ENABLE_TOKEN --headless || true
-        
+
+
         # 2. Reserva usando apenas letras minúsculas e números (sem hífen)
-        zrok reserve public localhost:5124 --backend-mode proxy --unique-name domainreserved || true
-        
+
+        zrok reserve public localhost:5124 --backend-mode proxy --unique-name
+        domainreserved || true
+
+
         # 3. Abre o túnel definitivo
+
         zrok share reserved domainreserved --headless
