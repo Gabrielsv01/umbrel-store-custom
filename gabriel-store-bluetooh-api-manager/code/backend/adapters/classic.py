@@ -98,6 +98,15 @@ class ClassicManager:
             or "status 0x05" in low
 
     @staticmethod
+    def _is_stale_connection(detail: str) -> bool:
+        """status 0x0b ("Connection Already Exists" at the HCI level): the
+        controller or the remote device still thinks a prior link is up for a
+        few seconds after it actually dropped — a plain retry right away just
+        gets rejected again. A short cooldown is usually all it takes."""
+        low = detail.lower()
+        return "status 0x0b" in low or "br-connection-refused" in low
+
+    @staticmethod
     def _has_failure(text: str) -> bool:
         """bluetoothctl's output is a running transcript, not a final result:
         e.g. a failed `pair` still logs a transient `Connected: yes` while it
@@ -251,6 +260,19 @@ class ClassicManager:
                 pair = await self.pair(address)
             await self.trust(address)
             connect = await self.connect(address)
+            # status 0x0b ("Connection Already Exists"): the controller or the
+            # speaker still thinks a prior link is up for a few seconds after
+            # it actually dropped. A short cooldown and one retry of the whole
+            # pair+trust+connect usually clears it, rather than failing
+            # outright the first time this is hit.
+            if not connect["ok"] and (
+                self._is_stale_connection(pair.get("detail", ""))
+                or self._is_stale_connection(connect.get("detail", ""))
+            ):
+                await asyncio.sleep(4)
+                pair = await self.pair(address)
+                await self.trust(address)
+                connect = await self.connect(address)
             if connect["ok"]:
                 # Some speakers (Echo/Alexa) drop an idle A2DP link within
                 # seconds of connecting — well under the time it takes a user
