@@ -380,6 +380,17 @@ class AudioService:
         if not ok:
             bus.publish("audio_connect", level="warn", device=device,
                         detail=text.strip()[-200:])
+            # Some speakers (Echo/Alexa) refuse to persist the bond at all —
+            # BlueZ reports Bonded: no the moment they disconnect (seen via
+            # a "new_link_key ... store_hint 0" from the speaker itself: it's
+            # telling BlueZ not to store the key). A plain connect can't work
+            # without redoing the full handshake, so fall back to it here
+            # instead of making the user go back to the Devices tab for a
+            # manual Pair+Connect every single time. Only works if the
+            # speaker is currently discoverable/in pairing mode.
+            from .classic import classic  # deferred: classic.py imports this module
+            result = await classic.pair_connect(device)
+            ok = bool(result.get("ok"))
         return "connected" if ok else "failed"
 
     async def _a2dp_pcm_available(self, device: str) -> bool:

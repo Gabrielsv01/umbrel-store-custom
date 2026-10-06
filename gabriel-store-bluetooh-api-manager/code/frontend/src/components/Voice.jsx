@@ -52,11 +52,13 @@ export default function Voice({ classic }) {
     setPlayingJobId(jobId);
   }
 
-  // Paired, not just currently-connected: a speaker's Classic link commonly
-  // drops when idle (the speaker's own power saving, not a bug), but Play
-  // reconnects on demand — requiring "connected right now" just to pick it
-  // would hide a perfectly playable, already-paired speaker from this list.
-  const speakers = classic.filter((c) => c.paired);
+  // Any known Classic device, not just paired/connected right now: some
+  // speakers (Echo/Alexa) refuse to persist the pairing bond at all — BlueZ
+  // reports them as unpaired the moment they disconnect, even seconds after
+  // a successful play. Play's own connect step now re-pairs automatically
+  // when needed (as long as the speaker is discoverable), so gating this
+  // list on "paired"/"connected" would just hide the one speaker you have.
+  const speakers = classic;
 
   useEffect(() => {
     if (voiceError) setError(voiceError);
@@ -100,7 +102,7 @@ export default function Voice({ classic }) {
     if (!text.trim()) return setError("Digite um texto.");
     if (!activeVoice) return setError("Nenhuma voz disponível.");
     const needsDevice = mode === "schedule" || target === "speaker";
-    if (needsDevice && !device) return setError("Escolha um alto-falante pareado.");
+    if (needsDevice && !device) return setError("Escolha um alto-falante.");
     if (mode === "schedule" && repeat === "once" && !date) return setError("Escolha uma data.");
     if (mode === "schedule" && repeat === "weekly" && days.length === 0) return setError("Escolha os dias da semana.");
     const submitMode = mode === "schedule" ? "schedule" : (target === "speaker" ? "play" : "browser");
@@ -122,7 +124,7 @@ export default function Voice({ classic }) {
 
   async function sendJobToSpeaker(jobId) {
     setError(null);
-    if (!device) return setError("Escolha um alto-falante pareado.");
+    if (!device) return setError("Escolha um alto-falante.");
     try {
       await api.ttsPlayJob(jobId, device);
       setStatus(await api.ttsStatus());
@@ -167,10 +169,10 @@ export default function Voice({ classic }) {
               <Select label="Alto-falante" value={device} onChange={(e) => setDevice(e.target.value)}>
                 {speakers.map((c) => (
                   <MenuItem key={c.address} value={c.address}>
-                    {c.name}{!c.connected && " (reconecta ao tocar)"}
+                    {c.name}{!c.connected && " (conecta ao tocar)"}
                   </MenuItem>
                 ))}
-                {!speakers.length && <MenuItem value="" disabled>Nenhum pareado</MenuItem>}
+                {!speakers.length && <MenuItem value="" disabled>Nenhum encontrado</MenuItem>}
               </Select>
             </FormControl>
 

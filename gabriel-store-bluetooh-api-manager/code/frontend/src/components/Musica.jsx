@@ -33,11 +33,13 @@ export default function Musica({ classic, audioStatus, onAudioStatus }) {
   const [navStatus, setNavStatus] = useState({ configured: false, url: "" });
   const [form, setForm] = useState({ url: "", username: "", password: "" });
 
-  // Paired, not just currently-connected: the Classic link commonly drops
-  // when idle (the speaker's own power saving, not a bug), but Play
-  // reconnects on demand — requiring "connected right now" would hide an
-  // already-paired, perfectly playable speaker from this list.
-  const speakers = classic.filter((item) => item.paired);
+  // Any known Classic device, not just paired/connected right now: some
+  // speakers (Echo/Alexa) refuse to persist the pairing bond at all — BlueZ
+  // reports them as unpaired the moment they disconnect, even seconds after
+  // a successful play. Play's own connect step now re-pairs automatically
+  // when needed (as long as the speaker is discoverable), so gating this
+  // list on "paired"/"connected" would just hide the one speaker you have.
+  const speakers = classic;
 
   useEffect(() => {
     if (!device && speakers.length) setDevice(speakers[0].address);
@@ -147,10 +149,10 @@ export default function Musica({ classic, audioStatus, onAudioStatus }) {
             <Select label="Alto-falante" value={device} onChange={(e) => setDevice(e.target.value)}>
               {speakers.map((item) => (
                 <MenuItem key={item.address} value={item.address}>
-                  {item.name} ({item.address}){!item.connected && " — reconecta ao tocar"}
+                  {item.name} ({item.address}){!item.connected && " — conecta ao tocar"}
                 </MenuItem>
               ))}
-              {!speakers.length && <MenuItem value="" disabled>Nenhum alto-falante pareado</MenuItem>}
+              {!speakers.length && <MenuItem value="" disabled>Nenhum alto-falante encontrado</MenuItem>}
             </Select>
           </FormControl>
         </CardContent>
