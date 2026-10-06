@@ -61,11 +61,10 @@ KEEPALIVE_INTERVAL = float(os.getenv("AUDIO_KEEPALIVE_INTERVAL", "20"))
 # Some speakers (Echo/Alexa) drop an idle A2DP link within just a few seconds
 # of connecting if no PCM stream ever opens — well under human reaction time
 # between pairing from the Devices tab and switching to Audio to hit Play.
-# prime_connection() bridges that gap with back-to-back short silent opens
-# (PRIME_BRIDGE_INTERVAL, tighter than the drop we've observed) for up to
-# PRIME_BRIDGE_SECONDS, bailing out as soon as a real track starts playing.
+# prime_connection() bridges that gap with ONE continuous silent open (closing
+# and reopening the PCM reads as "source finished" to some speakers and makes
+# them hang up instead) held for up to this long, or until a real track starts.
 PRIME_BRIDGE_SECONDS = 90.0
-PRIME_BRIDGE_INTERVAL = 3.0
 
 # aplay/bluealsa errors that all mean "A2DP link isn't ready to stream yet": the
 # device is connected at ACL level but the audio transport isn't up, so the PCM
@@ -121,6 +120,11 @@ class AudioService:
         self._warm_until: float = 0.0
         self._keepalive_task: Optional[asyncio.Task] = None
         self._keepalive_device: Optional[str] = None
+        # Background task from prime_connection() (see classic.py) — a single
+        # continuous silent stream bridging a manual Pair+Connect to the user
+        # actually hitting Play. Cancelled by _ensure_loop() the moment a real
+        # track starts.
+        self._priming_task: Optional[asyncio.Task] = None
 
     # ---- public API ------------------------------------------------------
     def _current_elapsed(self) -> float:
@@ -309,6 +313,7 @@ class AudioService:
 
     # ---- internals -------------------------------------------------------
     def _ensure_loop(self) -> None:
+        self._cancel_priming()
         if self._loop_task is None or self._loop_task.done():
             self._loop_task = asyncio.create_task(self._run())
 
@@ -440,22 +445,38 @@ class AudioService:
 
     async def prime_connection(self, device: str) -> None:
         """Called right after a manual Pair+Connect (Devices tab) succeeds —
-        see classic.py. Fire-and-forget: keeps `device` fed with silence so
-        the speaker doesn't tear down the idle link before the user gets to
-        Play. Backs off the moment a real track starts (self._current set) or
-        a silent open itself fails (link already gone for good)."""
+        see classic.py. Fire-and-forget: keeps `device` fed with ONE
+        continuous silent stream so the speaker doesn't tear down the idle
+        link before the user gets to Play. A speaker like Echo/Alexa reads a
+        PCM that closes and reopens as "the source finished" and drops the
+        link on its own — tried that first (repeated short opens) and it
+        still hung up mid-second-open, so this holds a single open for as
+        long as PRIME_BRIDGE_SECONDS, cancelled by _ensure_loop() the moment
+        a real track starts."""
         if settings.MOCK_HARDWARE or self._current is not None:
             return
-        asyncio.create_task(self._prime_bridge_loop(device))
+        self._cancel_priming()
+        self._priming_task = asyncio.create_task(self._prime_bridge_loop(device))
+
+    def _cancel_priming(self) -> None:
+        task = self._priming_task
+        self._priming_task = None
+        if task is not None and not task.done():
+            task.cancel()
 
     async def _prime_bridge_loop(self, device: str) -> None:
-        deadline = time.monotonic() + PRIME_BRIDGE_SECONDS
-        while time.monotonic() < deadline and self._current is None:
-            code, _, _ = await self._warm_up(device, PRIME_BRIDGE_INTERVAL)
-            if code != 0:
-                return
-            self._warm_device = device
-            self._warm_until = time.monotonic() + WARM_GRACE_SECONDS
+        try:
+            code, _, _ = await self._warm_up(device, PRIME_BRIDGE_SECONDS)
+            if code == 0:
+                self._warm_device = device
+                self._warm_until = time.monotonic() + WARM_GRACE_SECONDS
+        except asyncio.CancelledError:
+            for proc in (self._aplay, self._ffmpeg):
+                if proc is not None and proc.returncode is None:
+                    proc.kill()
+            raise
+        finally:
+            self._priming_task = None
 
     async def _prime(self, device: str, seconds: float, kind: str) -> None:
         """Warm the link with a silent open; if A2DP isn't up yet, settle and
