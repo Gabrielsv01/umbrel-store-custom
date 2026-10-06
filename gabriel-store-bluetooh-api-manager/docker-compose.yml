@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   bluetooth-api-manager:
-    image: gabrielsv01/bluetooth-api-manager:1.7.0-native
+    image: gabrielsv01/bluetooth-api-manager:1.7.1-native
     container_name: bluetooth-api-manager
     environment:
       - PORT=5157
@@ -62,6 +62,10 @@ services:
       # Share the host's D-Bus system bus so bluetoothctl/bleak/bluez-alsa talk
       # to the host's own bluetoothd instead of a private one in the container.
       - /run/dbus:/run/dbus
+      # Read-write: lets the entrypoint install the org.bluealsa D-Bus policy
+      # onto the host (the host has no bluez-alsa package, so it ships none) —
+      # without it bluealsad can't own its D-Bus name and crash-loops forever.
+      - /etc/dbus-1/system.d:/etc/dbus-1/system.d
     restart: unless-stopped
 
   # Piper text-to-speech worker. Isolated so the heavy ONNX runtime stays out of

@@ -18,16 +18,18 @@ speech.
 
 ## Architecture
 
-The app uses two containers and a private Bluetooth stack. The main container
-owns the adapter and starts its own system D-Bus, `bluetoothd`, `bluez-alsa` and
-`obexd`; the Piper container provides text-to-speech generation.
+The app uses two containers. The main container shares the **host's** Bluetooth
+stack: the host's `bluetoothd` owns the adapter, and its D-Bus system bus is
+bind-mounted into the container, where `bluez-alsa` and `obexd` run (the host
+normally doesn't have bluez-alsa installed). The Piper container provides
+text-to-speech generation.
 
 Front and back remain separated in code (KISS deploy, DRY logic):
 
 - **backend/** — FastAPI. `adapters/bluetooth.py` is the single Bluetooth layer
-  (built on `bleak`, which talks to the container's BlueZ over its private
-  system D-Bus). `core/events.py` is one event bus that feeds both the WebSocket
-  and the Logs view.
+  (built on `bleak`, which talks to BlueZ over the shared system D-Bus).
+  `core/events.py` is one event bus that feeds both the WebSocket and the Logs
+  view.
 - **frontend/** — React + Vite. Built in a Docker stage and served as static
   files by FastAPI. Tabs: Devices, Live Data, Logs.
 - **piper/** — HTTP TTS worker using Piper and a persisted voice model.
@@ -37,21 +39,29 @@ are at `/docs`.
 
 ## Host requirements
 
-The container owns the Bluetooth adapter, so the host needs:
+The app shares the host's Bluetooth adapter and D-Bus, so the host needs:
 
-- A working USB or built-in Bluetooth adapter visible to the container.
+- A working USB or built-in Bluetooth adapter.
 - `network_mode: host` and `privileged: true` (already configured in
   `docker-compose.yml`).
-- The host's Bluetooth service disabled to avoid competing with the container's
-  `bluetoothd`:
+- The host's Bluetooth service **enabled and running** — it's now the sole
+  owner of the adapter (the opposite of older versions of this app, which
+  required disabling it):
 
   ```bash
-  sudo systemctl disable --now bluetooth
+  sudo systemctl enable --now bluetooth
   ```
 
-The app does not require the host's system D-Bus, PulseAudio or PipeWire. The
-container provides its own D-Bus and bluez-alsa audio path. Audio playback is
-best-effort and requires a paired A2DP speaker/headset.
+The container does not run its own `bluetoothd` or D-Bus daemon — it bind-mounts
+the host's `/run/dbus` and talks to the host's BlueZ. It still provides its own
+bluez-alsa audio path (the host normally doesn't have bluez-alsa installed). Since
+the host also ships no D-Bus policy for bluez-alsa's `org.bluealsa` bus name, the
+entrypoint installs one onto the host's `/etc/dbus-1/system.d` (bind-mounted,
+read-write) on first boot and tells the host's running `dbus-daemon` to reload —
+no service restart needed. Without it, `bluealsad` fails to start with "Couldn't
+acquire D-Bus name" and audio playback never works. No PulseAudio or PipeWire is
+required either way. Audio playback is best-effort and requires a paired A2DP
+speaker/headset.
 
 ## Key API endpoints
 

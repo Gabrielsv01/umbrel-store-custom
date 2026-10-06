@@ -35,6 +35,12 @@ COPY backend/ ./backend/
 COPY entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
+# D-Bus policy bluealsad needs to own `org.bluealsa` on the HOST's system bus
+# (the host doesn't have bluez-alsa installed, so no such policy exists there).
+# Installed onto the host's /etc/dbus-1/system.d (bind-mounted) by entrypoint.sh,
+# since this image path is hidden behind that bind mount at runtime.
+COPY dbus-policy/org.bluealsa.conf /opt/bluealsa-dbus-policy.conf
+
 # Static frontend built in stage 1, served by FastAPI.
 COPY --from=frontend /frontend/dist ./frontend_dist
 

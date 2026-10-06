@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 set -e
 
-# Self-contained Bluetooth + audio stack (Option B).
+# Shares the HOST's Bluetooth stack (Option A) instead of running a private one.
 #
-# Instead of talking to the host's bluetoothd, we run our OWN private stack
-# inside the container so that bluez-alsa (which must own the `org.bluealsa`
-# name on the system bus) works with our own D-Bus policy. This makes the app
-# fully isolated — but it means the container owns the Bluetooth adapter, so the
-# host's own bluetooth service must be disabled (systemctl disable --now bluetooth).
+# The host's bluetoothd owns the adapter and its D-Bus system bus is bind-mounted
+# into the container at /run/dbus (see docker-compose.yml), so bluetoothctl and
+# dbus_fast/bleak here talk to that same bus (both fall back to the standard
+# /var/run/dbus/system_bus_socket path when DBUS_SYSTEM_BUS_ADDRESS is unset — we
+# deliberately do NOT set it, nor start our own dbus-daemon/bluetoothd).
 #
-# Everything (BLE via bleak, OBEX, and A2DP audio) uses the private system bus.
+# bluez-alsa still runs IN the container (the host normally doesn't have it) and
+# registers its A2DP endpoint against the host's bluetoothd over that shared bus.
+# OBEX keeps its own private session bus below — unrelated to the system bus.
 DATA_DIR="${DATA_DIR:-/data}"
 
 # supervise <name> <cmd...> — keep a daemon alive, backing off on repeated exits.
@@ -30,17 +32,24 @@ first_exec() {  # echo the first existing executable from the arguments
   command -v "$(basename "$1")" 2>/dev/null || true
 }
 
-# --- private system bus -------------------------------------------------
-mkdir -p /run/dbus "$DATA_DIR/received"
-dbus-uuidgen --ensure=/etc/machine-id 2>/dev/null || true
-dbus-daemon --system --fork
-export DBUS_SYSTEM_BUS_ADDRESS="unix:path=/run/dbus/system_bus_socket"
+mkdir -p "$DATA_DIR/received"
 
-# --- bluetoothd (owns the adapter) --------------------------------------
-BLUETOOTHD="$(first_exec /usr/libexec/bluetooth/bluetoothd /usr/lib/bluetooth/bluetoothd)"
-[ -n "$BLUETOOTHD" ] && supervise bluetoothd "$BLUETOOTHD" --nodetach --experimental
+# --- install the org.bluealsa D-Bus policy onto the HOST, if missing/stale -----
+# The host has no bluez-alsa package, so it ships no policy allowing anyone to
+# own `org.bluealsa` on its system bus — without this, bluealsad's startup fails
+# with "Couldn't acquire D-Bus name" and crash-loops forever. /etc/dbus-1/system.d
+# is bind-mounted from the host (see docker-compose.yml), so writing here lands
+# on the host's real filesystem. ReloadConfig makes the already-running host
+# dbus-daemon pick it up immediately, with no service restart needed.
+POLICY_SRC=/opt/bluealsa-dbus-policy.conf
+POLICY_DST=/etc/dbus-1/system.d/org.bluealsa.conf
+if [ -f "$POLICY_SRC" ] && ! cmp -s "$POLICY_SRC" "$POLICY_DST" 2>/dev/null; then
+  cp "$POLICY_SRC" "$POLICY_DST"
+  dbus-send --system --type=method_call --dest=org.freedesktop.DBus \
+    / org.freedesktop.DBus.ReloadConfig >/dev/null 2>&1 || true
+fi
 
-# Power the adapter on once bluetoothd/hci0 shows up (best-effort, non-blocking).
+# Power the adapter on once the host's bluetoothd/hci0 shows up (best-effort, non-blocking).
 (
   for _ in $(seq 1 30); do
     if bluetoothctl show >/dev/null 2>&1; then
