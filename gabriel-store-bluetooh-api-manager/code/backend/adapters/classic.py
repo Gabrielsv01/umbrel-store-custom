@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from dbus_fast import BusType
 from dbus_fast.aio import MessageBus
 
 from ..core.events import bus
+from .bluetooth import ble
 
 _DEV_RE = re.compile(r"^Device\s+([0-9A-F:]{17})\s+(.*)$", re.IGNORECASE)
 
@@ -42,6 +43,46 @@ def _parse_devices(text: str) -> Dict[str, str]:
 
 
 class ClassicManager:
+    def __init__(self) -> None:
+        # Addresses we believe are Classic-connected (best-effort; rechecked
+        # periodically by _watch_loop, since a radio-level drop never raises
+        # an explicit disconnect anywhere in this app).
+        self._connected: set[str] = set()
+        self._watch_task: Optional[asyncio.Task] = None
+
+    def _mark_connected(self, address: str) -> None:
+        self._connected.add(address)
+        if self._watch_task is None or self._watch_task.done():
+            self._watch_task = asyncio.create_task(self._watch_loop())
+
+    def _mark_disconnected(self, address: str) -> None:
+        self._connected.discard(address)
+
+    async def _watch_loop(self) -> None:
+        """Hold continuous BLE scanning paused for as long as any Classic
+        device is connected. This Pi's single shared radio can't reliably run
+        continuous LE discovery alongside an active Classic/A2DP link — a
+        running inquiry silently drops the link with no disconnect event ever
+        published (see also audio.py's own pause_scan() around playback,
+        which this coexists with via BLEManager's reference-counted holds).
+        """
+        held = False
+        try:
+            while self._connected:
+                if not held:
+                    held = True
+                    await ble.pause_scan()
+                await asyncio.sleep(5)
+                still_connected: set[str] = set()
+                for address in list(self._connected):
+                    info = await _btctl("info", address, timeout=5)
+                    if "connected: yes" in info.lower():
+                        still_connected.add(address)
+                self._connected = still_connected
+        finally:
+            if held:
+                await ble.resume_scan()
+
     @staticmethod
     def _is_auth_failure(detail: str) -> bool:
         low = detail.lower()
@@ -94,6 +135,10 @@ class ClassicManager:
             level=None if ok else "warn",
             verb=verb, device=address, ok=ok, detail=text.strip()[-200:],
         )
+        if verb == "connect" and ok:
+            self._mark_connected(address)
+        elif verb == "disconnect":
+            self._mark_disconnected(address)
         return {"verb": verb, "device": address, "ok": ok, "detail": text.strip()[-400:]}
 
     async def pair(self, address: str) -> Dict[str, Any]:
@@ -121,6 +166,7 @@ class ClassicManager:
         ok = "removed" in low or "not available" in low
         bus.publish("classic_action", level=None if ok else "warn",
                     verb="remove", device=address, ok=ok, detail=text.strip()[-200:])
+        self._mark_disconnected(address)
         return {"verb": "remove", "device": address, "ok": ok, "detail": text.strip()[-400:]}
 
     async def set_device_alias(self, address: str, name: str) -> Dict[str, Any]:

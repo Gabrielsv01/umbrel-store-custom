@@ -33,6 +33,10 @@ class BLEManager:
         self._notifying: set[str] = set()
         # address -> {char_uuid: {hex, text, length, ts}} latest read/notified value
         self._values: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        # How many independent callers currently want discovery paused (audio
+        # playback, the classic-connection watcher, ...). resume_scan() only
+        # actually restarts the scanner once every hold has been released.
+        self._pause_depth = 0
 
     # ---- lifecycle -------------------------------------------------------
     async def start(self) -> None:
@@ -66,9 +70,15 @@ class BLEManager:
 
         BR/EDR (A2DP) connects fail with "br-connection-profile-unavailable"
         while the adapter is busy with an inquiry/discovery, and the inquiry
-        also glitches an active A2DP stream. The audio player pauses discovery
-        around a connect+play and resumes it afterwards.
+        also glitches — or silently drops — an active Classic/A2DP link (the
+        Pi has a single shared radio, so continuous LE scanning and a Classic
+        connection fight over it). The audio player pauses discovery around a
+        connect+play, and the classic-connection watcher (classic.py) holds it
+        paused for as long as any Classic device is connected; reference-
+        counted so either caller releasing its hold doesn't resume discovery
+        while the other still needs it paused.
         """
+        self._pause_depth += 1
         if self._scanner and self._scanning:
             try:
                 await self._scanner.stop()
@@ -78,7 +88,11 @@ class BLEManager:
         bus.publish("scan_state", scanning=False)
 
     async def resume_scan(self) -> None:
-        """Restart the continuous discovery paused by pause_scan()."""
+        """Release one hold placed by pause_scan(). Only actually restarts
+        discovery once every hold has been released."""
+        self._pause_depth = max(0, self._pause_depth - 1)
+        if self._pause_depth > 0:
+            return
         await self.start()
 
     # ---- scanning --------------------------------------------------------
