@@ -15,6 +15,7 @@ from dbus_fast import BusType
 from dbus_fast.aio import MessageBus
 
 from ..core.events import bus
+from .audio import audio
 from .bluetooth import ble
 
 _DEV_RE = re.compile(r"^Device\s+([0-9A-F:]{17})\s+(.*)$", re.IGNORECASE)
@@ -232,6 +233,11 @@ class ClassicManager:
                 pair = await self.pair(address)
             await self.trust(address)
             connect = await self.connect(address)
+            if connect["ok"]:
+                # Some speakers (Echo/Alexa) drop an idle A2DP link within
+                # seconds of connecting — well under the time it takes a user
+                # to switch to the Audio tab and hit Play. Bridge that gap.
+                await audio.prime_connection(address)
             return {
                 "appeared": appeared,
                 "ok": connect["ok"],
