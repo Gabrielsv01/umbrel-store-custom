@@ -104,7 +104,18 @@ class ClassicManager:
         return "org.bluez.error" in low or re.search(r"failed to \w+", low) is not None
 
     async def scan(self, seconds: int = 15) -> List[Dict[str, Any]]:
-        """Run a timed BR/EDR + LE inquiry, then return everything known."""
+        """Run a timed BR/EDR + LE inquiry, then return everything known.
+
+        Skipped while any Classic device is connected: a running inquiry on
+        this single shared radio reliably knocks out a live Classic/A2DP link
+        (same issue ble.pause_scan() guards against for continuous BLE scan)
+        — not worth risking an already-connected speaker just to refresh the
+        discovered-devices list.
+        """
+        if self._connected:
+            bus.publish("classic_scan", level="warn", state="skipped",
+                        reason="a device is connected")
+            return await self.devices()
         bus.publish("classic_scan", state="start", seconds=seconds)
         await _btctl("--timeout", str(seconds), "scan", "on", timeout=seconds + 8)
         bus.publish("classic_scan", state="stop")
