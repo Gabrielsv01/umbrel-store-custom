@@ -72,5 +72,32 @@ export function useEventStream() {
     };
   }, []);
 
+  // Drop devices not seen in a while (and not connected) — BLE devices using
+  // Resolvable Private Addresses (RPAs), like phones or Echo/Alexa speakers,
+  // rotate their address periodically; without this, every rotation leaves a
+  // permanent "ghost" entry under its old address and the list fills up with
+  // duplicates of the same physical device. Matches the backend's own
+  // STALE_DEVICE_SECONDS (adapters/bluetooth.py).
+  useEffect(() => {
+    const STALE_SECONDS = 120;
+    const prune = () => {
+      const now = Date.now() / 1000;
+      setDevices((prev) => {
+        let changed = false;
+        const next = {};
+        for (const [addr, d] of Object.entries(prev)) {
+          if (d.connected || now - d.last_seen < STALE_SECONDS) {
+            next[addr] = d;
+          } else {
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    };
+    const t = setInterval(prune, 15000);
+    return () => clearInterval(t);
+  }, []);
+
   return { connected, devices, log, gattData };
 }

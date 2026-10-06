@@ -127,14 +127,16 @@ export default function PlayerPage() {
 
   // PlayerPage has no speaker picker of its own — it either reuses whatever
   // device is already playing, or (nothing loaded yet) falls back to a
-  // currently-connected classic Bluetooth speaker, same as the Música tab.
+  // paired classic Bluetooth speaker, same as the Voz tab. Paired, not just
+  // currently-connected: the Classic link commonly drops when idle (the
+  // speaker's own power saving), but Play reconnects on demand.
   useEffect(() => {
     const tick = () => api.classicDevices().then(setClassicDevices).catch(() => {});
     tick();
     const t = setInterval(tick, 4000);
     return () => clearInterval(t);
   }, []);
-  const connectedSpeaker = classicDevices.find((d) => d.connected);
+  const connectedSpeaker = classicDevices.find((d) => d.paired);
 
   useEffect(() => {
     api.navidromeStatus()
@@ -212,7 +214,7 @@ export default function PlayerPage() {
   function requireDevice() {
     const device = current?.device || connectedSpeaker?.address;
     if (!device) {
-      setErrorNotice("Nenhum alto-falante Bluetooth conectado. Conecte um na aba Devices.");
+      setErrorNotice("Nenhum alto-falante Bluetooth pareado. Pareie um na aba Devices.");
       return null;
     }
     return device;

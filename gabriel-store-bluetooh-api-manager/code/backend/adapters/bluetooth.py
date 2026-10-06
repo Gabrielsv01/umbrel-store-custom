@@ -18,6 +18,13 @@ from dbus_fast.aio import MessageBus
 from ..core.config import settings
 from ..core.events import bus
 
+# How long a BLE device stays in the live list after its last advertisement.
+# Devices using Resolvable Private Addresses (RPAs) — phones, Echo/Alexa
+# speakers, etc. — rotate their address every so often; without this, every
+# rotation leaves a permanent "ghost" entry behind under its old address and
+# the list fills up with duplicates of the same physical device.
+STALE_DEVICE_SECONDS = 120.0
+
 
 class BLEManager:
     def __init__(self) -> None:
@@ -146,6 +153,17 @@ class BLEManager:
             sysbus.disconnect()
 
     def list_devices(self) -> list[Dict[str, Any]]:
+        # Drop addresses not seen in a while (and not connected) — almost
+        # always a device that rotated to a new RPA, not one still around.
+        now = time.time()
+        stale = [
+            addr for addr, d in self._devices.items()
+            if not d["connected"] and now - d["last_seen"] >= STALE_DEVICE_SECONDS
+        ]
+        for addr in stale:
+            del self._devices[addr]
+            self._ble_objects.pop(addr, None)
+
         # Freshest / strongest signal first.
         return sorted(
             self._devices.values(),

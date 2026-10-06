@@ -52,15 +52,19 @@ export default function Voice({ classic }) {
     setPlayingJobId(jobId);
   }
 
-  const connectedSpeakers = classic.filter((c) => c.connected);
+  // Paired, not just currently-connected: a speaker's Classic link commonly
+  // drops when idle (the speaker's own power saving, not a bug), but Play
+  // reconnects on demand — requiring "connected right now" just to pick it
+  // would hide a perfectly playable, already-paired speaker from this list.
+  const speakers = classic.filter((c) => c.paired);
 
   useEffect(() => {
     if (voiceError) setError(voiceError);
   }, [voiceError]);
 
   useEffect(() => {
-    if (!device && connectedSpeakers.length) setDevice(connectedSpeakers[0].address);
-  }, [connectedSpeakers, device]);
+    if (!device && speakers.length) setDevice(speakers[0].address);
+  }, [speakers, device]);
 
   useEffect(() => {
     const tick = () => api.ttsStatus().then(setStatus).catch(() => {});
@@ -96,7 +100,7 @@ export default function Voice({ classic }) {
     if (!text.trim()) return setError("Digite um texto.");
     if (!activeVoice) return setError("Nenhuma voz disponível.");
     const needsDevice = mode === "schedule" || target === "speaker";
-    if (needsDevice && !device) return setError("Escolha um alto-falante conectado.");
+    if (needsDevice && !device) return setError("Escolha um alto-falante pareado.");
     if (mode === "schedule" && repeat === "once" && !date) return setError("Escolha uma data.");
     if (mode === "schedule" && repeat === "weekly" && days.length === 0) return setError("Escolha os dias da semana.");
     const submitMode = mode === "schedule" ? "schedule" : (target === "speaker" ? "play" : "browser");
@@ -118,7 +122,7 @@ export default function Voice({ classic }) {
 
   async function sendJobToSpeaker(jobId) {
     setError(null);
-    if (!device) return setError("Escolha um alto-falante conectado.");
+    if (!device) return setError("Escolha um alto-falante pareado.");
     try {
       await api.ttsPlayJob(jobId, device);
       setStatus(await api.ttsStatus());
@@ -161,10 +165,12 @@ export default function Voice({ classic }) {
             <FormControl size="small" sx={{ minWidth: 200, maxWidth: 320 }}>
               <InputLabel>Alto-falante</InputLabel>
               <Select label="Alto-falante" value={device} onChange={(e) => setDevice(e.target.value)}>
-                {connectedSpeakers.map((c) => (
-                  <MenuItem key={c.address} value={c.address}>{c.name}</MenuItem>
+                {speakers.map((c) => (
+                  <MenuItem key={c.address} value={c.address}>
+                    {c.name}{!c.connected && " (reconecta ao tocar)"}
+                  </MenuItem>
                 ))}
-                {!connectedSpeakers.length && <MenuItem value="" disabled>Nenhum conectado</MenuItem>}
+                {!speakers.length && <MenuItem value="" disabled>Nenhum pareado</MenuItem>}
               </Select>
             </FormControl>
 
@@ -195,7 +201,7 @@ export default function Voice({ classic }) {
                   🎛️ Gerar
                 </Button>
                 <Button variant="contained" onClick={() => generate("speaker")}
-                  disabled={!connectedSpeakers.length}>
+                  disabled={!speakers.length}>
                   📡 Tocar no alto-falante
                 </Button>
               </Stack>

@@ -33,7 +33,11 @@ export default function Musica({ classic, audioStatus, onAudioStatus }) {
   const [navStatus, setNavStatus] = useState({ configured: false, url: "" });
   const [form, setForm] = useState({ url: "", username: "", password: "" });
 
-  const speakers = classic.filter((item) => item.connected);
+  // Paired, not just currently-connected: the Classic link commonly drops
+  // when idle (the speaker's own power saving, not a bug), but Play
+  // reconnects on demand — requiring "connected right now" would hide an
+  // already-paired, perfectly playable speaker from this list.
+  const speakers = classic.filter((item) => item.paired);
 
   useEffect(() => {
     if (!device && speakers.length) setDevice(speakers[0].address);
@@ -142,9 +146,11 @@ export default function Musica({ classic, audioStatus, onAudioStatus }) {
             <InputLabel>Alto-falante</InputLabel>
             <Select label="Alto-falante" value={device} onChange={(e) => setDevice(e.target.value)}>
               {speakers.map((item) => (
-                <MenuItem key={item.address} value={item.address}>{item.name} ({item.address})</MenuItem>
+                <MenuItem key={item.address} value={item.address}>
+                  {item.name} ({item.address}){!item.connected && " — reconecta ao tocar"}
+                </MenuItem>
               ))}
-              {!speakers.length && <MenuItem value="" disabled>Nenhum alto-falante conectado</MenuItem>}
+              {!speakers.length && <MenuItem value="" disabled>Nenhum alto-falante pareado</MenuItem>}
             </Select>
           </FormControl>
         </CardContent>
