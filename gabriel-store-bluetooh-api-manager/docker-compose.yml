@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   bluetooth-api-manager:
-    image: gabrielsv01/bluetooth-api-manager:1.6.9
+    image: gabrielsv01/bluetooth-api-manager:1.7.0-native
     container_name: bluetooth-api-manager
     environment:
       - PORT=5157
@@ -43,13 +43,14 @@ services:
       # Reconnect the last-used speaker while idle. Set to 0 to disable.
       - AUDIO_KEEPALIVE_INTERVAL=20
     # Host networking + privileged give the container direct access to the HCI
-    # Bluetooth adapter. The app runs its OWN Bluetooth stack (bluetoothd,
-    # bluez-alsa, obexd) so it is fully self-contained — no host audio server or
-    # host D-Bus needed.
+    # Bluetooth adapter. The app shares the HOST's bluetoothd/D-Bus system bus
+    # (bind-mounted below) instead of running its own — only bluez-alsa and
+    # obexd run inside the container.
     #
-    # IMPORTANT: because the container owns the adapter, disable the host's own
-    # bluetooth service once on the Pi to avoid conflicts:
-    #     sudo systemctl disable --now bluetooth
+    # IMPORTANT: the host's own bluetooth service must be ENABLED and running
+    # (this is the opposite of older versions of this app, which required
+    # disabling it) — it's now the sole owner of the adapter:
+    #     sudo systemctl enable --now bluetooth
     network_mode: host
     privileged: true
     volumes:
@@ -58,6 +59,9 @@ services:
       # Persist BlueZ pairings + cached device names so they survive restarts
       # and app updates (otherwise every restart forgets paired speakers).
       - ${APP_DATA_DIR:-./data}/bluetooth:/var/lib/bluetooth
+      # Share the host's D-Bus system bus so bluetoothctl/bleak/bluez-alsa talk
+      # to the host's own bluetoothd instead of a private one in the container.
+      - /run/dbus:/run/dbus
     restart: unless-stopped
 
   # Piper text-to-speech worker. Isolated so the heavy ONNX runtime stays out of

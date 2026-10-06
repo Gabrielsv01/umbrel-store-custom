@@ -4,7 +4,7 @@ name: Bluetooth API Manager
 tagline: Manage Bluetooth devices, stream data and control them over an API
 icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-bluetooh-api-manager/icon.svg
 category: Utilities
-version: "1.6.9"
+version: "1.7.0"
 port: 5157
 description: >-
   Bluetooth API Manager gives you a single place to see and control the
@@ -30,10 +30,10 @@ description: >-
   - A web interface to watch everything happening on the manager in real time.
 
 
-  Requires a host with a working Bluetooth adapter. The app runs its own
-  bluetoothd, D-Bus, bluez-alsa and obexd inside the container, so the host's
-  Bluetooth service must be disabled to avoid competing for the adapter.
-  Runs with host networking and privileged access to the adapter.
+  Requires a host with a working Bluetooth adapter and its Bluetooth service
+  enabled (the app shares the host's bluetoothd/D-Bus; it only runs bluez-alsa
+  and obexd inside the container). Runs with host networking and privileged
+  access to the adapter.
 developer: Gabriel Vieira
 website: https://github.com/Gabrielsv01/umbrel-store-custom
 submitter: Gabriel Vieira
