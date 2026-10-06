@@ -59,6 +59,13 @@ class ClassicManager:
     def _mark_disconnected(self, address: str) -> None:
         self._connected.discard(address)
 
+    def is_connected(self, address: str) -> bool:
+        """Best-effort: is `address` currently Classic-connected? Used to
+        refuse a BLE (GATT) connect to the same address — attempting both
+        transports at once on this single shared radio reliably knocks out
+        the Classic/A2DP link (see adapters/bluetooth.py's pause_scan())."""
+        return address in self._connected
+
     async def _watch_loop(self) -> None:
         """Hold continuous BLE scanning paused for as long as any Classic
         device is connected. This Pi's single shared radio can't reliably run

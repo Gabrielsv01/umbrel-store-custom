@@ -129,6 +129,14 @@ async def list_devices() -> list[dict]:
 
 @router.post("/devices/{address}/connect")
 async def connect(address: str) -> dict:
+    if classic.is_connected(address):
+        # This single radio can't reliably hold a BLE (GATT) connection and a
+        # Classic/A2DP link to the same address at once — attempting it drops
+        # the Classic connection instead.
+        raise HTTPException(
+            status_code=409,
+            detail="already connected over Classic — disconnect it first if you need BLE/GATT",
+        )
     try:
         return await ble.connect(address)
     except Exception as exc:  # noqa: BLE001

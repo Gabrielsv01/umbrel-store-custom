@@ -223,10 +223,17 @@ export default function Devices({ ble, classic, adapter, onChange }) {
                       LE · {g.le.connected ? "conectado (GATT)" : "não conectado"}
                     </Typography>
                     <Box sx={{ flex: 1 }} />
-                    <Button size="small" disabled={busy === leAddr}
-                      onClick={() => run(leAddr, () => (g.le.connected ? api.disconnect(leAddr) : api.connect(leAddr)))}>
-                      {busy === leAddr ? "…" : g.le.connected ? "Desconectar" : "Conectar (BLE)"}
-                    </Button>
+                    <Tooltip title={g.classic?.connected
+                      ? "Conectado via Classic/A2DP — conectar por BLE ao mesmo tempo derruba esse link"
+                      : ""}>
+                      <span>
+                        <Button size="small"
+                          disabled={busy === leAddr || (!g.le.connected && g.classic?.connected)}
+                          onClick={() => run(leAddr, () => (g.le.connected ? api.disconnect(leAddr) : api.connect(leAddr)))}>
+                          {busy === leAddr ? "…" : g.le.connected ? "Desconectar" : "Conectar (BLE)"}
+                        </Button>
+                      </span>
+                    </Tooltip>
                   </Stack>
                 )}
               </CardContent>
