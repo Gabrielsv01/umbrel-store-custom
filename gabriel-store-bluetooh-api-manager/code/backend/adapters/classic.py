@@ -261,18 +261,26 @@ class ClassicManager:
             await self.trust(address)
             connect = await self.connect(address)
             # status 0x0b ("Connection Already Exists"): the controller or the
-            # speaker still thinks a prior link is up for a few seconds after
-            # it actually dropped. A short cooldown and one retry of the whole
-            # pair+trust+connect usually clears it, rather than failing
-            # outright the first time this is hit.
+            # speaker is holding onto a stale ACL handle for this peer from a
+            # prior session. A plain cooldown-and-retry isn't reliable (seen
+            # it fail repeatedly over 20+s in practice) — an explicit
+            # disconnect forces that handle to release instead of waiting for
+            # it to expire on its own, so send one before each retry.
             if not connect["ok"] and (
                 self._is_stale_connection(pair.get("detail", ""))
                 or self._is_stale_connection(connect.get("detail", ""))
             ):
-                await asyncio.sleep(4)
-                pair = await self.pair(address)
-                await self.trust(address)
-                connect = await self.connect(address)
+                for wait_seconds in (4, 8):
+                    await self.disconnect(address)
+                    await asyncio.sleep(wait_seconds)
+                    pair = await self.pair(address)
+                    await self.trust(address)
+                    connect = await self.connect(address)
+                    if connect["ok"] or not (
+                        self._is_stale_connection(pair.get("detail", ""))
+                        or self._is_stale_connection(connect.get("detail", ""))
+                    ):
+                        break
             if connect["ok"]:
                 # Some speakers (Echo/Alexa) drop an idle A2DP link within
                 # seconds of connecting — well under the time it takes a user

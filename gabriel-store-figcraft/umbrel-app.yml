@@ -1,0 +1,25 @@
+manifestVersion: 1
+id: gabriel-store-figcraft
+name: FigCraft
+tagline: Run FigCraft server on your Umbrel
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-figcraft/icon.svg
+category: Craft
+version: "0.5.1"
+port: 5169
+description: >-
+  This app allows you to run a FigCraft server on your Umbrel device.
+  Ideal for hosting and managing your FigCraft server locally.
+
+developer: Gabriel Vieira
+website: https://github.com/Gabrielsv01/umbrel-store-custom
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+releaseNotes: >-
+  First version of the FigCraft app for Umbrel.
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""

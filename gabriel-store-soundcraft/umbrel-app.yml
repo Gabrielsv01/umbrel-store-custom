@@ -1,0 +1,25 @@
+manifestVersion: 1
+id: gabriel-store-soundcraft
+name: SoundCraft
+tagline: Run SoundCraft server on your Umbrel
+icon: https://raw.githubusercontent.com/Gabrielsv01/umbrel-store-custom/main/gabriel-store-soundcraft/icon.svg
+category: Craft
+version: "0.5.0"
+port: 5171
+description: >-
+  This app allows you to run a SoundCraft server on your Umbrel device.
+  Ideal for hosting and managing your SoundCraft server locally.
+
+developer: Gabriel Vieira
+website: https://github.com/Gabrielsv01/umbrel-store-custom
+submitter: Gabriel Vieira
+submission: https://github.com/Gabrielsv01/umbrel-store-custom
+repo: https://github.com/Gabrielsv01/umbrel-store-custom
+support: https://github.com/Gabrielsv01/umbrel-store-custom/issues
+gallery: []
+releaseNotes: >-
+  First version of the SoundCraft app for Umbrel.
+dependencies: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
